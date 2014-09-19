@@ -1,0 +1,181 @@
+
+1  播放器实现了3个接口：IMediaPlayerService  IMediaPlayer  IMediaPlayerClient
+其中IMediaPlayerClient仅定义了 notify函数：callback mechanism for passing messages 
+to MediaPlayer object。不过IMediaPlayerClient这个名字有点词不答意。
+
+【题外：notify函数调用流程】
+MediaPlayer::setDataSource 调用 BpMediaPlayerService::create（sp<IMediaPlayerClient>& 
+client）传入参数类型 MediaPlayer。然后data.writeStrongBinder(client->asBinder());
+的时候  asBinder 返回的是 this (Bp端 asBinder 返回的是remote() 实际返回BpBinder对象 )
+
+2 关于 setDataSource 函数 
+﻿① MediaPlayer 类中定义调用②
+
+setDataSource( char *url, KeyedVector<String8, String8> *headers )
+setDataSource( int fd, int64_t offset, int64_t length )
+setDataSource( sp<IStreamSource> &source ) 
+
+② IMediaPlayer 类中定义 createPlayer后调用③
+
+setDataSource( char *url, KeyedVector<String8, String8>* headers )
+setDataSource( int fd, int64_t offset, int64_t length )
+setDataSource( sp<IStreamSource>& source )
+
+③ MediaPlayerBase类中定义
+
+setDataSource( char *url, KeyedVector<String8, String8> *headers )
+setDataSource( int fd, int64_t offset, int64_t length )
+setDataSource( sp<IStreamSource> &source )
+
+④ 继承自 MediaPlayerBase 的 NuPlayerDriver 再调用 NullPlayer 中定义的
+
+setDataSource( char *url, KeyedVector<String8, String8> *headers )
+setDataSource( int fd, int64_t offset, int64_t length )
+setDataSource( sp<IStreamSource> &source )
+
+
+3 关于 getPlayerType
+
+player_type getPlayerType( char* url )
+player_type getPlayerType( int fd, int64_t offset, int64_t length )
+player_type getPlayerType( sp<IStreamSource> &source )
+
+enum player_type {
+    STAGEFRIGHT_PLAYER,
+    NU_PLAYER,
+    AAH_RX_PLAYER
+};
+
+NU_PLAYER：   http:// .m3u8   rtsp:// 
+AAH_RX_PLAYER：  aahRX://   （不知道什么格式）
+
+
+4 看看 NU_Player
+NU_Player 和 StageFrightPlayer（media/libmediaplayerservice/） 都基于 libstagefright
+库（media/libstagefright/）
+路径：frameworks/av/media/libmediaplayerservice/nuplayer
+
+NuPlayerDriver 基本是对 NuPlayer 的简单包装（注意这种包装方法）
+
+RTSPSource:Source:RefBase
+
+Source 定义：start stop seekTo 等函数
+
+NuPlayer::Decoder::configure()
+{
+mCodec = new ACodec; // libstagefright里
+}
+
+MediaCodec 构造函数也 new ACodec，仅此两处（StageFrightPlayer没有直接new Acodec？）
+MediaCodec::CreateByType
+MediaCodec::CreateByComponentName  2函数 new MediaCodec
+
+5 关于 stagefright 的 foundation
+/libstagefright/foundation 定义一组基础类。
+AHandler.cpp
+ALooper.cpp
+AMessage.cpp
+他们实现了java层 Looper Handler Message 类似功能
+通过线程，消息机制，在单个进程里面又实现了一种 C/S 模型。
+
+AAtomizer.cpp
+ABitReader.cpp
+ABuffer.cpp
+AString.cpp
+
+
+AHandler 定义重要纯虚函数：onMessageReceived()=0 他应该是在 Acodec.cpp中被调用
+
+6 关于OMXCodec
+
+AwesomePlayer::initAudioDecoder(...)
+{
+    sp<MediaSource> mAudioSource;
+    mAudioSource = OMXCodec::Create(...);
+}
+
+AwesomePlayer::initVideoDecoder(...)
+{
+    sp<MediaSource> mVideoSource;
+    mVideoSource = OMXCodec::Create(...);
+}
+
+sp<MediaSource> OMXCodec::Create(...)
+{
+sp<OMXCodecObserver> observer = new OMXCodecObserver;
+sp<OMXCodec> codec = new OMXCodec
+}
+
+----------
+ALOGV 如何打印出来！？
+打印级别 V/I/D/W/E
+logcat -c 清除所有log
+
+
+-------------
+20121022
+TF101  4.1.1 网页视频点击系统直接启动了Gallery2 进行播放。怎么回事。程序管理器打开，
+显示的是 Video player 而实际就是gallery进程。
+
+-------------
+梳理Gallery2中的视频播放功能
+
+各种 Listener 接口其实是1 or 1组回调函数。
+
+
+----------------------
+跟踪 TF101 网页视频播放（连接 USB 可以直接adb shell ）
+//1365 浏览器进程
+D/MediaPlayer( 1365): Couldn't open file on client side, trying server side
+在 framework/base/media/java/android/media/MediaPlayer.java 中
+
+void setDataSource(...)
+{
+    Log.d(TAG, "Couldn't open file on client side, trying server side");
+    setDataSource(uri.toString(), headers);
+}
+//109 是/system/bin/mediaserver
+I/LiveSession(  109): onConnect 'http://v.youku.com/player/1350986865/v.m3u8'
+W/LiveSession(  109): fetchFile http://v.youku.com/mp4/ts/1350986865/v.m3u8
+// 10004 是browser进程的uid  可以用 ls -n /data/data 确认
+V/ChromiumHTTPDataSource(  109): connect on behalf of uid 10004
+
+./av/media/libstagefright/chromium_http/
+
+W/NuPlayer(  109): kWhatSeek seekTimeUs=10200000 us (10.20 secs)
+
+--------------------
+跟踪播放apple.com/html5/video
+
+I/AwesomePlayer(  109): setDataSource_l('http://xxx/html5/xx848x352.m4v')
+V/ChromiumHTTPDataSource(  109): connect on behalf of uid 10004
+I/ChromiumHTTPDataSource(  109): connect to http://movies.apple.com/media...xx848x352.m4v @0
+W/WVMExtractor(  109): Failed to open libwvm.so
+I/SampleTable(  109): There are reordered frames present.
+I/OMXCodec(  109): [OMX.Nvidia.h264.decode] AVC profile = 77 (Main), level = 30
+I/OMXCodec(  109): [OMX.Nvidia.h264.decode] video dimensions are 848 x 352
+I/OMXCodec(  109): [OMX.Nvidia.h264.decode] Crop rect is 848 x 352 @ (0, 0) /*Nvidia*/
+
+I/AwesomePlayer(  109): cache is running low (1.88 secs) , pausing.
+
+---------------
+TF101 Gallery 播放一个mp4文件。这里播放滑动进度条有倍速效果，而不是直接跳转。
+373是 systemserver 进程
+I/AudioService(  373):  AudioFocus  requestAudioFocus() from android.media.AudioManager
+I/ActivityManager(  373): Displayed com.android.gallery3d/.app.MovieActivity
+109 是 mediaservice 进程
+I/OMXCodec(  109): [OMX.Nvidia.mp4.decode] video dimensions are 640 x 352  
+I/OMXCodec(  109): [OMX.Nvidia.mp4.decode] Crop rect is 640 x 352 @ (0, 0)
+
+I/SoftAAC2(  109): Reconfiguring decoder: 44100 Hz, 2 channels
+
+
+-----------------
+关于TF101 编译版本的问题：
+把升级包解压缩，看到build文件里显示 JRO03L  查看源码 build 目录的git 发现 JRO03L 是 4.1.1-r4
+./repo  init -b android-4.1.1_r4
+./repo  sync
+
+--------------------
+20130425
+

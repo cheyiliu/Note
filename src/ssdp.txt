@@ -1,0 +1,17 @@
+The SSDP protocol can discover Plug & Play devices, with uPnP (Universal Plug and
+ Play). SSDP uses unicast and multicast adress (239.255.255.250). SSDP is HTTP 
+like protocol and work with NOTIFY and M-SEARCH methods.
+
+Display Filter
+udp.dstport == 1900
+http
+./dist-packages/twisted
+
+
+mdns
+广播地址：224.0.0.251
+源ip 192.169.199.202 目的ip 17.151.16.20 NTP协议 NTP Version 4,client  
+NTP 基于 UDP 
+
+
+

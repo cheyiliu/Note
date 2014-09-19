@@ -1,0 +1,593 @@
+1 编译
+	1) 安装libsdl1.2-dev，否则ffplay不编译
+
+
+2 常用命令示例
+	1) 视频截取
+	ffmpeg -ss 00:00:30 -i test.ts -t 300  -acodec copy -vcodec copy  xx.ts
+
+3 错误信息
+	sub_packet_size is invalid
+
+
+一个rm视频，用视频截断出来新的rm，播放或者fprobe都提示sub_packet_size is invalid，然后终止运行。只有rm有问题，其他格式还好。
+
+
+-codecs 查看所有编解码器 -filters 查看所有可用的filter -pix_fmts查看所有支持的图片格式
+-sample_fmts 查看所有支持的像素格式
+ffprobe -i money.mp4 查看媒体信息
+
+
+只转格式不转码(ts转mp4)
+ffmpeg.exe -i [输入文件] -vcodec copy -acodec copy [输出文件]
+./ffmpeg -i *.ts -c:v copy -c:a copy -absf aac_adtstoasc *.mp4
+
+ffmpeg实时转码，到wowza播放成功
+ffmpeg  -i "udp://192.168.0.2:10000" -vcodec libx264 -vb 150000 -g 60 -vprofile 
+baseline -level 2.1 -acodec aac -ab 64000 -ar 48000 -ac 2 -vbsf h264_mp4toannexb 
+-strict experimental -f mpegts udp://192.168.0.2:10001?pkt_size=1316
+
+
+官网：
+Converting videos and audios has never been so easy：$ ffmpeg -i input.mp4 output.avi
+
+0.9不行，提示
+[NULL @ 0xa8d6e0] non-existing SPS 0 referenced in buffering period
+[NULL @ 0xa8d6e0] non-existing SPS 32 referenced in buffering period
+[mp4 @ 0xa8e860] Application provided invalid, non monotonically increasing dts 
+to muxer in stream 0: 194400 >= 194400
+av_interleaved_write_frame(): Invalid argument
+
+但是 1.2.1 就能成功，并且速度非常快 500M左右  服务器转 5秒即可
+
+服务器默认没有gcc编译器，我把编译好的目录上传即可
+
+ffserver 是一个 HTTP 多媒体即时广播串流服务器，支援时移
+libavcodec 包含了全部 FFmpeg 音讯／视讯 编解码函式库
+libavutil 包含一些工具函式库
+libpostproc 对于视讯做前处理的函式库
+libswscale 对于影像作缩放的函式库
+
+
+20120102 下载ffmpeg pc编译
+
+1 编译：
+configure –disable-asm
+–disable-asm 不用yasm,x264解码效率会变低
+最后生成ffmpeg avconv ffprobe ffserver 
+
+
+2 有意思，ffmpeg里面可以配置使用 libstagefright 的h264解码程序。包含的路径也完全是
+android里面libstagefright的
+enabled libstagefright_h264  && require_cpp libstagefright_h264 "binder/ProcessState.h media/stagefright/MetaData.h
+    media/stagefright/MediaBufferGroup.h media/stagefright/MediaDebug.h media/stagefright/MediaDefs.h
+    media/stagefright/OMXClient.h media/stagefright/OMXCodec.h" android::OMXClient -lstagefright -lmedia -lutils -lbinder
+这俨然是要在android环境下才可以编译通过
+
+3
+FFmpeg from the repository does not include some encoders for formats such as: H.263, aac (libfaac)
+
+4
+ffplay 无法播放声音，打印SDL_OpenAudio,查看ffplay.c，发现 SDL_OpenAudio函数返回错误。
+这个函数用来打开声音设备，不过sdl默认使用oss声音系统，而ubuntu11.10默认不支持oss，
+我企图通过一个打开的mp3播放器的/proc/pid/fd  中看出他打开的是哪个音频设备，失败，无此信息
+/dev/dsp是2.4 kernel时和现在oss声音驱动的产物，一般都没人用了
+
+查看sdl的源代码 他就没有打开过 /device/snd 
+不行啊，死活打不开 alsa 音频设备，奇怪
+
+ubuntu10.04 上面就有 /dev/audio  dsp  adsp 等设备  ubuntu11.10 上就没有
+在ubuntu10.04 上，video 设备又打不开了
+
+4 测试发现在ubuntu11.10上，用的videoi设备是x11。 在10.04山sdl可以正常工作。
+仔细比对2个configure打印的内容，发现有很多不同：
+checking for g++... g++  (other)
+checking for g++... no   (mine)
+
+checking for X... libraries , headers  (other)
+checking for X... no (mine)
+
+checking for OpenGL (GLX) support... yes (other)
+checking for OpenGL (GLX) support... no (mine)
+
+安装android开发环境的时候 安装了 libx11-dev libgl1-mesa-dev g++-multilib 这个应该就是 x11驱动 gl  和g++了
+
+只安装libx11-dev以后，编译都出现了问题，提示 Xshm.h 找不到
+【Missing XShm.h 编译libSDL和android emulator时遇到】 看来android 模拟器也用到这个
+
+再次对比configure文件：
+checking for X11/extensions/Xrandr.h... yes  顾文彪
+checking for X11/extensions/Xrandr.h... no   我的
+
+我的系统没有 libXrender 这个库
+需要apt-get install libxext-dev (这个android环境并没有要求，顾又是什么时候安装的呢？)
+然后就可以编译了
+然后音视频都可以正常播放（ubuntu11.10因为没有oss驱动 还是没有声音）
+在ubuntu11.10 上 配置sdl的时候 --disable-oss 就有声音了，可能是sdl同时支持oss和alsa，
+disable-oss 就只能用alsa了。
+
+
+-------
+ffmpeg1.2.1
+ffplay http://192.168.7.35:1935/dvr/cctv1.stream/playlist.m3u8?DVR 可以播放
+但是不能回退。（视频上点击屏幕位置进退）
+开始以为能回退，后来发现是因为我把服务器直播信号线拔了（为什么拔掉鼠标就能后退？难道
+没有直播来源就认为是点播了？）
+
+---------
+ffmpeg2.0.2 播放hls m3u8文件 Duration统计有误，原因是hls.c hlsproto.c中涉及到duration
+的变量都是int类型，给成float或double 就得到了正确的点播节目的时间。
+hls的dvr仍然不行
+
+点击屏幕seek的时候，会进入hls.c中的hls_read_seek函数，但是dvr的时候不进入
+live和dvr 会不停的去获取m3u8文件！！！ 【我在EXT_INF处打log可以看出此点】
+
+
+-----------ffmpeg  hls
+可以同时打开多个ffplay播放dvr，
+2.5s（m3u8文件里的每条时间）get一次
+
+
+
+
+-----
+http_open_cnx 调 http_connect 
+
+
+hls vod时 执行seek的流程
+ffplay[文件中] -> read_thread -> [if (is->seek_req)处的]
+avformat_seek_file -> av_seek_frame（utils.c中） -> seek_frame_internal -> read_seek
+
+
+----------
+主要是修改 hls_read_seek 这个函数
+
+version 2.0.2
+hls_read_header 里
+
+v->cur_seq_no = v->start_seq_no + v->n_segments - 3;
+v->start_seq_no等于m3u8文件第一行的ts编号，v->n_segments 是ts行数，比如cctv2运行若干
+时间后 start_seq_no = 125202 n_segments = 468
+
+----------
+hls.c 与 hlsproto.c 有何区别
+read_data(){
+v->cur_seq_no++;
+}
+------------------
+ffmpeg 中av_rescale_rnd 的含义
+直接看代码, 它的作用是计算 "a * b / c" 的值并分五种方式来取整.
+用在FFmpeg中,
+则是将以 "时钟基c" 表示的 数值a 转换成以 "时钟基b" 来表示。
+
+
+s->streams[stream_index]->time_base.den  等于 90000。 90kHz 是视频领域的常量
+avctx->time_base.den = 90000;
+
+stream_index 是什么含义？
+static int seek_frame_internal(AVFormatContext *s, int stream_index,
+                               int64_t timestamp, int flags)
+hls 点播wowza时候 stream_index == -1
+----
+    if (s->iformat->read_seek || 1) {//gaojie
+        int dir = (ts - (uint64_t)min_ts > (uint64_t)max_ts - ts ? AVSEEK_FLAG_BACKWARD : 0);
+		av_log(NULL, AV_LOG_INFO, "SEEK #######11\n");
+        int ret = av_seek_frame(s, stream_index, ts, flags | dir);//vod只走这个下面条件不满足
+        if (ret<0 && ts != min_ts && max_ts != ts) {
+			av_log(NULL, AV_LOG_INFO, "SEEK #######22\n");
+            ret = av_seek_frame(s, stream_index, dir ? max_ts : min_ts, flags | dir);
+            if (ret >= 0){
+				av_log(NULL, AV_LOG_INFO, "SEEK #######33\n");
+                ret = av_seek_frame(s, stream_index, ts, flags | (dir^AVSEEK_FLAG_BACKWARD));
+            }
+        }
+        return ret;
+    }
+
+-----
+seek位置的设置：
+ffplay.c中 event_loop -> case SDL_MOUSEMOTION
+
+--
+ffplay.c p3250 附近
+
+--20131016----------------------------------------------------------------
+mpegts.c完成dvb的解析
+解复用需要PAT PMT SDT
+EPG需要EIT TDT TOT
+
+--------------------
+libavformat/utils.c 定义了功能性行数  注意这个名字
+
+
+标准版ffmpeg打印：
+Duration: 00:19:58.08, start: 88364.442800, bitrate: 0 kb/s
+vitamio版打印
+D/Vitamio[Player](28498):   Duration: 
+D/Vitamio[Player](28498): 00:00:00.26
+D/Vitamio[Player](28498): , start: 
+D/Vitamio[Player](28498): 87734.682800
+D/Vitamio[Player](28498): , bitrate: 
+D/Vitamio[Player](28498): 4 kb/s
+因为android的打印函数默认自动换行。
+
+previous_duration 是vitomio打的补丁，他对hls做了不小的修改
+增加了EXT-X-DISCONTINUITY的解析（用于视频时间过长时）
+
+
+hls.c 和 hlsproto.c中各有一处 parse_playlist  ，hlsproto.c 好像没有使用！
+
+
+---
+vitamio iffmpeg 工程为啥每次编译都重新开始，执行了clean
+
+编译出的libffmpeg.so死机，是因为配置少了 avfilter模块
+运行起来了，但是音频解析成了2kHz，运行出错
+并且解析出的 video_width:	4  这显然不对。
+ffmpeg显示的信息 720x576  48KHz 都是正确的，传到上面就出错了。
+
+---------
+so文件应该不能再变成.o文件了！
+
+.sh文件configure时候  --disable-xx=xx \ (\后面不能有空格)
+
+
+
+-----------------------
+关于直播/时移进度条的处理:
+苹果浏览器
+直播：左侧 --:-- 右侧显示live 划块在左侧
+时移：进入时候左侧--:-- 右侧显示live 划块在右侧，划块左移后左侧显示13:00右侧显示-7:00
+
+VPlayer
+直播：左侧视频播放的时间，右侧显示00:00,划块在右侧。
+
+-mpegts解析---
+mpegts_read_packet -> handle_packets -> read_packet & handle_packet
+
+typedef struct AVInputFormat {
+int (*read_packet)(struct AVFormatContext *, AVPacket *pkt);
+}
+
+
+parser 与 decoder 之间的接口是什么？
+
+
+enum AVPictureType {
+    AV_PICTURE_TYPE_NONE = 0, ///< Undefined
+    AV_PICTURE_TYPE_I,     ///< Intra
+    AV_PICTURE_TYPE_P,     ///< Predicted
+    AV_PICTURE_TYPE_B,     ///< Bi-dir predicted
+    AV_PICTURE_TYPE_S,     ///< S(GMC)-VOP MPEG4
+    AV_PICTURE_TYPE_SI,    ///< Switching Intra
+    AV_PICTURE_TYPE_SP,    ///< Switching Predicted
+    AV_PICTURE_TYPE_BI,    ///< BI type
+};
+
+avcodec_decode_video2  解码一帧数据
+
+提取I帧命令
+$ ./ffmpeg -i test.ts  -vf '[in]select=eq(pict_type\,I)' I.frames.ts
+生成的I帧文件可以播放
+
+ ./ffmpeg -i test.ts  -vf '[in]select=eq(pict_type\,I),showinfo[out]' I.frames.jpeg
+ffmpeg功能强大
+[image2 @ 0x1abf040] Could not get frame filename number 2 from pattern 'I.frames.jpeg' 
+(either set updatefirst or use a pattern like %03d within the filename pattern)
+av_interleaved_write_frame(): Invalid argument
+
+
+
+------
+直播信号随之间AVFormatContext -> start_time 增加 这个值是怎么算出来的呢？
+1056201620
+1145801620
+1176521620
+1236681620
+
+测了几个点播节目，这个值固定是1s 即 1000000
+
+seek的时候，为啥要加上 pts(即这里说的start_time)呢？
+
+---------------------
+android-ffmpeg 
+hls_seek 中的pos 值会随时间推移增加
+
+Duration: 00:19:58.08, start: 45461.560667 (这里显示的是PTS)
+进入seek的时候，取出的 pos 就是这个“start” 并且 pos的值不会更新，进入只赋值1次。
+
+------------------
+VideoState 保存着各种状态
+ffplay 当前时间应该是读取的pts
+
+---------------
+把服务器dvr停止，此时直播变点播。
+start: 51746.360667  虽然start不从0（或说是纯点播节目的10.0000）开始，但进度条是正确的
+说明只要把pts解正确就没有问题了。
+现在dvr时移后，ffplay下方显示的pts就会出错，好！先把ffplay的这个问题解决了
+ffplay用的是AV_SYNC_AUDIO_MASTER
+
+ffplay.c中
+enum {
+    AV_SYNC_AUDIO_MASTER, /* default choice */
+    AV_SYNC_VIDEO_MASTER,
+    AV_SYNC_EXTERNAL_CLOCK, /* synchronize to an external clock */
+};
+
+
+服务器 20分钟  2.56s一段  共467段
+
+出错退出的时候只循环到427
+
+
+
+有意思：
+纯点播 sample.mp4 的m3u8
+
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:13
+#EXT-X-MEDIA-SEQUENCE:0
+#EXTINF:11.25,
+media_w1773380701_0.ts
+#EXTINF:11.25,
+media_w1773380701_1.ts
+...
+#EXTINF:1.541,
+media_w1773380701_54.ts
+#EXT-X-ENDLIST
+
+
+dvr系统停止数据源，变成点播：
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-ALLOW-CACHE:NO
+#EXT-X-TARGETDURATION:4
+#EXT-X-MEDIA-SEQUENCE:577294
+#EXT-X-ENDLIST               //endlist怎么在这里？
+#EXTINF:2.56,
+media_w1697109531_DVR_577294.ts
+...
+#EXTINF:2.56,
+media_w1697109531_DVR_577295.ts
+
+启动dvr
+#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-ALLOW-CACHE:NO
+#EXT-X-TARGETDURATION:4
+#EXT-X-MEDIA-SEQUENCE:577569  //注意，这里标注第一条
+#EXTINF:2.56,
+media_w979079760_DVR_577569.ts
+#EXTINF:2.56,
+media_w979079760_DVR_577570.ts
+...
+#EXTINF:2.56,
+media_w979079760_DVR_578035.ts
+
+
+-----------------------------
+seek的时候，会先调用stop在调用start
+
+onSeekComplete
+
+
+hls_read_header
+
+------------
+转载于：http://blog.csdn.net/moruite/article/details/6305944，这篇文章算是ffmpeg移
+植方面的经典文章了。
+IT行业是一个踩在巨人肩膀上前进的行业，否则做的事情不一定有意义，所以我也是基于havlenapetr
+移植的ffmpeg基础上做了些改进，他做的主要贡献有：
+1.移植了ffmpeg并将与媒体相关的结构体在java层重新进行了封装，方便应用程序在java层直
+接操作ffmpeg API,如各种媒体格式转码及播放，如图1所示
+2.模仿Android的MediaPlayer类实现了ffmpeg的播放接口，如setDataSource(),setDisplay(),
+start(), stop(),pause()等，缺点是没有实现seek功能。
+3.实现了一个简单播放器功能，抛弃掉ffmpeg自带的ffplay播放器，他重新实现了音视频的分离
+播放和同步处理等播放器应有的功能。
+
+----------
+可能有用的打印
+W/SystemClock(  433): time going backwards: prev 67674907005003(ioctl) vs now 67674906813003(ioctl), tid=515
+
+-----------------
+集中经历解决seek问题
+
+ffplay 回退的时候非常的快，怎么做到的
+
+http://192.168.7.35:1935/dvr/cctv2.stream/playlist.m3u8?DVR: error while seeking
+
+
+按键控制seek 走event_loop处的do_seek: 这个地方调用的stream_seek 指定了rel参数
+点击屏幕位置时，seek_rel 为0  
+上下左右键时，分别是 60000000 -60000000 -10000000 10000000
+点击屏幕取值 
+INT64_MIN  -9223372036854775808 = 0x8000000000000000  (用%lx打印)
+INT64_MAX  9223372036854775807 = 0x7fffffffffffffff
+点击屏幕 seek_flags = 0
+
+
+read_seek2 不成立！
+avformat_seek_file 里面走 if (s->iformat->read_seek || 1)
+
+
+seek到最后的时候 read_thread 整个不运行了。
+
+
+
+    /**
+     * Presentation timestamp in AVStream->time_base units; the time at which
+     * the decompressed packet will be presented to the user.
+     * Can be AV_NOPTS_VALUE if it is not stored in the file.
+     * pts MUST be larger or equal to dts as presentation cannot happen before
+     * decompression, unless one wants to view hex dumps. Some formats misuse
+     * the terms dts and pts/cts to mean something different. Such timestamps
+     * must be converted to true pts/dts before they are stored in AVPacket.
+     */
+    int64_t pts;
+    /**
+     * Decompression timestamp in AVStream->time_base units; the time at which
+     * the packet is decompressed.
+     * Can be AV_NOPTS_VALUE if it is not stored in the file.
+     */
+    int64_t dts;
+
+
+-----
+
+    /**
+     * Decoding: pts of the first frame of the stream in presentation order, in stream time base.
+     * Only set this if you are absolutely 100% sure that the value you set
+     * it to really is the pts of the first frame.
+     * This may be undefined (AV_NOPTS_VALUE).
+     * @note The ASF header does NOT contain a correct start_time the ASF
+     * demuxer must NOT set this.
+     */
+    int64_t start_time;
+
+
+start_time何时赋值？
+
+
+##pts_drift=-1383549524.89 update=1383556510.83 6985.93
+##pts_drift=-1383549524.89 update=1383556510.94 6986.05
+##pts_drift=-1383454752.86 update=1383556510.97 101758.11
+
+
+##pts_drift=-1383550709.84 update=1383557014.13 6304.29
+##pts_drift=-1383550153.14 update=1383557014.20 6861.05
+
+时钟更新流程：周期调用
+update_video_pts -> set_clock -> set_clock_at
+
+// reference time stamp should be 60 s before first time stamp
+pts_wrap_reference 是 first dts - 60s
+
+重要现象：
+20分钟之后，就可以随意跳转了，泥马！
+过10分钟，10分钟之内不可timeshift，依此类推
+
+开始后，有大约1分钟的地方不能timeshift，过2分钟后，就3分钟的位置不能看，过10分钟就11分钟
+的位置不能看依次类推，但是开始超过20分钟，就可以随意时移了，现象很是怪异。
+不过根据这种现象，我把开始的pts整体向后平移 duration 时间，竟然解决了问题。
+具体的还要再调查。
+
+static int update_wrap_reference(AVFormatContext *s, AVStream *st, int stream_index)
+{
+// reference time stamp should be 60 s before first time stamp
+int64_t pts_wrap_reference = st->first_dts - 
+av_rescale(60, st->time_base.den, st->time_base.num)-1200*90000; //后退1200s
+//这里减了能保证ffplay下方显示的pts正常，因为可以不进入 wrap_timestamp()的 +(1ULL<<st->pts_wrap_bits)逻辑了
+不减时间也可以，对于android版本
+注意，修改时不能影响到点播。
+果然影响了点播，点播seek后会自动向前移动20分钟，:-)
+
+
+注意：AVFormatContext结构体不能在最开始，因为他用了 类继承的概念
+
+
+-----------------------
+xss调试airplay，解出音频为pcm格式，使用
+ffplay -i test.pcm  -f s16le -channels 2 -ar 44100  可以播放。
+
+airplay ，手机先将mp3 转换成alac，再发送出去。
+--------------
+20140310 使用java版本alac解析出来的pcm，提示
+Format mp3 detected only with low score of 25, misdetection possible
+
+
+ffmpeg -i input.mp4 -c:v libx264 -profile:v high -level:v 4.0 -c:a copy output.mp4
+
+--enable-libstagefright-h264  enable H.264 decoding via libstagefright [no]
+
+ 
+一个有问题的流-ss -t不好用，用mediainfo（windows下的开源软件，看这个流只有30s）
+后来仔细看看才发现，那个有问题的流，用vlc可以正常播放，但是ffplay播放不了
+这也解释了ffmpeg为啥不能正确截取了。把这个流处理了一下，把中间错误的删除了就好了。
+
+
+提取es流
+ffmpeg -i "d:\out1.ts" -vcodec copy -f rawvideo d:\2.mpeg
+
+ffmpeg -i "d:\out1.ts" -vcodec copy -f rawvideo d:\2.bin 也行 
+说明 -f rawvideoi起到了决定性作用
+
+ffplay -i housy_airtunes_pcm -f s16be -channels 4 -ar 44100
+
+
+--------------------------------------------------------------------------------
+20140402 有收获
+alac格式的.m4a 文件转换为wav文件的命令：
+./ffplay -i xx.m4a out.wav
+
+wav 文件 就是pcm文件+文件头，头信息包括：采样频率，采样深度，通道数
+
+如果是16bit深度采样，2通道，存储格式就是  2byte 2byte 分别表示左通道，右通道
+至于无符号有符号的变换  单字节 +- 0x80  双字节 +- 0x8000 
+
+大小端 就是 0x1234 变为 0x3412
+
+原来保存的文件用ffplay播放速度变为1半，是因为，每个通道的16bit 都变成了32bit，并且做
+了符号扩展，所以每16bit前面都添加了 0xffff 或者 0x0000。这同时解释了速度减半和一个声
+道没声音2个问题。
+
+
+------------
+20140519 
+xss：用udp从192.168.6.200 推送流到192.168.6.20  在6.20上用ffplay播放  
+ffplay udp://192.168.6.20:1000
+但是我记得在vlc中，udp组播过来的数据，我应该写udp://192.168.6.20播放（即：播放本地地址）
+到底要怎么写呢？
+
+---
+20140709
+xss调试mx盒子时移功能，服务器设置6小时时移，每条2.4s，共8100条m3u8 分析这个文件需要4s
+而一条才2.4s，也就是过2.4s就更新playlist，分析时间比更新时间还长，所以导致问题。
+
+
+virtual box 虚拟机 ubuntu中 ffplay：
+No more channel combinations to try, audio open failed
+
+
+vlc支持的网络协议：2.1.0 
+http://www.example.com/stream.avi     // avi也可以流化？
+rtp://@:1234
+rtsp://
+
+vlc 可以录屏
+
+
+--------
+vitamio 继续深化ffmpeg，作出8秒视频的应用。
+开源/商业2条线
+
+
+---
+广告与正片无缝衔接
+
+
+
+---
+ffplay播放一个ts流小段落，提示
+non-existing SPS 0 referenced in buffering period
+
+c270摄像头：
+./ffplay  -f video4linux2  -i /dev/video0
+默认格式：yuyv422, 640x480, 147456 kb/s, 30 fps（640x480x16x30=147456000）
+如何提高分辨率
+
+
+ffmpeg -f alsa -i hw:1 -f video4linux2 -s 320x240 -i /dev/video0 out.mpg(没有试)
+用了一下cheese，再回头用ffplay显示：
+yuyv422, 1280x960, 589824 kb/s, 30 fps
+
+
+lsusb: ID 046d:0825 Logitech, Inc. Webcam C270
+cheese webcam booth软件(软件中心搜cheese)
+
+
+如何修复一个损坏的视频dsdb
+
+格式转换
+ffmpeg  -i xxx.wmv  xxx-1.mp4 可以转换，但是原片分辨率有损失。但是查看转后mp4文件，分辨率仍然是之前的1280x720，为何？
+

@@ -1,0 +1,914 @@
+minigui
+
+ MWM_DEFBARLEN 固定长度的时候默认的长度
+pageStep 什么含义?
+si.nPage = MIN( pData->itemVisible, pData->itemCount );
+nPage 取itemVisible和itemCount中最小的一个
+然后pSBar->pageStep = lpsi->nPage;
+把nPage赋值给pageSetp
+所以pageSetp就时一页的条数
+
+scroolbar的类型:固定长度还是可变长度要做成可以设置的.
+看看win32是怎么做的.
+ pSBar->barLen = (int) (moveRange*pSBar->pageStep * 1.0f/(pSBar->maxPos - pSBar->minPos + 1) + 0.5);后面+0.5是四舍五入
+
+如果算出来的值小于最小值,则取最小值.
+原来最小值8个象素,这个跟Win32一摸一样.
+
+moveRange改为Range
+
+pSBar->maxPos - pSBar->minPos + 1事先算出来
+
+位置的最小值不知道什么时候会用到.
+
+
+curPos  scroll的当前位置
+
+SIF_RANGE SIF_PAGE SIF_POS
+range指 nMin nMax
+POS指 curPos 当前位置
+Page指 pageSetp 指每一个page代表多少条记录.
+
+ indicates which fields contain valid values,
+指示哪个区域包含有效值.
+
+如果没有指定range标志  那么nmin默认0 nmax默认100
+
+这样写的目的何在呢?有必要搞这么复杂吗?
+
+
+    {
+        int max = pSBar->maxPos;
+        max -= ((pSBar->pageStep - 1) > 0)?(pSBar->pageStep - 1):0;
+
+        if (pSBar->curPos > max)
+            pSBar->curPos = max;
+    }
+何意思?
+
+
+看一下 qpsk中频的波形.
+
+
+else if ( pSBar->pageStep > (pSBar->maxPos - pSBar->minPos + 1) )这个一般是不满足的啊
+
+
+si.nPos = pData->itemTop;
+当前位置 = itemTop( 每页的一条的索引 ) 可见只要每页的一条的索引不动,滚动条就不动.
+
+curPos的值最大为nMax-nPage
+
+scrollBarPos 函数一个内部函数
+SetScrollPos 调用上面的的函数
+
+SetScrollInfo 里面相应redraw的时候也调用 scrollBarPos 
+
+drawScrollBar注意,正常情况下 只需要画中间部分,两边的箭头不需要画.
+程序里面通过剪切 ClipRectIntersect
+保证正常情况下不画箭头部分
+
+画划块和背景的时候使用了 DrawBoxFromBitmap函数
+Draws a box from bitmap. 属于一个帮助函数
+内部调用 FillBoxWithBitmapPart 函数实现的.
+
+ * \param hdc The handle to drawing context.
+ * \param box The rectangle of the box.
+ * \param bmp The pointer to the BITMAP object.
+ * \param h_v Draw the box along horizental or vertical.
+ * \param do_clip Does clip the drawing in the box?
+每种情况填充3次 调用3次 FillBoxWithBitmapPart
+
+bmp_x = (box->right + box->left - bmp_w)>>1;  取box的中间位置.!!
+
+DrawBoxFromBitmap 这个函数 画两头和中间不一样的"条"
+要求这个图片 两头和中间各占1/3
+
+lstCancelSelected 只在这里调用一次.
+这个处理删除!!!
+
+
+LB_SETCURSEL的处理中 
+
+            if (new >= 0 && new != old) {
+                if (pData->itemCount - new >= pData->itemVisibles)
+                    newTop = new;
+                else
+                    newTop = MAX (pData->itemCount - pData->itemVisibles, 0);
+这里好像有点问题啊!!
+
+
+LB_GETITEMADDDATA
+LB_SETITEMADDDATA
+设置和获得 32-bit data value associated with an item.
+
+给每一个条目附加一个32位的数.  listbox内部没有处理,只是提供一个set一个get消息
+这有啥用啊!!!
+删除!!!
+
+多选listbox到底怎么操作!!!
+
+
+
+1 一个线程如果有了顶级窗口,则用他作为托管窗口
+2 突然想到一个问题:我如何做到按上下键 相应normal条呢?
+我在桌面上使无法接受键盘消息的,当然有一个办法就是先创建一个跟桌面一样大小的背景全透明的窗口. normal条隐藏之后,桌面成了活动窗口
+有一个dskHandleKeyHooks函数 用来处理我这种情况
+有一个MSG_REGKEYHOOK消息!
+封装好的函数 RegisterKeyMsgHook
+
+3 桌面是一个特殊的主窗口?!
+4 桌面窗口自己有一个消息队列
+
+    if (ActMainwnd) {
+        if (dskHandleKeyHooks ((HWND)ActMainwnd, message, (WPARAM)scancode, (LPARAM)status) == HOOK_GOON)
+            PostMessage((HWND)ActMainwnd, message, (WPARAM)scancode, (LPARAM)status);
+    } else {
+        if (dskHandleKeyHooks (HWND_DESKTOP, message, (WPARAM)scancode, (LPARAM)status) == HOOK_GOON)
+            SendMessage(HWND_DESKTOP, MSG_DT_KEYOFF + message,(WPARAM)scancode, (LPARAM)status);
+    }
+注意看上面的代码:
+进入这个函数的时候,只有3个消息 keydown keyup char 
+如果没有hook函数 则发送DT+message 就是3个 DT_keydown  DT_keyup  DT_char
+而这3个消息在desktopproc 中没有处理 见下:
+
+        case MSG_DT_KEYDOWN:
+        case MSG_DT_CHAR:
+        case MSG_DT_KEYUP:
+        case MSG_DT_LBUTTONDOWN:
+        case MSG_DT_LBUTTONUP:
+        case MSG_DT_LBUTTONDBLCLK:
+        case MSG_DT_MOUSEMOVE:
+        case MSG_DT_RBUTTONDOWN:
+        case MSG_DT_RBUTTONDBLCLK:
+
+可以把这些都删除  desktop中的按键处理 都用hook函数处理就好了!
+
+但是 按 power 待机 按menu 出菜单这样的操作 放到哪里好呢?
+
+最开始我是想吧他放到desktop.c里面处理的.
+但是总觉得不好,应为desktop.c是要封死的.
+
+另外请注意:活动窗口和desktop都可以hootkey  并且使用的是同一个hook函数.
+alt+tab的处理可以去掉了
+
+printscreen的操作也要去掉了. 原来想在这里处理power 和 menu键的.
+现在显然要用 hook函数来处理power和menu等公共的按键.
+
+封装好的 注册hook 的函数RegisterKeyMsgHook
+
+MSGHOOK RegisterKeyMsgHook( void* context, MSGHOOK hook ) 第一个参数是干什么用的呢?
+
+我之前还在找:系统中有没有在一个proc函数还没有出来的时候又调用SendMessage进入同一个proc函数现在找到了 desktop的proc在没有活动窗口的时候,发送DT_Keyup等消息的时候就属于这种情况啊!
+
+
+CheckAndGetMainWindowPtr !!
+窗口结构体里面包含,pNode结构体指针,实际上没有必要使用指针在分配空间,直接使用结构体实体就好了,!!
+
+ * \fn BOOL GUIAPI DestroyMainWindow (HWND hWnd)
+ * \brief Destroys a main window.
+ *
+ * This function destroys the main window specified by \a hWnd.
+ * It does not release all system resource used by the main window.
+ * You should call \a MainWindowThreadCleanup to destroy the main window
+ * actually.
+为什么要这样做? 销毁窗口还不销毁彻底,还要再调用 MainWindowThreadCleanup???
+
+recalcWinUnderThis 里面调用clipByAllAboveThis 到底是under还是above
+
+
+再次理解 hosting hosted 什么的概念.
+paint的时候,以hosted为依据.
+那么如果 4个窗口在2个线程里面 这4个窗口的循序是无法确定的.
+
+记事本的"查找"是一个非模态 窗口,但是这个查找窗口
+GET_WIN_ZORDER 改为getzorder
+
+当窗口不在同一个线程里面的时候: 先想想:有没有这样的应用???
+起码基本应用型:没有这样的应用:做一个机顶合,gui在一个线程足够了!!!
+
+再想:一个是圆角窗口 其实还有一个是透明窗口呢!!!!透明窗口,这个是最有意义的
+整个窗口透明分为2种情况:半透明和一张png图片.
+
+
+startClipWin 和endClipWin 就是枷锁解锁
+
+一个透明窗口上面的控件也是问题
+比如一个窗口消失
+
+在想想 paint时候的那个递归
+任何递归都可以用循环代替.
+
+
+
+static HWND CheckInvRgn( PMAINWIN pWin )
+{
+    PCTL pCtrl = (PCTL)pWin;
+    HWND hwnd;
+
+    if ( pCtrl->InvRgn.rgn.head )
+        return (HWND)pCtrl;
+    pCtrl = pCtrl->children;
+    while ( pCtrl ) {
+        if ( ( hwnd = CheckInvRgn((PMAINWIN) pCtrl) ) )
+            return hwnd;
+        pCtrl = pCtrl->next;
+    }
+    return 0;
+}
+
+static HWND CheckHostedTree( PMAINWIN pHosting )
+{
+    HWND hNeedPaint;
+    PMAINWIN pHosted;
+
+    if ( (hNeedPaint = CheckInvRgn(pHosting)) )
+        return hNeedPaint;
+    pHosted = pHosting->pFirstHosted;
+    while ( pHosted ) {
+        if ( (hNeedPaint = CheckHostedTree(pHosted)) )
+            return hNeedPaint;
+        pHosted = pHosted->pNextHosted;
+    }
+    return 0;
+}
+
+
+20100207 销毁主窗口本身是一个递归调用!!!晕死了!
+并且:销毁一个主窗口会同时销毁被他托管的窗口
+这里是一个非常复杂的逻辑:如果一个窗口有托管的窗口,托管的窗口又有托管的窗口,则都要销毁.
+
+    head = pWin->pFirstHosted;
+    while ( head ) {
+        next = head->pNextHosted;
+        if ( IsDialog((HWND)head) ) {
+            EndDialog( (HWND)head, IDCANCEL );
+        } else {
+            if ( DestroyMainWindow( (HWND)head) )
+                MainWindowCleanup( (HWND)head );
+        }
+        head = next;
+    }
+
+
+首先,阴影是有不通透明度的灰度值
+用PS画出来的阴影为6象素宽,6级灰度.实际上看ps画出来的,并不是准确的灰度
+因为灰度 RGB的值都是一样的,但是PS出来的 略有差别,但是这个不重要,取一样的即可.
+6级依次取值为:
+
+下方和右方的灰度值是不同的.
+垂直 1排  81 83 86  水平1排 66 67 70
+
+也没准: 我画一个绿色矩行  就是纯灰度
+画一个蓝色矩形,就不是纯灰度,
+
+绿色矩形的灰度值依次为:
+垂直: 87 110 140 179 209  232 248
+水平: 71 87  110 140 179  209 232
+
+共分为7级
+
+两头和拐角保存成一个map图
+右上角 56字节 8行7列 依次为
+248 249 251 252 254 254 255
+235 238 242 246 250 252 254
+215 220 227 237 244 250 254
+188 197 209 224 237 246 252
+154 168 186 209 227 242 251
+127 145 168 197 220 238 249
+107 127 154 188 215 235 248 
+94  116 145 182 211 233 248
+
+拐角 7x7
+94  116 145 182 211 233 248
+107 127 154 188 215 235 248
+127 145 168 197 220 238 249
+154 168 186 209 227 242 251
+188 197 209 224 237 246 252
+215 220 227 237 244 250 254
+235 238 242 246 250 252 254
+跟上面的一样.
+
+
+左下角: 7x7
+233 211 182 145 116 94  79 
+235 215 188 154 127 107 94
+238 220 197 168 145 127 116
+242 227 209 186 168 154 145 
+246 237 224 209 197 188 182 
+250 244 237 227 220 215 211
+252 250 246 242 238 235 233 
+
+在水平线的最后一列 实际上是有不同的灰度  忽略不计了 基本看不出来
+
+
+
+2008/03/07
+
+分析newgal目录：
+先理解blit的含义
+
+static void lstDrawFocusRect (HWND hwnd, HDC hdc, PLISTBOXDATA pData)
+
+2008/11/11 23:44
+还是想好好研究以下MiniGUI.在高清机器上，MiniGUI绝对大有所为！
+
+2008/11/12  0:10
+1首先要理解surface的概念
+有一个surface.c文件
+
+整理清楚MiniGUI的内存使用情况
+
+InitGAL调用GAL_VideoInit
+关于那个VC的项目  怎么才能把库和应用程序编译到一起还能够调试
+20081112发现 其实不用和到一起 照样可以调试 使用VC6.0
+编译库的时候选择 Debug  就是在Project->Setting中 所有带Debug字眼的都选上
+这样在另外一个VC工程中 连接这个库的时候 就可以进入到库函数的内部进行调试
+要搞清楚VC6.0中.dsp 和 .dsw文件的关系
+例子.exe必须跟minigui.lib  minigui.dll在同一个目录
+找不到库的时候要添加路径 方法：
+Tools->options->Directories
+VC生成一个MiniGUI.dll 一个Minigui.lib
+Debug的时候如果出现一个对话框 说明某些东西的路径没有设置对
+
+下面仔细分析一下bitblt.c这个函数
+首先例子程序应该是个RGB16 [这个值在wvfb的configure.ini文件里面定义]
+深度16即565格式
+找对内存直接修改 就可以在wvfb上面有所体现[这一点让人非常兴奋]
+纯红色
+1111 1000 0000 0000
+内存中要调换顺序为
+0x00f8
+纯绿色
+0000 0111 1110 0000
+内存中要调换顺序
+0xe007
+纯蓝色
+0000 0000 0001 1111
+内存中要调换顺序
+0x1f00
+
+这里有一点可以肯定 就是MiniGUI直接操作了wvfb的缓冲区
+[而实际上 就应该这样做]
+
+[注意]bitblt那个例子 打开wvfb后整个窗口是640*480
+
+20081112 3:12 在家
+好！睡觉！现在对minigui有了更深刻的认识了
+
+
+20081114 23:49
+要弄清楚gui的逻辑结构
+
+用的是线程模式Thread 
+#ifndef _LITE_VERSION是成立的
+
+第一个函数 CreateMainWindow 
+
+/*Already have a top level main window
+顶级窗口的概念
+创建和显示主窗口CreateMainWindow 
+
+20081115 1:51
+minigui开始创建了很多线程，这里还是比较复杂的
+调试带库的程序 要在库里面设置断点  只需要打开库文件的源码 设置断点即可
+
+HDC设备上下文句柄 Handle to device context
+
+MiniGUI还是很专业的，要做复杂功能必须使用她
+
+应该是MiniGUI的Thread模式  可以在RTOS中的多个任务中创建窗口
+
+InitWndManagementInfo这个函数设置桌面的大小
+#define HDC_SCREEN  0 这是一个特殊的DC代表桌面
+理解这里面的一些概念 HDC到PDC的转换
+
+[注意]HDC就是一个[整型数]
+而实际上是DC结构体的[地址]
+所以 dc_HDC2PDC 这个函数就是把整形数hdc转换成PDC类型的地址
+
+typedef struct tagDC DC;
+typedef struct tagDC* PDC;
+DC是一个很复杂的结构体 记录了句柄的详细信息
+里面有一项
+RECT DevRC 是一个Rectangle 记录[左右顶底]
+
+
+而DC是一个结构体  PDC是这个结构体的指针
+screen是一个特殊的DC 很多地方都加了特殊处理
+
+typedef struct GAL_Surface {
+理解Surface的含义
+
+DesktopMain这个函数是一个线程
+Desktop window 使用的一个线程
+这个线程跟其他主窗口的线程具有同样的优先级
+如果没有main window接收低级事件，桌面窗口是唯一能够接收低级事件的窗口
+
+GetMessage应用程序里面收消息的函数
+
+HWND 主窗口或者控件的handle
+handle of window
+也是一个unsigned int
+
+typedef struct _MSG
+{
+	/** The handle to the window which receives this message. */
+    HWND             hwnd;
+	/** The message identifier. */
+    int              message;
+    /** The first parameter of the message (32-bit integer). */
+    WPARAM           wParam;
+    /** The second parameter of the message (32-bit integer). */
+    LPARAM           lParam;
+    /** Time*/
+    unsigned int     time;
+#ifndef _LITE_VERSION
+    /** Addtional data*/
+    void*            pAdd;
+#endif
+} MSG;
+注意这个消息，首先要指定，是哪个HWND接收这个消息，也就是说要说明
+是哪个窗口接收这个消息
+
+XX_WinProc(HWND hWnd, int message, WPARAM wParam, LPARAM lParam)
+message消息都是事先定义好的吗？
+
+PostMessage函数  发消息函数
+int PostMessage (HWND hWnd, int iMsg, WPARAM wParam, LPARAM lParam)
+注意理解，GUI系统的消息队列还不同于操作系统的消息队列
+
+/* get main window pointer of a window, including desktop window */
+static inline PMAINWIN getMainWindowPtr (HWND hWnd){
+    PMAINWIN pWin;
+    MG_CHECK_RET (MG_IS_WINDOW(hWnd), NULL);
+    pWin = MG_GET_WINDOW_PTR (hWnd);
+    return pWin->pMainWin;
+}
+
+注意HWND
+也是一个结构体的指针
+
+
+CreateMainWindow和
+CreateWindow函数
+
+在minigui-thread模式中，每个建立有窗口的gui线程有自己的消息队列
+在rtos中，一个线程就相当于一个任务。而且，所有属于同一个线程的窗口
+共享同一个消息队列
+GetMessage()函数将获得所有与hMainWnd窗口在同一个线程中的窗口的消息
+
+MSG_CREATE消息
+该消息在建立好的窗口成功添加到minigui的窗口管理器之后发送到窗口过程
+这时应用程序可以在其中创建子窗口
+
+源码中的一段注释：
+    /* There was a very large bug. 
+     * We should add the new main window in system and then
+     * SendMessage MSG_CREATE for application to create
+     * child windows.
+     */
+在CreateMainWindow函数中发消息
+SendMessage( [MSG_CREATE])
+在主窗口的Proc函数里面要有对消息MSG_CREATE的处理
+SendMessage函数实际上就是直接执行Proc函数
+最后一句
+return (*WndProc)(hWnd, iMsg, wParam, lParam);
+
+
+CreateMainWindow函数创建一个主窗口 在MSG_CREATE消息里面创建子窗体
+使用函数CreateWindow
+
+一个消息循环
+    while (GetMessage(&Msg, hMainWnd)) {
+        TranslateMessage(&Msg);
+        DispatchMessage(&Msg);
+    }
+
+主窗口的结构体跟控件的结构体一样
+所以minigui里面有一个“移花接木”术
+在这两个结构体之间有一个相当于强制类型转换。
+实际上 minigui的许多特性 并不适用于机顶盒的简单应用
+
+2008年11月28日 23点52分
+关于gui中的消息的理解，一直没有到位。感觉什么都不会了。坚持！，就像初中的学习一样有任性，最后，达到一个高度，注意珍惜时间。
+
+GetWndProc这个函数在3个地方调用过
+1  SendMessage  这个发消息就相当于直接调用过程处理函数
+2  DispatchMessage 这个复杂些
+3  SendAsyncMessage
+
+注意下面的函数
+SendSyncMessage
+/* send a synchronous message to a window in a different thread */
+在这个同步消息内部会有
+ /* suspend until the message been handled. */
+也就是说，同步消息是在一个线程中发给另外一个线程中的窗口
+并且会等待消息被处理完
+相对应的
+SendAsyncMessage
+
+PostSyncMessage调用SendSyncMessage
+解释：
+Posts a synchronical message to a window which is in different thread.
+This function will return until 
+ * the message is handled by the window procedure.
+
+note The destination window must belong to other thread.
+
+
+// the MSGQUEUE struct is a internal struct.
+// using semaphores to implement message queue.
+MiniGUI里面的消息队列是用信号量做的一个消息队列 
+并不是RTOS里面说的消息队列
+
+
+LB_SETCURSEL  Selects an item.  
+An application sends an LB_SETCURSEL message to a list box to 
+select an item and scroll it into view, if necessary.
+The index of the item to be selected and hilighted.
+返回原来的选择值.
+
+这个有用啊!! 进入节目列表的时候需要停在上次退出时候的位置.
+
+if ( newItem<0 || newItem>pData->itemCount - 1 ) {
+      if( dwStyle & LBS_MULTIPLESEL )
+          return LB_ERR;
+        else 
+    return lstCancelSelected( hwnd, pData );
+  }
+setcursel的时候,指定位置如果超出范围,返回错误.
+但是为什么不是multisel的时候,不返回错误而是取消选择?
+
+lstCancelSelected 只在这里调用一次.
+这个处理删除!!!
+
+选中后,都在每屏的最上方.
+
+owerdata 无法做多选择列表吧!
+
+LB_GETSELITEMS
+对于多选择列表,返回一个buffer 记录选中条目.
+
+应该改到1000行以内!!!
+
+多选listbox到底怎么操作!!!
+
+多选列表框何时用?
+比如再播放mp3的时候,正在播放的显示选中,同时还可以再去选择
+实际上也没有必要,做一个特殊标记就可以了,比如我的手机.
+
+mi中的,使用空格选择和取消多选项的
+
+多项选择什么时候会用到呢?必须用到的地方?
+
+LB_SETSEL 在多选列表中,把一条设置成选择状态!
+lstInvItem 是某一条区域无效!
+
+itemHi与select标志位的关系:
+对于单选择listbox, itemHi项是唯一有select标志的
+对于多选listbox 有select标志的有若干了就
+
+lstSelectItem这个函数要从头查找原来
+注意里面的实现
+newItem->dwFlags ^= LBIF_SELECTED; 如果是多选listbox
+原来是选择的就不选择原来是不选择的就选择.
+
+20100123  1:31
+在win32中,Listbox添加大量数据时也会看到滚动条变化过程[有一个VC测试程序]
+实际应用中 
+我可以改listbox为:先设置总条数,显示好滚动条,在添加条目. 当然这样时最快的.
+但是以后如果添加一条就要再设置条数.不标准.起码win32没有这样做
+
+第二种方法,为了不看到滚动条变化的过程,我可以先不显示listbox,添加完成再显示.
+这样的缺点是慢了一些.
+感觉VC就是这样做的,listbox打开后看不到滚动条变化的过程,直接显示为最终位置和大小
+我那个VC测试程序,如果addstring时候加入延时,则窗口会打开很慢,而不是先打开再看到插入过程. 点击清空的时候倒是能看到过程, 呵呵 点击增加条目也可以看到滚动条过程.
+
+回头看mi的创建对话框:开始窗口类型是不可见,发送了MSG_INITDIALOG之后才设置为可见.
+所以VC的那个例子,再MSG_INITDIALOG中插入若干多项,我看不到插入过程,插入完成后才会使
+主窗口可见,所以看不到滚动条的变化过程.好 就这样实现!!!
+
+关于虚拟列表专题和打开列表停留在上次关闭时候选中的条目处.
+在节目列表的时候使用.
+但是有个问题,只能使用SETCURSEL消息设置选中条,选中条只能在最上方,不能保证跟关闭时候的在listbox的位置一致.这个没有关系.
+
+我可以在创建listbox的时候no visible  执行完SETCURSEL后再visible,可以看到直接挺到了选中条目处.
+
+什么时候要数据合理呢? SETCOUNT的时候吗?
+
+
+1 091106 在用VC做芯片烧写器的时候，如果说
+画操作只能在 OnPain里面响应吗？
+比如我 在 OnLButtonDown（鼠标消息）的时候想把一个Rect的颜色改变，即重新填充
+如果不在OnPaint里面画会有什么问题呢？
+
+CPaintDC::CPaintDC(CWnd* pWnd)
+{
+	ASSERT_VALID(pWnd);
+	ASSERT(::IsWindow(pWnd->m_hWnd));
+
+	if (!Attach(::BeginPaint(m_hWnd = pWnd->m_hWnd, &m_ps)))
+		AfxThrowResourceException();
+}
+
+刚刚体会到C++的强大
+定一个了一个局部的 CPaintDC，在这个局部类实例所在空间无效的一刹那，会调用析构函数，哎呀！！！
+CPaintDC::~CPaintDC()
+{
+	ASSERT(m_hDC != NULL);
+	ASSERT(::IsWindow(m_hWnd));
+
+	::EndPaint(m_hWnd, &m_ps);
+	Detach();
+}
+
+不知道为什么VC 的dialog里面，会一直响应OnPaint()消息。
+
+2 再一次理解InvalideRect 然后在Paint消息里面重画和直接就重画，有何区别。
+3 如果在C++编程过程中，需要一个全局变量在各个函数之间使用，我想到的是定义一个全局变量。
+但是葛德亮说在类中增加一个数据成员即可，哎！要熟悉C++的思路。这才体现出了C++的数据封装啊。
+4 开始以为VC的onPaint会一直进入，实际上不是（葛德亮告诉我的） 是因为程序窗口不停的在最小化/还原 之间切换
+5 C++类里面不能直接给一个定义的变量赋值！！？？？
+
+
+6 把Flash的操作也抽象到UI里面，Flash，没有文件系统，就是一块存储区域。
+文件系统也封装到UI中。
+
+7 改rc_output和surface的 clip_rect  慎重！！
+（1）FillBox这个函数
+首先 ENTER_DRAWING 先求 &pdc->rc_output, &pdc->ecrgn.rcBound的交集 也就是说 要输出的区域跟 有效剪切域重叠了，才会去输出，否则直接退出。
+（2）系统中存在着两个 Rect系统  一个是左右顶底的格式，另一个是左顶 长度 高度的格式，应该给统一一下，以便减少运算
+（3）发现一个问题 mini中 
+#define RECTW(rc)    (rc.right - rc.left)
+宽度= left-right   应该再加1吧！！！
+在我的OSD系统中  left+width-1 ==right
+（4）DC 里面的 rc_output 要留着  ENTER_DRAWING的时候要用这个算交集的
+
+第二步，修改BitBlt函数 ，跟FillBox类似。
+这两个函数上来先 check_ecrgn  生成一个 有效剪切域。
+等等。mini里面所有的 两种矩形表示方法的转换 都没有加减1的处理
+全部没有加减1， 没有问题，最终导致看到的效果都大了1，这个没有关系
+
+简化OSD_Blit这个函数。目前NEC的驱动BitBlt还有问题  方法1，向右下移动的时候使用软件实现 （同一个surface的时候，并且交叉） 这样也可以。或者等NEC改驱动。
+
+分两种情况：在同一个surface 不在同一个surface  在同一个surface时，是否交叉。
+
+OSD_Blit里面一坨复杂的判断有什么用呢？
+
+SET_OSD_CLIPRECT (pddc, eff_rc);
+只给 目标DC设置 有效剪切域 那么源区域就不处理了吗？
+
+Blit要判断源区域有没有超出原surface的大小  如果超出，要根据源区域大小剪切目的区域。
+那么必须把blit目的的全部区域传进来，直接传 剪切后的，就无法跟源区域做剪切了
+
+FillBox 参数是可以设置成 负数 的 这一点很好，设置成负数说明区域超出了显示范围，比如超出屏幕范围。
+
+【坐标是可以为负值的！！！！！】窗口移动后就会产生负值。
+osd_blit函数里面 
+
+刚发现，还有一个rotatebmp.c呢。
+
+8 mi中，不同的组件还是不能随意组合的。但是gtk和qt能。要好好研究下，gtk和qt是怎么做的。
+
+
+9 基本的一个窗口： 现在的GAI程序  设置左右声道的
+处理3个消息
+GAI_EM_FORMLOAD  创建
+GAI_EM_TIMER  需要一个timer  多长时间不操作，窗口就自动消失。！！！哎呀
+在这个消息里面 关闭窗口（在mi中，关闭主窗口，会连带关闭所有子窗口）
+GAI_EM_KEYPROC
+处理左右键
+
+10 在公司现在的Gai中，发现一个很有意思的问题，整套程序一共有78个页面，每个页面都要响应
+case GAI_KEY_POWER:  这个消息
+	AUIM_PlaySetStandby();
+没错，按键消息，只会发给当前活动窗口，只有这样做，才能保证在每个窗口都能够关闭机器进入待机状态。
+那么，这就是一个典型的所有窗口都要响应的消息，显然要放到基类中。
+
+关于按键消息又糊涂了mi中： 由 所有页面都要响应 powerdown 按键想到的。 肯定要将所有页面都需要响应的按键放到基类
+
+11 MSG_KeyDown 和 MSG_Char 的关系，还是没有搞懂呢啊！！
+MSG_CHAR是一个能转换成字符(ASCII码)的键值
+比如我的遥控器 MSG_KeyDown后，可以返回扫描码，扫描码我用一个检索的形式返回。这样可以把不同的遥控器屏蔽到驱动层
+同时 这些扫描码里面 能够转化成 ASCII 的要转化成 MSG_CHAR消息。
+
+所以我要写一个 0-9 再到 a-z的转换
+所有的消息先要到 desktop窗口 的消息队列  可以在这里捕获 PowerDown按键。
+
+还有关于Menu键和exit键的处理
+
+12 mi中 Alt+Tab 可以切换活动窗口
+13 原来的程序里面有很多全局变量  封装后 全部用类里面的成员变量，提高封装力度。
+14 公司的Gai 当在 channellist界面 按了遥控器后，同样要destroy  channelList窗口
+MVC  MVC  MVC  MVC  MVC  MVC MVC！！！！
+还是有必要仔细研究一下现在的东西。  把现在的东西全部借鉴。
+
+（1）当从ChannelList 按 menu进入主菜单后， 再返回到channelList的时候， 选中条要停在退出时的位置
+这些东西都要一并封装进去。
+ 窗口看不见的时候有两种状态 ：隐藏和销毁
+
+frmChannelnumbar 指的是节目好  很大的那个数字
+frmChannelbar 指的是normal条。
+
+
+15 要搭出一个机顶盒的框架出来。UI的框架。
+使得做各种菜单都很容易。
+要有一个状态机：这个想法很好！！！针对特殊应用的UI的状态转换机器。就想JTAG的那个状态机。
+同时把这个状态机器封装到 APP类里面。
+
+16 Flash也封装出来  CFlash 包括读写擦 等等  构造函数里面 读取Flash信息。 CFlash
+上层应用都使用C++来写。  CFlash类封装没有多大意义。对于用户层，只有保存数据库和保存菜单设置
+在E3SLP上首先实践。实践！啊  时间宝贵！！
+数据库就用SQLite，功能灵活 容易扩展。
+
+关于配置存储的方法，又想到了一个好的模型：
+每组预留4到8个空间，或者说，使用一个单向链表
+
+
+
+17 再想想 关于配置的存储：菜单设置的保存。
+建立一个接口更灵活的 存储模 型。
+音量分别存储  分别存储 但是不能存到db里面 DB创建完成后 基本不动了除非编辑节目
+
+
+18 有一个问题：消息处理回调函数，有的是break 有的是return  根据是否要执行默认处理函数。 那么封装之后怎么，怎么决定是否调用默认函数呢？ 091113
+
+还是一个老问题：画的函数必须全部在Paint消息里面处理吗？ 在keydown消息里面 能获得hdc并且画吗？  姚军说行，但是不好。比如窗口拖动后会有问题（当然如果窗口全部在显示，拖动实际是bitblt 
+但是 如果有一半被挡住，移动后 只想应 paint消息 不响应keydown消息 则）
+
+19 091114 周六 17:41又有很多问题不明白，真难受心里，唉。
+MSG_EraseBKGND 传进来的hdc为什么都是0呢？
+
+Qt和Gtk短时间内是搞不懂的。minigui已经足够复杂。
+关于控件可以显示到主窗口外面的问题
+Combobox 怎么决定listbox是向上弹出还是向下弹出呢？
+
+搞清楚 MSG_SHOWGLOBALCTRL 是个什么东西
+只在ShowWindow的时候发（show一个控件） 并且是加了一个WS_EX_CTRLASMAINWIN参数
+combobox 按了 ok 之后，显示listbox
+ShowWindow( pData->ListBoxControl, SW_SHOW );
+
+按了Keydown之后， 如果是OK 进入combobox的 case CBS_DROPDOWNLIST:
+然后show 那个listbox  ShowWindow函数，如果是个控件 
+
+20 091116 主窗口上创建一个listbox，如果既设置透明又设置可以超出主窗口，则listbox的内容无法显示。
+如果只设置 可以超出主窗口 WS_EX_CTRLASMAINWIN 属性 可以正常。
+
+listbox的内容添加以后，什么时候开始显示的呢？
+关于人物优先级问题： 人物优先级问题，可以导致列表显示问题。如果insertstring任务优先级高，而listbox所在的主窗口的任务优先级低，则调用完所有的insterstring命令后才显示。
+这个很正常，因为中间产生的invalidateRect（Pain消息）没有处理，而是攒到最后处理的。
+
+关于ListBox下载的问题也是一个问题。一起下载还是随时从DB数据库里面取数据
+
+如果随时从DB里面取，
+
+要先把总大小设置进去把scrolBar显示出来。现在scrolBar显示的速度太慢了。每添加一条就要计算一次scrolBar的位置
+
+
+21 091117痛苦中的挣扎！
+关于ListBox 怎样随时下载数据而不是一次把列表数据全部下载完？的问题
+
+22 痛苦！
+考察一个问题：继承一个CListBox 重定义 OnNcPaint 函数   （Qt又如何呢？怎么做呢这种情况下？）
+总感觉MFC做的封装，做了很多多余的工作 不如QT这种原生的OO
+先理解MFC再说吧！！！！别好高骛远！
+
+23 消息反射机制：
+发给父窗口的消息 mi中好像只有COMMAND消息
+
+24 VC中 WinApp类的继承类怎么也需要 DECLARE_MESSAGE_MAP啊
+
+AfxFindMessageEntry 查找匹配的函数。
+还有一个问题：执行了一个消息处理 比如paint 还需要在执行default吗？ 除非default里面还有一个同样的消息处理。
+Command消息会单独处理  
+AfxFindMessageEntry这个函数在两个文件中被调用：
+cmdtarg.cpp  wincore.cpp
+
+
+MFC CWnd类中  WindowProc  OnWndMsg 都是虚的。 
+拜托  DefWindowProc这个就不用虚了吧
+
+MFC中 oncommand消息 是单独处理的
+
+这里为什么要有两个呢?我指的是 WindowProc  OnWndMsg
+正常情况下 WindowProc 调用了 OnWndMsg
+
+但是极特殊情况下 WindowProc 会被重载的，我的应用不会用到了。所以要简化。
+
+OnWndMsg虽然也是一个虚的，但是mfc中没有重载过他。
+OnWndMsg里面对 OnCommand （也是一个虚函数  有几处重载 有几处是在CWnd::OnCommand的基础上增加了一些功能） 做了单独处理   OnCmdMsg是个虚函数  CDialog就对他进行重载了。
+先调用CWnd::OnCmdMsg 再加其他若干处理 其实其他的处理在普通情况下用不到
+所以我的应用 OnCmdMsg不用重载
+补充：CWnd::OnCmdMsg  实际上CWnd类没有定义OnCmdMsg消息 使用的是CCmdTarget的OnCmdsg
+
+CWnd类本身最后 也有 DECLARE_MESSAGE_MAP()
+所以你也可以不继承CWnd类 而直接创建一个主窗口。
+
+消息声明 消息begin 消息end  就是构建下面这个函数
+GetMessageMap
+显然这个函数也是个虚的 哎还是姚军的那个简单啊。
+但是在源码里面 调用GetMessageMap的地方怎么还是个for循环啊。
+
+注意了： 姚军的 BEGIN_MESSAGE_MAP(theClass, baseClass) 
+定义没有用到 baseClass 参数
+而MFC的用到了
+
+又理解了消息映射里面的 ::_GetBaseMessageMap函数
+#ifdef _AFXDLL
+const AFX_MSGMAP* CCmdTarget::_GetBaseMessageMap()
+{
+	return NULL;
+}
+#endif
+注意了 最原始的基类 返回NULL   所以上面有
+	for (pMessageMap = GetMessageMap(); pMessageMap != NULL;
+	  pMessageMap = (*pMessageMap->pfnGetBaseMap)())
+这样的判断。
+
+
+_AfxDispatchCmdMsg只是一个普通函数 不是类成员函数.
+
+// CDialog - Modeless and Modal
+
+BEGIN_MESSAGE_MAP(CDialog, CWnd)
+#ifndef _AFX_NO_GRAYDLG_SUPPORT
+	ON_WM_CTLCOLOR()
+#endif
+	//{{AFX_MSG_MAP(CDialog)
+	ON_COMMAND(IDOK, OnOK)
+	ON_COMMAND(IDCANCEL, OnCancel)
+	ON_MESSAGE(WM_COMMANDHELP, OnCommandHelp)
+	ON_MESSAGE(WM_HELPHITTEST, OnHelpHitTest)
+	ON_MESSAGE(WM_INITDIALOG, HandleInitDialog)
+	ON_MESSAGE(WM_SETFONT, HandleSetFont)
+
+呵呵 看看上面的定义吧!!
+
+鼠标单击 双击 键盘按下 等都属于command消息
+
+ * MSG_COMMAND
+ * int id = LOWORD(wParam);
+ * int code = HIWORD(wParam);
+ * HWND hwnd = (HWND)lParam;
+
+{ WM_PAINT, 0, 0, 0, AfxSig_vv, \
+注意第二个参数  对于ON_COMMAND消息 第二个参数代表消息类型 比如BN_CLICKED  BN_DCLICKED 第三个参数为控件ID  对于象ON_PAINT这样的消息 第二三个参数是没有用的 写成0
+这样看来 ON_COMMAND消息确实要单独处理 因为跟别的处理方法不通啊.
+
+我理解到了深层次的东西了:
+void CTest2Dlg::OnOK() 
+{
+	// TODO: Add extra validation here
+	
+	CDialog::OnOK();
+}
+	ON_BN_CLICKED(IDC_BUTTON1, OnButton1)
+	ON_BN_DOUBLECLICKED(IDC_BUTTON1, OnDoubleclickedButton1)
+上面两个 其实就是ON_COMMAND
+
+	ON_COMMAND(IDOK,OnOK)
+在CTest2Dlg里面定义和不定义都是一样的.
+定义了就直接调用
+	for (pMessageMap = GetMessageMap(); pMessageMap != NULL;
+	  pMessageMap = (*pMessageMap->pfnGetBaseMap)())
+这个循环一次就找到了处理
+不定义就使用最基类的
+上面的循环3次才能找到
+但是最终效果是一样的.
+
+我决定：消息映射不使用姚军的方式，而是使用MFC的数组方式（其实MFC的方法简化后跟姚军的你吗一摸一样，我就要弄个不一样的）
+2 CWnd类消息处理的函数简化 Command消息不用单独拿出来处理（姚军的就没有单独拿出来啊）
+
+
+wndEraseBackground这个函数负责擦除背景
+
+在创建主窗口的时候，要指定背景色，而这个背景色在创建主窗口函数里面被1赋值到
+pWin->iBkColor里面
+
+在wndEraseBackground这个函数里面，就使用这个颜色填充 FillBox窗口的背景
+
+当我创建一个主窗口的时候，最先执行desktop的回调函数
+一层一层，就发了一个消息，执行左面擦除操作，左面擦除就是填充一个颜色值。
+
+CreateMainWindow函数给desktop任务发了一个消息：MSG_ADDNEWMAINWIN
+
+SendAsyncMessage  Sends an asynchronical message to a window
+This function may corrupt your data.
+
+一般在画NC区域和擦除背景的时候用这个东西来发消息
+
+如这里的擦除背景，是在desktop的任务里面调用了擦除背景的操作！！！
+
+而skin的时候，就是重新定义了MSG_ERASEBKGND这个消息的处理，用
+FillBoxWithBitmap代替了FillBox函数，太绝妙了！
+
+
+
+在看一下 cmdbutton 的skin是怎么实现的。
+cmdbutton需要3张图片  高亮 单击 不可用  表示3中状态。
+
+
+怎样实现ListComBox
+
+
+

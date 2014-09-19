@@ -1,0 +1,251 @@
+1 SkImageDecoder::Factory returned null  //模拟器上取mp3的专辑图片时候打印
+
+frameworks/base/core/jni/android/graphics/BitmapFactory.cpp 或 BitmapRegionDecoder.cpp 打出来的
+
+frameworks/base/core/jni 这组jni主要职责是？  他生成 libandroid_runtime.so
+
+2 AudioService  在system_server进程中运行，是java程序
+AudioSink  /system/bin/mediaserver进程中运行
+
+3 模拟器音乐播放器用到 2次 AudioService,147是system_server
+I/AudioService(147): AudioFocus requestAudioFocus() from android.media.AudioManager@4100ae70com.android.music.MediaPlaybackService$3@41009a58
+I/AudioService(147): Remote Control registerMediaButtonIntent() for PendingIntent{PendingIntentRecord{com.android.music broadcastIntent}}
+
+AudioService 里面的函数：
+requestAudioFocus(...)
+{
+String clientId; // clientID 是： android.media.AudioManager@4100ae70com.android.music.MediaPlaybackService$3@41009a58
+Log.i(TAG, " AudioFocus  requestAudioFocus() from " + clientId);
+}
+
+registerMediaButtonIntent(...) 
+{
+PendingIntent mediaIntent;
+Log.i(TAG, "  Remote Control   registerMediaButtonIntent() for " + mediaIntent);
+}
+
+/music/MediaPlaybackService.java中
+AudioManager mAudioManager;
+mAudioManager.requestAudioFocus(...); //此函数是对AudioService::requestAudioFocus 的简单封装
+mAudioManager.registerMediaButtonEventReceiver(...);//此函数调用 AudioService::registerMediaButtonIntent
+
+AudioManager 是对AudioService的包装
+
+4  39是 mediaserver 进程
+D/AudioSink(39): bufferCount (4) is too small and increased to 12
+
+#define LOG_TAG "AudioSink"  // AudioSink 代表了 AudioOutput
+class AudioOutput : public MediaPlayerBase::AudioSink
+
+MediaPlayerService::AudioOutput::open()
+{
+ALOGD("bufferCount (%d) is too small and increased to %d");
+}
+
+
+
+---------------------
+模拟器无法图片浏览
+E/libEGL  (583): called unimplemented OpenGL ES API
+./native/opengl/libs/EGL/egl.cpp:    ALOGE("called unimplemented OpenGL ES API");
+
+自己编译的系统（4.1.2  full-eng） gallery2 不能显示图片，不能播放视频。直接下载的模拟器就可以
+
+当我在图片浏览器中删除图片的时候：
+D/MediaProvider(413): object removed 17   //删除操作由 media provider 处理
+
+
+/system/bin/surfaceflinger 是一个单独进程
+I/ARMAssembler(36): generated scanline__00000077 // 36是 surfaceflinger
+
+模拟器中 mp4 文件音视频播放分开处理：
+I/OMXCodec(39):   h.264
+I/SoftAAC2(39):
+
+正常编译下 LOGV 是打不出来的，看log.h说明：
+/*
+ * Normally we strip ALOGV (VERBOSE messages) from release builds.
+ * You can modify this (for example with "#define LOG_NDEBUG 0"
+ * at the top of your source file) to change that behavior.
+ */
+TARGET_PRODUCT=full
+TARGET_BUILD_VARIANT=eng
+TARGET_BUILD_TYPE=release  // 这里表明是release builds 还可以设置成 TARGET_BUILD_TYPE=debug
+
+envsetup.sh 里面的一个函数选择：
+    echo "Build type choices are:"
+    echo "     1. release"
+    echo "     2. debug"
+
+当然 lunch full-eng  默认的是release
+
+
+
+------------------
+
+用模拟器打开 www.youku.com 的视频 (模拟器打不开网络视频)
+//39是 /system/bin/mediaserver
+I/LiveSession(   39): onConnect 'http://v.youku.com/player/getM3U8/vid/XNDY1NjM0NDcy/type/mp4/ts/1350980441/v.m3u8'
+打开m3u8 文件有：
+http://f.youku.com/player/getMpegtsPath/st/mp4/fileid/030008040050861DD8213205B3EEAE0530BBC8-3F44-142A-CE7C-E0F2870BE9EE/ipad0_0.ts?
+m3u8 格式都是ts流 
+
+
+-----------------
+TF101 升级的 CyanogenMod 4.1.1 版本，连接usb线后直接就可以 adb shell 这个很好，不用安装什么驱动
+USB 方式连接到ubuntu，没有安装特殊驱动，直接执行adb shell 他怎么就知道有这个硬件设备呢？ （可以研究一下adb的源码）
+
+
+=========
+Dev Tools 是啥东西
+
+---------
+比如libstagefright.so 应该是zygote进程映射了，然后所有java进程都是他的子进程，所以在相同位置都有这个文件
+readelf app_process 发现并没有链接那么多的库，
+
+启动打印：
+I/Zygote  (  107): Preloading classes...
+
+
+//把libstagefright.so 删除，看到
+E/Zygote  (  830): Caused by: java.lang.UnsatisfiedLinkError: Cannot load library: link_image[1916]:   830 could not load needed library 'libstagefright.so' for 'libmedia_jni.so' (load_library[1118]: Library 'libstagefright.so' not found)
+
+
+替换同版本libstagefright.so 到TF101 系统无法启动
+
+打印
+I/ServiceManager( 7437): Waiting for service media.player...
+W/AudioSystem( 7437): AudioFlinger not published, waiting...
+I/ServiceManager( 7437): Waiting for service media.audio_flinger...
+I/ServiceManager( 7437): Waiting for service media.player...
+I/ServiceManager( 7437): Waiting for service media.audio_flinger...
+I/ServiceManager( 7437): Waiting for service media.player...
+I/ServiceManager( 7437): Waiting for service media.audio_flinger...
+I/ServiceManager( 7437): Waiting for service media.player...
+I/ServiceManager( 7437): Waiting for service media.audio_flinger...
+I/ServiceManager( 7437): Waiting for service media.player...
+I/ServiceManager( 7437): Waiting for service media.audio_flinger...
+
+这是因为系统没有启动 mediaserver 服务
+向前看到：
+W/IMediaDeathNotifier( 7437): Media player service not published, waiting...
+
+
+./av/media/libmedia/IMediaDeathNotifier.cpp:   ALOGW("Media player service not published, waiting...");
+
+那么人家做这个第三方rom的时候是怎么搞的呢？
+
+------------
+我靠：终于在模拟器上把 omxcode里面的verbos e信息打出来了
+自己编译出来的模拟器gallery无法播放视频，下载的模拟器可以播放，但是怎么替换里面的libstagefright.so文件呢？
+adb root
+adb remount
+adb shell
+
+mv libstagefright.so libstagefright.so-ok
+
+adb push  libstagefright.so(修改过的)  /system/lib/
+
+这时如果不重启，相应进程链接的还是原来的so  cat maps 会显示 libstagefright.so-ok （这里比较神奇）
+但是重启后，系统就恢复原样了（为什么？难道上面的操作并没有改变 yaffs的image？！）
+这时候我竟然想到一个绝招： 在shell里面kill掉 zygote进程，系统会 “半重启” ：重启zygot 以及所有apk，这个时候gallery竟然就链接到了
+我修改的libstagefright.so中，也打印出了verbose信息。 绝了！
+
+模拟器  sd卡问题
+tools目录下  mksdcard 命令 mksdcard 1024M sdcard.img
+emulator -sdcard e:sdcard.img
+
+导入文件后，如果要在模拟器中访问，还需要在模拟器中的Dev tools （一个应用程序）里面scan一下媒体文件，
+
+安装 libmtp 和 mtpfs 软件包：
+$ sudo pacman -S libmtp mtpfs （可通过新立德安装）
+编辑文件 /etc/fuse.conf ，去掉 user_allow_other 一行前面的注释。在 /media 文件夹里创建名为“nexus7”的文件夹作为挂载点。然后就可以挂载 Nexus 7 文件系统了。挂载文件系统的命令：
+
+$ sudo mtpfs -o allow_other /media/nexus7
+挂载好之后在文件浏览器应该可以看到一个新的挂载点，在里面可以任意管理里面的文件。
+卸载的命令是：
+$ umount /media/nexus7
+
+adb调试需要打开 developer options 里面的usb debug开关 ，4.2.1 隐藏了这个选项，在Build Number上点7次，可以显示
+
+使用 adb 命令检测设备：
+$ ./adb devices
+正常的话应该看到类似如下的结果：
+
+List of devices attached
+015dxxxxf50cxxxx device
+如果没看到一般是 udev 访问规则没有添加正确，修正后重新加载规则，再用 adb 扫描：
+
+$ ./adb kill-server 
+$ ./adb devices
+
+
+init: skipping insecure file '/default.prop'
+init: skipping insecure file '/init.rc'
+需去除文件写权限
+其实，root目录要放入到只读文件系统中。
+
+2 gdbserver使用
+平台：gdbserver 192.168.1.87:1234 logcat
+主机：mips-xx-gdb logcat
+      target remote 192.168.11.39:1234
+
+悲催的是，调试logcat 段错误的gdbser也 Bus error
+
+3 init: untracked pid xxx exited  在 ./signal_handler.c 里
+
+4 编译参数有些区别
+
+6 libstdc++.so 源码目录 bionic/libstdc++
+
+7 一个库中添加1函数，调用此函数生成1可执行elf，然后库中此函数删除，编译拷贝，再执行elf打印：
+mips_relocate_got(linker.cpp:1236): cannot locate "gaojie_test"...CANNOT LINK EXECUTABLE
+
+8 把 android_reboot.c 单独列出一个目标编译成单独的库就可以使用，有点意思！（20121015 22:02） Linker 的问题？！难道是库不能太大？
+直接打印：Restarting system，这个是从kernle中打印的
+./kernel/sys.c:		printk(KERN_EMERG "Restarting system.\n");
+
+
+9  ICS的linker还是一个 exe，JellyBean的竟然成了 so。这是回归，uclibc的linker就是个so。并且源码改动也非常大
+
+10 模拟器上的kernel是2.6.29
+跟踪同一个进程，模拟器的动态库从 2aaa8000 开始，而7231从7732e000开始
+从4.0开始 Android 4.0+ ：Address Space Layout Randomization (ASLR) to randomize key locations in memory
+而 Android 4.1+：
+1 PIE (Position Independent Executable) support
+2 Read-only relocations / immediate binding (-Wl,-z,relro -Wl,-z,now)
+3 dmesg_restrict enabled (avoid leaking kernel addresses)
+4 kptr_restrict enabled (avoid leaking kernel addresses)
+
+但是我默认编译的好像没有使用 PIE （可执行程序可以映射到任何地方开始运行。查资料貌似目前只支持arm，x86）
+
+
+11 kernel 移植
+driver/misc/ apanic.c  kernel_debugger.c  pmem.c  uid_stat.c 
+
+12 同一个kernel，运行 JellyBean，shell 就不能tab，原来的版本就可以，比较sh源码没有区别。
+
+13 切换版本：
+./repo init -b android-4.1.2_r1
+./repo sync
+
+14 这些工具都可以编译出来
+/out/host/linux-x86/bin/emulator64-mips
+/out/host/linux-x86/bin/emulator-mips
+/out/host/linux-x86/bin/mksdcard
+
+15
+下载的现成的4.1.1模拟器可以正常播放mp3 mp4 但我编译出来的MIPS JellyBean 不能播放。 可以用他进一步跟踪stagefright多媒体结构。
+
+16 用4.1.1的编译器gcc4.6编译kernel，仍然 segmentation fault。怀疑是博通的mips对接部分不适合4.1.1  好吧，移植4.1.1 放弃(20121017 16:45)
+
+17 
+ARCH_HAVE_ALIGNED_DOUBLES :=true 
+
+18 20121018 移植彻底失败，尝试各种方法，基本程序就是起不来。停止。
+--------------------
+1 4.2.1_r1 在本机和dell R810 上没有编译通过
+4.2.1切回到4.1.1_r4 没有成功，后赵 repo sync -l (加-l)成功
+
+
+

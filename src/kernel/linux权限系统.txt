@@ -1,0 +1,17 @@
+﻿专题: 理解linux的权限系统和android的权限系统
+
+在exec.c中，检测mode = inode->i_mode;
+
+cred.h
+
+uid_t	uid;	/* real UID of the task */
+gid_t	gid;	/* real GID of the task */
+uid_t	suid;	/* saved UID of the task */
+gid_t	sgid;	/* saved GID of the task */
+uid_t	euid;	/* effective UID of the task */
+gid_t	egid;	/* effective GID of the task */
+
+3种uid各有什么区别呢？
+
+
+Unix中，每个进程都包含三个ID：real user ID，effective user ID，saved set user ID

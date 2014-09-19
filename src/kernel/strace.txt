@@ -1,0 +1,72 @@
+
+strace 不在busybox里，需要单独到sourceforge下载交叉编译。
+
+先用android编译器试试
+
+./configure CC=mipsel-linux-android-gcc  --host=mips-linux    配置不过去啊
+
+后来发现external里面已经有strace，mmm一下就好了
+
+
+JellyBean 移植时候，logcat启动 segmentation fault
+
+strace logcat 打印：
+
+
+read(3, "\177ELF\1\1\1\0\0\0\0\0\0\0\0\0\3\0\10\0\1\0\0\0@\r\0\0004\0\0\0"..., 52) = 52
+mmap(NULL, 4096, PROT_READ, MAP_PRIVATE, 3, 0) = 0x77824000
+madvise(0x77824000, 4096, 0xc /* MADV_??? */) = -1 EINVAL (Invalid argument)  // Invalid 有影响吗？
+lseek(3, -8, SEEK_END)                  = 70940
+
+stat64("/vendor/lib/libstdc++.so", 0x7ff5f560) = -1 ENOENT (No such file or directory) //还会去尝试这个目录？
+stat64("/system/lib/libstdc++.so", {st_mode=S_IFREG|0775, st_size=70840, ...}) = 0
+open("/system/lib/libstdc++.so", O_RDONLY|O_LARGEFILE) = 3
+
+
+mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7781f000  //匿名映射
+madvise(0x7781f000, 4096, 0xc /* MADV_??? */) = -1 EINVAL (Invalid argument)
+mprotect(0x7781f000, 4096, PROT_READ)   = 0
+
+brk(0)                                  = 0x771000
+brk(0x771000)                           = 0x771000
+brk(0x772000)                           = 0x772000
+--- {si_signo=SIGSEGV, si_code=SEGV_MAPERR} (Segmentation fault) ---
+prctl(0x10, 0x7ff5f768, 0, 0, 0)        = 0
+
+open("/dev/log/main", O_WRONLY|O_LARGEFILE) = 3
+writev(3, [{"\7", 1}, {"libc\0", 5}, {"Fatal signal 11 (SIGSEGV) at 0x0"..., 72}], 3) = 78
+socket(PF_UNIX, SOCK_STREAM, 0)         = 4
+connect(4, {sa_family=AF_UNIX, path=@"android:debuggerd"}, 20) = -1 ERRNO_146 (Connection refused)  //logcat进程出现段错误后通过socket启动debuggerd
+writev(3, [{"\7", 1}, {"libc\0", 5}, {"Unable to open connection to deb"..., 59}], 3) = 65          //由于此时系统有问题 debuggerd 也段错误了
+sigaction(SIGSEGV, {0x10000000, [], 0}, {0x10000008, [SYS], 0}, 0) = 0
+--- {si_signo=SIGSEGV, si_code=SEGV_MAPERR} (Segmentation fault) ---
+
+
+重新编译kernel，打开 CONFIG_KSM 再次运行，相应打印变为：
+madvise(0x771e0000, 4096, 0xc /* MADV_??? */) = 0  表明ksm成功了，但仍然：
+
+brk(0)                                  = 0x6f5000
+brk(0x6f5000)                           = 0x6f5000
+brk(0x6f6000)                           = 0x6f6000
+--- {si_signo=SIGSEGV, si_code=SEGV_MAPERR, si_addr=0xadc} (Segmentation fault) ---
+悲催!
+
+并且 CONFIG_KSM 不是问题，模拟器上logcat能正常运行的也有：
+madvise(0x40021000, 20480, 0xc /* MADV_??? */) = -1 EINVAL (Invalid argument)
+
+-------------
+SEGV_MAPERR :
+It's a segmentation fault which happens during malloc. Most probably a dangling pointer issue, or some sort of buffer overflow.
+Enabling coredumps will help you determine the problem. [ 什么是 coredumps ]
+
+SIGSEGV 2种情况引起：
+SEGV_MAPERR	地址没有映射到对象
+SEGV_ACCERR	对映射的对象没有权限
+
+
+
+
+
+
+
+

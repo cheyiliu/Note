@@ -1,0 +1,41 @@
+android原生不支持Ethernet，实现来自 The Android-X86 Open Source Project
+a20在framework/base/ethernet
+EthernetDataTracker.java(这是android原生文件 不知为何移动到这里)
+EthernetDevInfo.aidl
+IEthernetManager.aidl
+EthernetDevInfo.java
+EthernetManager.java (主要文件)
+
+
+
+
+物理连接 wifi,3G,bluetooth,ethernet
+控制协议 PAN个人局域网 PPP 点对点  
+
+源码：android/system/netd
+/system/bin/netd
+源码：android/external/dhcpcd (DHCP client daemon)
+dhcpcd is an implementation of the DHCP client specified in RFC2131
+/system/bin/dhcpcd
+里面有个 showlease.c 用于 debug 测试
+别人怎么用这个daemon程序呢？ 它如何接收参数，命令
+
+m3
+com.amlogic.PPPoE
+在packages/amlogic/pppoe
+/system/bin/pppoe_wrapper
+
+init.rc中
+service netd /system/bin/netd
+    class main
+    socket netd stream 0660 root system
+    socket dnsproxyd stream 0660 root inet
+    socket mdns stream 0660 root system
+
+libnetutils
+android/system/core/libnetutils
+
+
+从下到上的检测流程
+
+

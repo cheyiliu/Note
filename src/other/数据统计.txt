@@ -1,0 +1,3 @@
+http://wiki.xbmc.org/index.php?title=Android_hardware  
+xbmc 对于所支持的盒子的统计
+

@@ -1,0 +1,1793 @@
+待明确问题：
+1 ts如何统计时长
+
+
+文件格式: mkv、mp4、flv/f4v、avi、mpg/mpeg、mov、ts，trp、m2ts
+解码格式：h.264、mpeg1/2、asp/divx/xvid 共3种（vc-1，rmvb能支持但无许可）
+音频解码格式：aac、mp3、ac3、pcm(dts等目前无法支持)
+
+最后采用：
+android2.2 Stagefright+ffmpeg+openmax
+多媒体播放分为 Parser和Decoder2部分，Parser全部由ffmpeg完成，Decoder全部由openmax完成
+软件部分存在争议的2点：
+1 android2.3多媒体部分有所增强，尤其在rtp/rtsp支持方面，曾考虑升级。但是升级2.3，涉
+及整个系统各个方面，风险高时间久，
+   反复权衡放弃升级。且4.0系统马上发布，更加失去升级2.3的意义。故以后不再议论此话题
+2 pipeline架构做了该stagefright做的事（同步处理），导致Trident没有按照标准实现OpenMax，
+引入很多问题。曾考虑剥离pipeline，
+  自己实现openmax。这种做法难度很大，且难于得到nxp的支持，加之当时的严重bug逐步解决，
+故此想法放弃。
+
+Container	"1 视频 mkv avi mp4 flv/f4v mpeg/mpg mov ts trp m2ts tp trp wmv rm rmvb 
+2 音频 mp3 wav flac ogg aac ac3  wma dts (ac3不是文件格式吧？)"	
+Decoder(Profile&Level)	"1 海斯3716: H.264 MPEG-2 MPEG4 SP/ASP DivX4/5/6 VC-1 AVS REAL8/9/10 AAC DD/DD+ DTS
+2 博通7231: H.264、MPEG-2、MPEG4 SP/ASP、DivX3/4/5/6、VC-1、AVS、SVC、AAC、DD/DD+、MPEG-1 Layer1/2/3、WMA/WMA Pro
+3 泰顶8471: H.264 MPEG-2 MPEG4 ASP/Divx/Xvid VC-1 AVS H.263"	"仅限硬解
+3716C、7231支持音频透传
+ASP兼容Divx？兼容h.263?
+"
+关于容器和解码格式的总结（）
+
+多媒体技术 错综复杂！ 要搞清楚
+
+1 各种组织
+  ITU:国际电信联盟  ISO：国际标准化组织 IEC 国际电工委员会
+活动图像和电视工程师协会(SMPTE) The Society of Motion Picture and Television Engineers
+
+H.262 是ITU-T的一个数字视频编码标准，属于视频编解码器。H.262在技术内容上和ISO／IEC的MPEG-2视频标准（正式名称是ISO/IEC 13818-2）一致。
+H.262是由ITU-T的VCEG组织和ISO／IEC的MPEG组织联合制定的  【ISO/IEC总是在一起】
+所以制定完成后分别成为了两个组织的标准，正式名称是" ITU-T 建议H.262"和"ISO/IEC 13818-2"。这两个标准在所有的文字叙述上都是相同的（也许除了封面和标价之外）。
+
+
+H.263是由ITU-T制定的视频会议用的低码率视频编码标准，属于视频编解码器
+基于之前的视频编码国际标准（H.261，MPEG-1和H.262／MPEG-2），H.263的性能有了革命性的提高。它的第一版于1995年完成，
+在所有码率下都优于之前的H.261。之后还有在1998年增加了新的功能的第二版H.263+，或者叫H.263v2，以及在2000年完成的第三版H.263++，即H.263v3
+
+在H.263之后，ITU-T（在与MPEG的合作下）的下一代视频编解码器是H.264，或者叫AVC以及MPEG-4第 10部分
+由于H.264在性能上超越了H.263很多，现在通常认为H.263是一个过时的标准（虽然它的开发完成并不是很久以前的事情）。
+大多数新的视频会议产品都已经支持了H.264视频编解码器，就像以前支持H.263和H.261一样。
+
+。
+
+MPEG-4是一套用于音频、视频信息的压缩编码标准，由国际标准化组织（ISO）和国际电工委员会（IEC）下属的“动态图像专家组”
+（Moving Picture Experts Group，即MPEG）制定，第一版在1998年10月通过，第二版在1999年12月通过。MPEG-4格式的主
+要用途在于网上流、光盘、语音传送（视频电话），以及电视广播。
+
+MPEG-4包含了MPEG-1及MPEG-2的绝大部份功能及其他格式的长处，并加入及扩充对虚拟现实模型语言（VRML ， Virtual 
+Reality Modeling Language）的支持，面向对象的合成文件（包括音效，视频及VRML对象），以及数字版权管理（DRM）及其他交互功能。
+
+MPEG-4大部份功能都留待开发者决定采用是否。这意味着整个格式的功能不一定被某个程序所完全函括。因此，这个格式有所谓‘profiles’
+及‘层次（levels）’，定义了MPEG-4用于某些特定应用的某些功能的集合。
+
+
+MPEG-1是MPEG组织制定的第一个视频和音频有损压缩标准。视频压缩算法于1990年定义完成。1992年底，MPEG-1正式被批准成为国际标准。
+H.261是1990年ITU-T制定的一个视频编码标准，属于视频编解码器。
+
+H.261是1990年ITU-T制定的一个视频编码标准，属于视频编解码器。
+[编辑] 设计与技术细节
+
+设计的目的是能够在带宽为64kbps的倍数的综合业务数字网（ISDN for Integrated Services Digital Network）上传输质量可接受的视频信号。
+编码程序设计的码率是能够在40kbps到2Mbps之间工作，能够对CIF和QCIF分辨率的视频进行编码，即亮度分辨率分别是352x288和 176x144，色度采用4:2:0采样，
+分辨率分别是176x144和88x72。在1994年的时候，H.261使用向后兼容的技巧加入了一个能够发送分辨率为704x576的静止图像的技术。
+
+H.261是第一个实用的数字视频编码标准。H.261的设计相当成功，之后的视频编码国际标准基本上都是基于H.261相同的设计框架，包括MPEG-1，
+MPEG-2／H.262，H.263，甚至 H.264。同样，H.261开发委员会（由Sakae Okubo领导，他的日文姓名是大久保荣）的基本的运作方式也被之后
+的视频编码标准开发组织所继承。H.261使用了混合编码框架，包括了基于运动补偿的帧间预测，基于离散余弦变换的空域变换编码，量化，zig-zag扫描和熵编码。
+
+H.261编码时基本的操作单位称为宏块。H.261使用YCbCr颜色空间，并采用4:2:0色度抽样，每个宏块包括16x16的亮度抽样值和两个相应的8x8的色度抽样值。
+
+H.261使用帧间预测来消除空域冗余，并使用了运动矢量来进行运动补偿。变换编码部分使用了一个8x8的离散余弦变换来消除空域的冗余，然后对变换后
+的系数进行阶梯量化（这一步是有损压缩），之后对量化后的变换系数进行Zig-zag扫描，并进行熵编码（使用Run-Level变长编码）来消除统计冗余。
+
+实际上H.261标准仅仅规定了如何进行视频的解码（后继的各个视频编码标准也继承了这种做法）。这样的话，实际上开发者在编码器的设计上拥有相当的
+自由来设计编码算法，只要他们的编码器产生的码流能够被所有按照H.261规范制造的解码器解码就可以了。编码器可以按照自己的需要对输入的视频进行
+任何预处理，解码器也有自由对输出的视频在显示之前进行任何后处理。去块效应滤波器是一个有效的后处理技术，它能明显的减轻因为使用分块运动补偿
+编码造成的块效应（马赛克）--在观看低码率视频（例如网站上的视频新闻）的时候我们都会注意到这种讨厌的效应。因此，在之后的视频编码标准如H.264
+中就把去块效应滤波器加为标准的一部分（即使在使用H.264 的时候，再完成解码后再增加一个标准外的去块效应滤波器也能提高主观视频质量）。
+
+后来的视频编码标准都可以说是在H.261的基础上进行逐步改进，引入新功能得到的。现在的视频编码标准比起H.261来在各性能方面都有了很大的提高，这
+使得H.261成为了过时的标准，除了在一些视频会议系统和网络视频中为了向后兼容还支持H.261，已经基本上看不到使用H.261的产品了。但是这并不妨碍
+H.261成为视频编码领域一个重要的里程碑式的标准。
+
+
+关于MKV:
+Matroska
+维基百科，自由的百科全书
+（重定向自MKV）
+
+Matroska，很多人把它当作为MKV，其实MKV只是Matroska媒体系列的其中一种文件。
+
+Matroska是一种新的多媒体封装格式，这个封装格式可把多种不同编码的视频及16条或以上不同格式的音频和语言不同的字
+幕封装到一个Matroska Media档内。它也是其中一种开放源代码的多媒体封装格式。
+
+多媒体封装格式
+
+    主条目：多媒体封装格式
+
+多媒体封装格式，简称MCF、多媒体容器，是一个开放（没有身份规限，免费）及自由把数据存放的格式。开发者承诺大家可以
+自由地使用这种格式和经这种格式所开发的软件；又不会在这种格式普遍的时候变成一个商业的科研项目。
+
+文件类型
+
+Matroska媒体定义了三种类型的档：
+
+   1. MKV (Matroska Video File) ：视频档，可以包含音频和字幕；
+   2. MKA (Matroska Audio File) ：单一的音频档，可以有多条及多种类型的音轨；
+   3. MKS (Matroska Subtitles) ：字幕文件。
+
+
+.mp4 遵循标准 ISO/IEC 14496-14
+
+3GP是一个多媒体储存格式，由Third Generation Partnership Project（3GPP）定义，主要用于3G手机上。
+
+技术细节
+
+3GP是MPEG-4 Part 14（MP4）的一种简化版本，减少了储存空间和较低的带宽需求，让手机上有限的储存空间可以使用。
+3GP档案影像的部份可以用MPEG-4 Part 2、H.263或MPEG-4 Part 10 (AVC/H.264)等格式来储存，声音的部份则支
+援AMR-NB、AMR-WB、AMR-WB+、AAC-LC或HE-AAC来当作声音的编码。目前3GP档案有两种不同的标准：
+
+    * 3GPP（针对GSM手机，副档名为.3gp）
+    * 3GPP2（针对CDMA手机，副档名为.3g2）
+
+这两种格式影像方面都采用MPEG-4及H.263，而声音则采用AAC或AMR标准。
+
+3GP格式视频有两种分辨率：
+
+1.分辨率176×144，适合市面上所有支持3GP格式的手机。
+
+
+
+2.分辨率320×240，清晰，适合高档手机、MP4播放器、PSP以及苹果iPod.
+这三种文件中以MKV最为常见。
+
+开发历史
+
+整个开发在2002年12 月7日开始，是多媒体封装格式科研计划之一。经过一场的争议后，Matroska决定使用
+Extensible Binary Meta Language（EBML， 可扩展的二进制元语言）取代其它二进制格式。开发者相信使用EBML有很多
+优点，例如若将来有新的开发计划发展或改变开发目目标时候，更容易扩充程序。
+
+目标
+
+整个开发有几个目标：
+
+   1. 创建一个现代、灵活、延伸性、多平台的互联网服务器，快速查找文件；
+   2. 发展一套创作和编辑用的Matroska文件工具，并在GNU通用公共许可证下发布；
+   3. 开发一个网络图书馆，允许开发者向Matroska申请，将他们自行开发的应用软件加入Matroska音频格式，并在GNU宽通用公共许可证下发布；
+   4. 与硬件制造商合作，把他们的音频格式嵌入多媒体的设备里；
+   5. 支授以Matroska在各种各样的操作系统（包括Windows、DirectShow、Linux、Haiku和多媒体处理框架GStreamer）的运作 。
+
+特点
+
+Matroska最大的特点就是能容纳多种不同类型的视频编码、音频编码及字幕流，并且它能把非常高密的RealMedia及QuickTime文件也容纳在内，同时将它们的音频和视频重新组织起来，从而达到一个更好和鲜明的效果。
+
+Matroska的开发是对多种传统媒体格式的一次大挑战，虽则如此，Matroska也被开发成一个多功能的多媒体容器。
+
+此外，根据网上数据的研究显示，MKV与普通的视频格式如AVI较为优异的。
+
+以下列表是MKV与AVI的研究列表：
+格式 	错误检测 	可变帧率 	内置多组可选字幕 	多音轨 	流传输 	菜单 	非微软操作系统
+MKV 	有 	支持 	支持 	支持 	即将支持 	即将支持 	支持
+AVI 	没有 	不支持 	不支持 	不支持 	不支持 	不支持 	不够支持
+
+播放
+MKV播放器屏幕截图
+
+现时播放Matroska这类格式并不需要专用的播放器，基本上任何播放器都可以播放MKV档。 在微软操作系统下，一般解码方法，
+是通过DirectShow分流器（DirectShow Filters），“直接地”把视频流及／或音频流以DirectX输出至硬件的驱动程序。
+
+MP4，全称MPEG-4 Part 14，是一种使用MPEG-4的多媒体电脑档案格式，副档名为.mp4，以储存数码音讯及数码视讯为主。
+
+
+FLAC即是Free Lossless Audio Codec的缩写，中文可解为无损音频压缩编码。FLAC是一套著名的自由音频压缩编码，其特点是无损压缩。
+不同于其他有损压缩编码如MP3 及 WMA（9.0版本支持无损压缩），它不会破坏任何原有的音频信息，所以可以还原音乐光盘音质。现在它已被很多软件及硬件音频产品所支持。
+
+在2003年1月29日，Xiphophorus（现在称为 Xiph.Org 基金会）宣布FLAC并入旗下，连同 Ogg Vorbis，Ogg Theora及 Speex成为旗下的开源产品。
+
+比较
+
+FLAC与其他无损压缩式如ZIP及gzip的主要分别在于 FLAC可实时播放已压缩的音频数据。而且FLAC比ZIP这类无损压缩格式有更高的压缩比率。
+（FLAC在压缩音乐光盘时有大约五成压缩率，但ZIP在同一情况下则只有一至两成压缩率。）
+
+虽然有损压缩格式如mp3，ogg等有更高的压缩率，但它们会破坏了音频的原来数据，使其不可变回原来音质。而且FLAC可自由选择压缩率及压缩时间，当然两者是成正比的。
+
+相比起其他无损压缩格式如Monkey's Audio（拓展名为.APE）及 Shorten，FLAC技术更先进，占用资源更低，虽然压缩率稍有不及Monkey's Audio，
+所以，更多的平台及硬件产品支持FLAC，目前在中国大陆Monkey's Audio更为流行。
+
+FLAC 同时亦是保存音乐光盘于电脑中的最佳方法之一，因为其不会破坏音频原始数据，所以FLAC 是可以再转回音乐光盘并保留原来的音质。而且可以有效对抗文件损坏。
+
+在 Hydrogenaudio 维基有一个各类无损音频压缩的比较表，内里包括了FLAC 。comparison
+
+
+H.264/MPEG-4 AVC
+维基百科，自由的百科全书
+跳转到： 导航, 搜索
+
+跳过字词转换说明
+汉漢▼▲
+为了阅读方便，本文使用全文手工转换。转换内容：
+
+本文采用电脑和信息技术组全文转换 [查看] • [编辑] • [强制刷新]
+
+以下为本条目单独的全文转换，请从本页面进行编辑：
+
+   1. 简体：視頻點播；繁體：隨選視訊； 当前用字模式下显示为→視頻點播
+   2. 简体：實時；繁體：即時； 当前用字模式下显示为→實時
+   3. 简体：标清；繁體：標準畫質； 当前用字模式下显示为→标清
+
+显示↓关闭↑字词转换说明
+
+字词转换是中文维基的一项自动转换，目的是通过计算机程序自动消除繁简、地区词等不同用字模式的差异，以达到阅读方便。字词转换包括全局转换和手动转换，本说明所使用的标题转换和全文转换技术，都属于手动转换。
+
+如果您想对我们的字词转换系统提出一些改进建议，或者提交应用面更广的转换（中文维基百科全站乃至MediaWiki软件），或者报告转换系统的错误，请前往Wikipedia:字词转换请求或候选发表您的意见。
+-------------------
+H.264，或称MPEG-4第十部分，是由ITU-T视频编码专家组（VCEG）和ISO／IEC动态图像专家组（MPEG）联合组成的联合视频组（JVT，Joint Video Team）提出的高度压缩数字视频编解码器标准。
+
+
+标准
+
+ITU-T的H.264标准和ISO/IEC MPEG-4第10部分（正式名称是ISO/IEC 14496-10）在编解码技术上是相同的，这种编解码技术
+也被称为AVC，即高级视频编码（Advanced Video Coding）。该标准第一版的最终草案已于2003年5月完成。
+
+H.264是ITU-T以H.26x系列为名称命名的标准之一，同时AVC是ISO／IEC MPEG一方的称呼。这个标准通常被称之为H.264/AVC
+（或者AVC/H.264或者H.264/MPEG- 4 AVC或MPEG-4/H.264 AVC）而明确的说明它两方面的开发者。该标准最早来自于ITU-T
+的称之为H.26L的项目的开发。H.26L这个名称虽然不太常见，但是一直被使用着。
+
+有时候该标准也被称之为“JVT编解码器”，这是由于该标准是由JVT组织并开发的（作为两个机构合作开发同一个标准的事情并非空前，
+之前的视频编码标准MPEG-2也是由MPEG和ITU-T两方合作开发的，因此MPEG-2在ITU-T的命名规范中被称之为H.262）。
+
+H.264/AVC项目最初的目标是希望新的编解码器能够在比相对以前的视频标准（比如MPEG-2或者H.263）低很多的比特率下（比如说，
+一半或者更少）提供很好的视频质量；同时，并不增加很多复杂的编码工具，使得硬件难以实现。另外一个目标是可适应性，即该编解码
+器能够在一个很广的范围内使用（比如说，即包含高码率也包含低码率，以及不同的视频分辨率），并且能在各种网络和系统上（比如组
+播、DVD存储、RTP／IP包网络、ITU-T多媒体电话系统）工作。
+
+JVT最近完成了一个对原标准的拓展，该拓展被称为高精度拓展（Fidelity Range Extensions，FRExt）。该拓展通过支持更高
+的像素精度（包括10位和12位像素精度）和支持更高的色度抽样率（包括YUV 4:2:2和YUV 4:4:4）来支持更高精度的视频编码。该
+拓展加入了一些新的特性（比如自适应的4x4和8x8的整数变换，用户自定义量化加权矩阵，高效的帧间无失真编码，支持新增的色度空
+间和色度参差变换）。该拓展的设计于2004年7月完成，草案也于2004年9月完成。由于该标准的最早版本于2003年5月完成，JVT已经完
+成了一轮对标准的勘误工作，新一轮的勘误也已于最近完成并且得到了ITU-T的批准，不久也将被MPEG批准。
+
+数字电视
+[编辑] 欧洲与北美洲地区
+
+欧洲的数字电视广播（DVB）标准组织，于2004年下半年通过了采用H.264/MPEG-4 AVC于欧洲地区进行数字电视广播，
+而法国总理让-皮埃尔·拉法兰于2004年宣布法国将会选用 H.264/MPEG-4 AVC作为高清电视接收器和数字电视地面广播服务的付费电视频道的一项要求。
+
+另外，美国和韩国正在考虑使用H.264/MPEG-4 AVC，作为数字电视地面广播的视频编码规格。
+
+The video and audio data is encoded as described in ITU-T Rec. H.262 | ISO/IEC 13818-2 and ISO/IEC 13818-3
+
+ISO/IEC 13818-1：系统-描述视频和音频的同步和多路技术
+【所以我一直在看的那个mpeg2的英文闻到那个是13818-1】
+
+
+M2T
+维基百科，自由的百科全书
+跳转到： 导航, 搜索
+
+【全部来自于 wiki 好东西啊！】
+
+MPEG2-TS（Transport Stream“传输串流”；又称TS、TP、MPEG-TS 或 M2T）是用于音效、影像与资料的通讯协定，最早应用于DVD的即时传送节目。
+MPEG2-TS 定义于 MPEG-2 第一部份，系统（即原来之 ISO/IEC 标准 13818-1 或 ITU-T Rec. H.222.0）。
+WinDVD、Elecard Player、VLC Media Player等软件可以直接播放MPEG-TS（播放前最好先将TS流档的副档名改为 .mpg）。
+TS的解码方式是从PID为0 的TS packet内，解析出PAT table，然后 PAT table 找到各个program 源的PID。解码器根据PMT talbe 
+的ES streaming 的PID，将TS流上的packet 进行区分，并按不同的ES流进行解码。
+
+
+支援TS的软件
+[编辑] Multiple OS
+    * FFmpeg
+    * MPlayer [4]
+    * VideoLAN VLC media player [5]
+[编辑] Linux
+    * xine
+    * MythTV
+    * GStreamer
+
+
+AVI：
+Audio Video Interleave (also Audio Video Interleaved), known by its acronym AVI,
+
+Developed by 	Microsoft
+Container for 	Audio, Video
+is a multimedia container format introduced by Microsoft  in November 1992 as 
+part of its Video for Windows technology.
+AVI files can contain both audio and video data in a file container that allows
+ synchronous audio-with-video playback. Like the DVD video format, AVI files 
+support multiple streaming audio and video, although these features are seldom 
+used. Most AVI files also use the file format extensions developed by the Matrox 
+OpenDML group in February 1996. These files are supported by Microsoft, and are 
+unofficially called "AVI 2.0".
+
+
+ASF
+
+
+
+
+MPEG-4是一套用于音频、视频信息的压缩编码标准，由国际标准化组织（ISO）和国际电工委员会（IEC）下
+属的“动态图像专家组”（Moving Picture Experts Group，即MPEG）制定，第一版在1998年10月通过，
+第二版在1999年12月通过。MPEG-4格式的主要用途在于网上流、光盘、语音传送（视频电话），以及电视广播。
+
+例如XviD编码就属于MPEG-4 Part 2。
+
+
+MPEG 标准 	由MPEG制定  MPEG-1  | MPEG-2  | (MPEG-3)?? | MPEG-4 | 
+ITU-T 标准 	由VCEG制定  H.261 | (H.262) | H.263 | H.263v2 | H.264
+
+
+ITU-T VCEG是Video Coding Experts Group的简称，也直接可称为VCEG，中文可以翻译成视频编码专家组。
+VCEG的官方头衔为ITU-T SG16 Q.6。VCEG开发制定了一系列视频通信协议和标准，包括H.261视频会议标准，
+和其后续版本H.263、H.263 plus、H.263 plus plus等。最新的标准是H.264（早期命名为H.26L）。H.264
+和ISO/IEC MPEG-4 Part 10是VCEG和MPEG合作共同发布的标准。
+
+
+MPEG-3是MPEG组织制定的视频和音频压缩标准。本来的目标是为HDTV提供20-40Mbps视频压缩技术。在标准制定的过程中，
+委员会很快发现MPEG-2可以取得类似的效果。随后，MPEG-3项目停止了。
+MPEG-3并非等于MP3。MP3是MPEG-1音频 Layer 3部分。
+
+H.261是1990年ITU-T制定的一个视频编码标准，属于视频编解码器。
+
+MPEG1与H261并没有对应关系，应该不是联合开发的
+
+VCEG开发制定了一系列视频通信协议和标准，包括H.261视频会议标准，和其后续版本H.263、H.263 plus、H.263 plus plus等
+国际电信联盟嘛 当然指定通讯有关的标准。
+
+H.261是第一个实用的数字视频编码标准。H.261的设计相当成功，之后的视频编码国际标准基本上都是基于H.261相同的设计框架，
+包括MPEG-1，MPEG-2／H.262，H.263，甚至 H.264。
+
+H.261是1990年ITU-T制定的一个视频编码标准，属于视频编解码器。（注意，只是视频！）
+
+
+后来的视频编码标准都可以说是在H.261的基础上进行逐步改进，引入新功能得到的。现在的视频编码标准比起H.261来在各性能方
+面都有了很大的提高，这使得H.261成为了过时的标准，除了在一些视频会议系统和网络视频中为了向后兼容还支持H.261，已经基本
+上看不到使用H.261的产品了。但是这并不妨碍H.261成为视频编码领域一个重要的里程碑式的标准。
+
+
+DivX，是DivX公司（前身是DivXNetworks公司）的著名品牌，是一种MPEG-4技术视频编解码器（codec）
+历史
+"DivX" 的商标不同于 "DIVX" (Digital Video Express，现已解散),
+
+DivX的竞争者有 Microsoft的 Windows Media Video 系列, 还有 Apple 的 QuickTime, 以及 RealNetworks RealVideo 系列.
+
+
+Xvid（旧称为XviD）是一个开放源代码的MPEG-4视频编解码器，它是基于OpenDivX而编写的。
+Xvid是由一群原OpenDivX义务开发者在OpenDivX于2001年7月停止开发后自行开发的。
+
+Xvid的主要竞争对手是DivX。但Xvid是开放源代码的，而DivX则只有免费（不是自由）的版本和商用版本。
+
+
+他们主导了完全符合ISO MPEG4标准的Open DivX CODEC的开发【是否可以理解为 mpeg4 只是一个标准，具体实现又很多种，效率性能各不同】
+
+VC-1，全名VC-1视讯编解码器（Video Codec 1），是微软所开发的视讯编解码系统。
+2003年提出标准化申请，最早名字是VC-9。2006年4月正式通过成为标准
+
+VC-1是基于Windows Media Video 9压缩技术的影像压缩标准
+压缩技术整合了MPEG及H.264之优点【mpeg几啊？？！】
+VC-1只有4种动作补偿（motion composition），压缩比无法胜过H.264。
+VC-1在压缩时间上，明显比H.264短了许多，复杂度约只有H.264的50%，对特效电影有很杰出的效能表现。
+由于H.264使用较小尺寸的转换公式与无法调整的量化矩阵，造成不能完整保留影像的高频细节资讯。
+HD DVD  和蓝光光碟（Blu-ray Disc）都支援VC-1。微软表示Windows Vista将支援VC-1影像压缩技术的HD DVD规格。电影及电视学会（SMPTE）已采用VC-1为视讯压缩标准。
+H.264 和 VC-1 是二种最受欢迎的影像压缩工具
+
+
+
+Windows Media Video
+WMV（Windows Media Video）是微软公司开发的一组数字视频编解码格式的通称【属于编解码器】
+它是Windows Media架构下的一部分。它最初是为低速率流媒体应用作为专有编解码开发出来的，但是2003年微软公司基于
+Windows Media Video第9版编解码起草了视频编解码规范并且提交给SMPTE申请作为标准。
+
+这个标准在2006年3月作为SMPTE 421M被正式批准，这样Windows Media Video 9编解码就不再是一个专有的技术
+早期的变解码版本（7和8）仍然被认为是专有技术，因为它们不在SMPTE 421M标准的涵盖范围内。
+
+WMV不是仅仅基于微软公司的自有技术开发的。从第七版（WMV1）开始，微软公司开始使用它自己非标准MPEG-4 Part 2。【什么意思？】
+
+但是，由于WMV第九版已经是SMPTE的一个独立标准（421M，也称为VC-1），有理由相信WMV的发展已经不像MPEG-4那样是一个它自己专
+有的编解码技术。现在VC-1专利共享的企业有16家（2006年4月），微软公司也是MPEG-4 AVC/H.264专利共享企业中的一家。
+
+
+视频流通常与Windows Media Audio音频流组合在一起并且使用扩展名为.wmv或者.asf的Advanced Streaming Format的文件进行封装。
+WMV通常使用Advanced Streaming Format（ASF）封装，它也可以使用AVI或者Matroska格式封装。
+
+如果是AVI封装的文件结果文件可以是.avi，如果是ASF封装的话则是.wmv或者.asf，如果是MKV封装的话则是.mkv。
+
+The key parts to be aware of are MPEG-4 part 2 (including Advanced Simple Profile, used by 
+codecs such as DivX, Xvid, Nero Digital and 3ivx and by Quicktime 6) and MPEG-4 part 10 
+(MPEG-4 AVC/H.264 or Advanced Video Coding, used by the x264  encoder, by Nero Digital AVC, 
+by Quicktime 7, and by high-definition video media like Blu-ray Disc).
+
+
+Each part covers a certain aspect of the whole specification.)
+
+One of the many "profiles" in Part 2 is the Advanced Simple Profile (ASP).【意思是说：part2中有很多profile？其中一个是ASP】
+
+【全部信息来自wiki！】
+MPEG-4 Part 2：
+
+MPEG-4 Part 2 or MPEG-4 Visual (formally ISO/IEC 14496-2[1]) is a video compression technology developed by MPEG.
+It belongs to the MPEG-4 ISO/IEC standards
+
+It is a discrete cosine transform 【离散余弦变换】compression standard, similar to previous standards such as MPEG-1 and MPEG-2. 
+Several popular codecs including DivX, Xvid and Nero Digital are implementations of this standard.
+【晕了。part2 是一个压缩标准吗？那H264呢？】
+
+Note that MPEG-4 Part 10 defines a different format than MPEG-4 Part 2 and should not be confused with it
+MPEG-4 Part 10 is commonly referred to as H.264 or AVC, and was jointly developed by ITU-T  and MPEG.
+
+MPEG-4 Part 2 is partially based on ITU-T H.263.[6]
+
+再次重申：视频压缩标准：
+ISO/IEC： MJPEG · Motion JPEG 2000 ·  MPEG-1 · MPEG-2 (Part 2) ·  MPEG-4  (Part 2/ASP · Part 10/AVC) · HEVC
+ITU-T： 
+
+There are two DivX codecs; the regular MPEG-4 Part 2 DivX codec and the H.264/MPEG-4 AVC DivX Plus 
+HD codec. It is one of several codecs commonly associated with "ripping", whereby audio and video
+ multimedia are transferred to a hard disk and transcoded.
+
+DivX formats：
+DivX Media Format (DMF)
+
+DivX 6 expanded the scope of DivX from including just a codec and a player by adding an optional 
+media container format called "DivX Media Format" ("DMF")[11]  (with a .divx extension) that includes 
+support for the following DVD-Video  and VOB container like features. This media container format is 
+used for the MPEG-4 Part 2 codec.
+
+    * DivX Media Format (DMF) features:
+          o Interactive video menus
+          o Multiple subtitles (XSUB)
+          o Multiple audio tracks
+          o Multiple video streams (for special features like bonus/extra content, just like on DVD-Video movies)
+          o Chapter points
+          o Other metadata (XTAG)
+          o Multiple format
+          o Partial backwards compatibility with AVI
+
+
+
+This new "DivX Media Format" also came with a "DivX Ultra Certified" profile, and all "Ultra" 
+certified players must support all "DivX Media Format" features. While video encoded with the DivX 
+codec is an MPEG-4 video stream, the DivX Media Format is analogous to media container formats such 
+as Apple's QuickTime. In much the same way that media formats such as DVD specify MPEG-2 video as a 
+part of their specification, the DivX Media Format specifies MPEG-4-compatible video as a part of
+ its specification. However, despite the use of the ".divx" extension, this format is an extension 
+to the AVI file format. The methods of including multiple audio and even subtitle tracks involve 
+storing the data in RIFF headers and other such AVI hacks which have been known for quite a while, 
+such that even VirtualDubMod  supports them. DivX, Inc. did this on purpose to keep at least partial
+ backwards compatibility with AVI, so that players that do not support the new features available to 
+the .divx container format (like interactive menus, chapter points and XSUB subtitles) can at least 
+play that primary video stream (usually the main movie if the DMF file contains multiple video streams 
+like special features like bonus materials). Of course, the DivX codec and tools like Dr. DivX  still 
+support the traditional method of creating standard AVI files.
+
+
+DivX Plus HD
+Main article: DivX Plus HD
+
+DivX Plus HD is a marketing name for a file type using the standard Matroska media container 
+format (.mkv), rather than the proprietary DivX Media Format. DivX Plus HD files contain 
+an H.264 video bitstream, AAC surround sound audio, and a number of XML-based attachments 
+defining chapters, subtitles and meta data.[12] This media container format is used for the 
+H.264/MPEG-4 AVC codec. 【怎么跟MKV还扯上关系了呢？】
+
+
+DivX profiles
+Ambox outdated serious.svg
+	This article may need to be updated. Please update this article to reflect recent 
+events or newly available information, and remove this template when finished. Please see 
+the talk page for more information. (December 2009)
+
+DivX has defined many profiles, which are sets of MPEG-4 features as determined by DivX. 
+Because the grouping is different from what is specified in the MPEG-4 standard, there is 
+a DivX-specific device certification process for device manufacturers.[13][dead link] DivX's
+ profiles differ from the standardized profiles of the ISO/IEC MPEG-4 international standard.
+
+
+Matroska：
+Matroska是一种新的多媒体封装格式，它可将多种不同编码的视频及16条以上不同格式的音频和不同语言的字幕流封装到一个Matroska Media文件当中!
+多媒体封装格式也称多媒体容器 (Multimedia Container)，它不同于DivX、 MP3这类编码格式，它只是为多媒体编码提供了一个“外壳”，
+常见的AVl、VOB、MPEG、OGG格式都是属于这种类型【mpeg也是一个封装外科吗？ 对了 .mpeg文件是什么格式？】
+
+但这些封装格式要么结构陈旧，要么不够开放，正因为如此，才促成了Matroska这类新的多媒体封装格式的诞生。
+Matroska媒体定义了三种类型的文件：MKV是视频文件，它里面可能还包含有音频和字幕；MKA 是单一的音频文件，
+但可能有多条及多种类型的音轨；MKS是字幕文件。 
+
+这三种文件以MKV最为常见，它可以封装多种流行的视频视频和音频，尤其是Real，并且它还采用了一种更加灵活的框架，
+叫做EBML，以确保能够支持将来新出现的压缩格式。；包含各种支持的音频编码，如MP2, MP3, Vorbis, AAC, AC3, 
+DTS, PCM；还可以包含“任意开关”的srt、ssa、ass等软字幕。
+
+目前比较知名的容器格式包括AVI（.avi）、MPEG（.mpg, .mpeg）、QuickTime（.mov）、RealMedia（.rm）、MP4（.mp4）等等。
+
+【.mpg  .mpeg 文件都是什么呢？】
+
+AVI已经是一种非常成熟的容器格式，为什么还要发展Matroska？有什么优势？ 
+AVI是微软公司在20世纪90年代早期推出的一种音视频容器格式，可以非常灵活地处理当时的各种音视频编码
+有必要了解的是，AVI是VFW（Video For Windows）框架的一部分，非常不幸的是，VFW无法支持音视频编码目
+前支持的更高级特性，比如动态码率音频编码（VBR）、动态帧率视频编码（VFR）。尽管AVI在90年代中后期扩展了
+其标准，叫做“Open DML AVI”，克服了许多恼人的限制，比如2GB文件大小限制，但仍然无法提供对很多现代压缩格
+式的兼容，比如开源的Ogg Vorbis音频压缩格
+
+Matroska跨越了所有的此类障碍，从而提供了对所有可知的音视频格式的支持，因为其采用了一种更加灵活的框架，
+叫做EBML，以确保能够支持将来新出现的压缩格式。这种框架允许增加对容器格式的新特性，同时不破坏原有软件和文件的向后兼容性。
+
+问：Matroska有哪些核心设计特性？
+　　答：文件内的快速查找；高错误恢复率；分章节；可选字幕；可选音频轨；模块化的可扩展性；基于互联网的流传输；类似DVD提供的菜单。 
+由于Matroska的设计比AVI更为复杂，因此应该需要更多的CPU时间
+
+Matroska的目标就是要取代旧式的媒体封装格式，其中最主要的目标就是AVI。
+
+AVI已经诞生十几年了，目前它依然还保持着旺盛的生命力，但其原
+　　始架构过于陈旧，这使得它在支持新的音视频编码上非常困难，在非微软平
+　　台使用也不够方便。而Matroska使用的是一种开放的架构，拥有众多的先
+　　进特性，并且能跨平台使用，这是AVI所望尘莫及的。
+
+MPEG-1标准于1992年正式出版，标准的编号为ISO/IEC11172
+
+
+
+MPEG-2
+　　MPEG-2标准于1994年公布，包括编号为 13818-1系统部分、编号为13818-2的视频部分、编号为13818-3的音频部分及编号
+为13818-4的符合性测试部分。
+　　MPEG-2编码标准希望囊括数字电视、图像通信各领域的编码标准，MPEG-2按压缩比大小的不同分成五个档次(profile)，
+每一个档次又按图像清晰度的不同分成四种图像格式，或称为级别(level)。五个档次四种级别共有20种组合，但实际应用中有
+些组合不太可能出现，较常用的是11种组合。这11种组合分别应用在不同的场合，如MP@ML(主档次与主级别)用在具有演播室质
+量标准清晰度电视SDTV中，美国HDTV大联盟采用MP@HL(主档次及高级别)。 
+
+MPEG-7
+　　MPEG-7(它的由来是1+2+4=7, 因为没有MPEG-3、MPEG-5、MPEG-6)于1996年10月开始研究。确切来讲，MPEG－7
+并不是一种压缩编码方法，其正规的名字叫做’多媒体内容描述接口，其目的是生成一种用来描述多媒体内容的标准，这个标
+准将对信息含义的解释提供一定的自由度，可以被传送给设备和电脑程序，或者被设备或电脑程序查取。MPEG-7并不针对某
+个具体的应用，而是针对被MPEG-7标准化了的图象元素，这些元素将支持尽可能多的各种应用。建立MPEG-7标准的出发点是
+依靠众多的参数对图象与声音实现分类，并对它们的数据库实现查询，就象我们今天查询文本数据库那样。可应用于数字图书馆
+，例如图象编目、音乐词典等；多媒体查询服务，如电话号码簿等；广播媒体选择，如广播与电视频道选取；多媒体编辑，如个
+性化的电子新闻服务、媒体创作等。
+
+　MPEG的缔造者们原先打算开发四个版本：MPEG1-MPEG4，以适用于不同带宽和数字影像质量的要求。后由于MPEG3被放弃，
+所以现存只有三个版本的MPEG：MPEG-1，MPEG-2，MPEG-4。总体来说，MPEG在三方面优于其他压缩/解压缩方案。首先，
+由于在一开始它就是做为一个国际化的标准来研究制定，所以，MPEG具有很好的兼容性。其次，MPEG能够比其他算法提供更好
+的压缩比，最高可达200:1。更重要的是，MPEG在提供高压缩比的同时，对数据的损失很小。
+
+MPEG-2
+　　MPEG-2制定于1994年，设计目标是高级工业标准的图象质量以及更高的传输率。MPEG-2所能提供的传输率在 3-10Mbits/sec间,
+其在NTSC制式下的分辨率可达720X486，MPEG-2也可提供并能够提供广播级的视像和CD级的音质。MPEG- 2的音频编码可提供左右中
+及两个环绕声道,以及一个加重低音声道，和多达7个伴音声道(DVD可有8种语言配音的原因)。由于MPEG-2在设计时的巧妙处理，使得大
+多数MPEG-2解码器也可播放MPEG-1格式的数据，如VCD。
+　　同时，由于MPEG-2的出色性能表现，已能适用于HDTV，使得原打算为HDTV设计的 MPEG-3，还没出世就被抛弃了。(MPEG-3要求
+传输速率在20Mbits/sev-40Mbits/sec间，但这将使画面有轻度扭曲)。除了做为DVD的指定标准外，MPEG-2还可用于为广播，有线
+电视网，电缆网络以及卫星直播(DirectBroadcastSatellite) 提供广播级的数字视频。
+　　MPEG-2的另一特点是，其可提供一个较广的范围改变压缩比，以适应不同画面质量，存储容量，以及带宽的要求。
+　　对于最终用户来说，由于现存电视机分辨率限制，MPEG-2所带来的高清晰度画面质量(如 DVD画面)在电视上效果并不明显，到是其
+音频特性(如加重低音，多伴音声道等)更引人注目。
+
+常见谬误：
+　MPEG-4等如DIVX
+　　不少人都以为DIVX即是MPEG-4，但其实DIVX是将影像部分以MPEG-4来压缩、音效部分以MP3压缩处理，再以AVI档格式存在的制成品，
+故档案较MPEG-2小，而画质表现就介乎MPEG-1与MPEG-2之间。 【啊 divx 是用avi档存在的？】
+
+MP3即是MPEG-3
+　　正如前述，MPEG-3只不过是被放弃的一种压缩技术，至于大家熟悉的MP3其实是MPEG- 1 Layer 3的音频数据压缩技术，简称MP3。【这个没有问题】
+
+。wmv,divx,xvid都可以说是MPEG-4的类型
+MPEG-4和MPEG-1/2一样，除了有Video视频格式外，也有音频的格式"AAC"。同样，也有MPEG-4系统层，
+现在的.mp4的文件都是使用的MPEG-4系统层。【mpeg-4 part14】
+
+MKV不是一种压缩格式，而是Matroska的一种媒体文件，Matroska是一种新的多媒体封装格式，也称多媒体容器 (Multimedia Container)。
+
+DivX：wiki上说 	Media player／Codec／Media format  【既是编解码器，也是封装格式】
+
+Filename extension：.divx
+Type of format 	media container【是一个容器】
+Container for    MPEG-4 Part 2–compliant video [也就是ASP兼容]
+Extended from 	AVI【由avi扩展而来】
+
+DivX最早是由国外的一名电脑游戏玩家和一名黑客制作，他们破解了微软的MPEG-4视频压缩算法而后重新改写并重新命名为DivX，
+而且还注册了公司。从这个角度来说，DivX也不算是全新的技术了。 
+
+目前有三种DivX编码器：DivX3.x是最著名的而且到处都有，它又称为DivX，实际上就是Microsoft的MPEG-4v3Codec的 Hack版本。
+第二个是DivX4，DivXNetworksInc.完全重新编写的作品，但是由于他们又推出了DivX5所以目前已经不用了。 DivX5提供更好的图像
+质量和更多的功能，经过不断努力，现今的Divx6也逐渐成为主流，Divx7也即将问世。 
+
+网上视像格式比较
+　现时在互联网上使用的视像格式普遍有WMF(WindowsMediaFormat)、 RealMedia及QuickTime，画质最
+好的是QuickTime，一般电影网站的预告片都会使用QuickTime格式，但是缺点仍然是容量较大　RealMedia在相同码率的情况下，
+视频质量内容略占优势。这种格式在早期（1998年至2004年左右）流行于网络下载，由于其压缩比较高，但是画质较差，所以在人们心
+中留下了体积小画面差的印象。其实对于RealMedia 来说，它早期的编码库的确画质较差，但使用RV9编码库之后，画质得到很大提升。
+在高码率的情况下，画质还是相当不错的。目前中国互联网上的大多数电影和电视剧都采用RealMedia格式，是因为其压缩比和图像质量
+之间的平衡做的好。
+　　而近来使用WMF的视像直播网站都已采用MPEG-4格式，传送容量可在宽频1.5MB之下，画质与一般VCD相近，故香港大多数宽频视像
+网站都使用WMF格式作视像播放。
+
+一班发烧友制作了DivX4.0，解决DivX3来自于Microsoft的MPEG-4V3的问题，现时最新版本是DivXCodec4.12。与 DivX3相比，
+最主要它内置了2-pass编码处理。而DivX4.0编码器亦可播放DivX3格式的AVI，不过由于DivX4并没有提供音效编码，用家仍然要使
+用MPEGLayer-3或WindowsMediaAudioV2/DivX;-)Audio作为音效编码。 
+
+目前DivX格式的影像文件只能通过电脑播放。需要安装一个DivX插件，Windowsmediaplayer就可以播放这种格式的AVI文件。
+【还是没有搞清除：divx跟avi有什么区别 avi是一个容器，那么divx也不是编解码器啊 divx使用的是mpeg-4和mp3啊】
+
+
+由于DivX是采用MPEG－4进行压缩的，而MPEG－4是有损压缩技术，还原后的图像只会比压缩前的图像质量差，而不会更好，
+所以在表现影片中的爆炸、快速运动等画面时，它的缺点就开始暴露出来了----轻微的马赛克等VCD里常见的问题在这里也开始上演，
+其图象质量还无法完全和DVD采用的 MPEG2技术相比，
+
+DIVX以MPEG4压缩影像，MP3压缩音效，并以AVI文件的格式存在【那么哪些技术才是divx的技术呢？】
+
+History
+
+The "DivX" brand is distinct from "DIVX" (Digital Video Express), an unrelated attempt by the now 
+defunct U.S. retailer Circuit City to develop a video rental system requiring special discs and 
+players.[1] The winking emoticon in the early "DivX ;-)" codec name was a tongue-in-cheek reference 
+to the failed DIVX system. The DivX company then adopted the name of the popular DivX ;-) codec 
+(which was not created by them), dropped the smiley and released DivX 4.0, which was actually the
+ first DivX version. (Note that DivX ;-) and DivX are separate products and are created by different
+ people; the former is not an older version of the latter). The DivX name is its trademark.[2][3] It is pronounced DIV-ex.
+[edit] Early works
+
+DivX ;-) (not DivX) 3.11 Alpha and later 3.xx versions refers to a hacked version of the Microsoft
+ MPEG-4 Version 3 video codec (not to be mistaken with MPEG-4 Part 3) from Windows Media Tools 4 
+codecs.[4][5] The video codec, which was actually not MPEG-4 compliant, was extracted around 1998 by 
+French hacker Jerome Rota (also known as Gej) at Montpellier. The Microsoft codec originally required 
+that the compressed output be put in an ASF file. It was altered to allow other containers such as Audio 
+Video Interleave (AVI).[6] Rota hacked the Microsoft codec because newer versions of the Windows Media 
+Player wouldn't play his video portfolio and résumé that were encoded with it. Instead of re-encoding 
+his portfolio, Rota and German hacker Max Morice decided to reverse engineer the codec, which "took about a week".[7]
+[edit] Later works
+
+In early 2000, Jordan Greenhall recruited Rota to form a company (originally called DivXNetworks, Inc.,
+ renamed to DivX, Inc. in 2005) to develop an MPEG-4 codec, from scratch, that would still be backward-compatible 
+with the Microsoft MPEG-4 Version 3 format. This effort resulted first in the release of the "OpenDivX" codec and 
+source code on 15 January 2001. OpenDivX was hosted as an open-source project on the Project Mayo web site hosted
+ at projectmayo.com[8] (the name comes from "mayonnaise", because, according to Rota, DivX and mayonnaise are both 
+"French and very hard to make." [7]). The company's internal developers and some external developers worked jointly
+ on OpenDivX for the next several months, but the project eventually stagnated.
+
+In early 2001, DivX employee "Sparky" wrote a new and improved version of the codec's encoding algorithm known as 
+"encore2". This code was included in the OpenDivX public source repository for a brief time, but then was abruptly 
+removed. The explanation from DivX at the time was that "the community really wants a Winamp, not a Linux." It was 
+at this point that the project forked. That summer, Rota left the French Riviera and moved to San Diego "with 
+nothing but a pack of cigarettes"[9] where he and Greenhall founded what would eventually become DivX, Inc.[7]
+
+DivX took the encore2 code and developed it into DivX 4.0, initially released in July 2001. Other developers who 
+had participated in OpenDivX took encore2 and started a new project—Xvid—that started with the same encoding core.
+ DivX, Inc. has since continued to develop the DivX codec, releasing DivX 5.0 in March 2002. By the release of 
+version 5.2.1 on 8 September 2004, the DivX codec was substantially feature-complete.[10][dead link] Changes 
+since then have tended to focus on speed, and encouraging wider hardware player support, while the company has 
+also focused its time on the formats and next generation codecs.
+
+
+
+
+腾讯科技讯（编译/中涛）北京时间5月20日消息，据国外媒体报道，微软IE部门总经理迪安·哈查莫维奇(Dean Hachamovitch)
+周三表示，微软IE9浏览器今后将支持VP8视频编解码技术，目的是提高IE9的开放性和兼容性。
+
+WebM项目
+
+在谷歌周三举行的I/O开发者技术大会上，该公司宣布启动WebM项目。WebM是一种开源、无需交纳版税的网络媒体文件格式，并
+得到了火狐(Firefox)浏览器开发商Mozilla、挪威浏览器开发商Opera、芯片巨头AMD、图形芯片商 Nvidia及商用软件巨头甲骨文等公司的支持。
+
+WebM使用VP8编解码器技术，而VP8又是基于网络视频技术开发商On2公司的Matroska媒体技术。今年2月，谷歌以1.06亿美元
+将On2收为己有。On2以其视频压缩技术而著称，该技术目前已广泛应用于各类桌面软件和移动应用程序当中。On2客户包括Adobe、
+Skype、诺基亚、英飞凌、Sun、索尼和美国网络电视服务商Brightcove等等。
+
+微软回应
+
+针对谷歌的WebM项目，哈查莫维奇周三晚些时候在一则博文中表示：“微软IE9除支持 HTML5标准外，还将支持H.264格式的视频
+内容播放，同时将支持VP8视频技术，前提是用户必须在Windows机器当中已经安装VP8解码包。” 他强调指出，在IE9正式支持
+VP8之前，尚有一些特定技术问题需要解决。
+
+哈查莫维奇说：“我想明确表态的是，我们希望IE浏览器在保持其安全性和稳定性的同时，也能加强该产品的开放性和兼容性。我们
+在此向用户郑重承诺，IE9将支持所有广泛应用的媒体格式。与此同时，Windows客户、开发者和网站所有人也希望在使用IE9过
+程中，他们的知识产权能够得到保护。”
+
+标准之争
+
+HTML5互联网浏览标准的新功能之一，就是支持网络视频。但在网络视频标准选择上，Ogg Theora和H.264两种标准正相持不下。
+微软是H.264专利池的主要贡献者之一，因此决定在Windows操作系统和IE9浏览器当中支持该标准。苹果也在H.264专利池当中拥
+有一项专利，因此也支持H.264格式，并表示H.264将成为Adobe Flash视频技术的替代产品。
+
+但Mozilla和Opera对H.264格式持反对态度。此外，制定HTML5技术规范的业界人士也表示，网络视频标准不应仅选择特定的编解码器。
+
+业界人士指出，WebM项目或许有利于缓解Ogg Theora和H.264两种标准之间的冲突，但如果WebM得不到微软和苹果的支持，则很
+难成为事实上的网络视频标准。对于谷歌启动WebM项目一事，苹果还没有发表评论。
+
+受Mozilla推崇
+
+Mozilla布道者克里斯·布里扎德(Chris Blizzard)周三在一则博文中写道：“VP8在编解码编程质量优于Ogg Theora，画质可
+同H.264格式相媲美，我们将在火狐浏览器中支持WebM格式。我们今天发布的火狐4.0预测版，就提供了对WebM的早期支持。”
+
+与Mozilla一样，Opera也推出了一个支持WebM格式的测试版浏览器。Opera首席技术官(CTO)哈肯·维姆莱(Hakon Wium Lie)
+表示：“HTML、CSS和JavaScript技术都没有申请专利，互联网一直具有其开放性特征。”
+
+虽然HTML5标准的视频功能将对Adobe Flash构成重大威胁，但谷歌已与Adobe结盟，谷歌已决定在其Chrome浏览器集成Flash。
+正因为如此，Adobe首席技术官(CTO)凯文·林奇(Kevin Lynch)周三表示，Flash播放器将集成VP8功能，新产品有望于一年之内发布。
+
+
+[Theora]
+Theora是一个免权利金、开放格式的有损影像压缩技术，由Xiph.Org 基金会开发，该基金会还开发了著名的声音编码技术Vorbis，以及多媒体容器档案Ogg。
+Theora 是由 On2 Technologies 公司专属的 VP3 编码器经过开放原始码后衍生而来。Theora 的命名来自于一个电视节目Max Headroom[2]。
+
+技术细节
+
+Theora 是一个可变位元速率、以DCT为基础的影像压缩格式。和多数的影像编码格式一样，Theora 使用了色度抽样、
+block based motion compensation 和 8×8 DCT block，也支援视讯压缩图像类型 和 视讯压缩图像类型，
+但是不支援使用在 H.264 和 VC-1 的 bi-predictive frames（B-frame），Theora 也不支援 隔行扫描, 
+variable frame rates, 或 bit-depths larger than 8 bits per component[3]。
+
+Theora 的影像流可以储存在任何的容器档案格式中，最常用的是和声音编码Vorbis一起储存在Ogg档案格式中，
+这种方式可以提供完全开放、免权利金的多媒体档案。此外Theora影像也可以储存在Matroska档案中[4]。
+
+发展历史
+
+VP3 原本是On2 Technologies开发出来的专属格式影像编码格式，2001年8月On2 Technologies宣布将会把
+VP 3.2的影像编码演算法以开放原始码的方式公开[5][6]。同年9月，他们把VP 3.2的演法公布在www.vp3.com.
+
+支持Ogg Vorbis格式的播放软件
+
+微软Windows系统
+
+    * 千千静听4.6.0以后的版本可以完全支持Ogg Vorbis格式。（有中文简体和中文繁体版本，免费软件；下载页面）
+    * 使用Windows Media Player播放Ogg Vorbis文件需要安装Ogg Vorbis DirectShow过滤器和解码器 0.9.9.6版（免费；下载页面）
+    * Winamp2.80 及以后的版本，除了“lite”设定之外，均支援Ogg Vorbis，不用依靠其他软件。（下载页面）
+    * foobar2000 的任何版本皆支援Ogg Vorbis
+    * QuickTime 加上一个免费模组后也可支持Ogg Vorbis模组开发页面
+    * RealPlayer 的实验性支援：项目页面／下载v0.4版本
+    * MPlayer [1]。
+
+[编辑] 苹果MAC OS系统
+
+    * 加上一个免费模组后的QuickTime[2]
+    * VideoLAN client: http://videolan.org
+
+[编辑] Unix/Linux系统
+
+作为Linux中少数支持的媒体格式，得到最为广泛的支持。基本所有的音频、视频相关软件都支持此格式。 最新的RealPlayer亦可处理Ogg Vorbis，
+并包含一个给浏览器的模组
+
+MP@HL	Main Profile At High Level
+MP＠ML，即： Main Profile＠Main Level
+
+RealVideo
+RealVideo是一种影片格式由RealNetworks于 1997年所开发，至2006年时已到RealVideo版本10。它从开
+发伊始就定位为应用为网络上视频播放上的格式。支持多种播放的平台，包含Windows、Mac、Linux、Solaris
+以及某些移动电话。相较于其他的视频编解码器，RealVideo通常可以将视频数据压缩得更小。因此它可以在用 
+56Kbps MODEM 拨号上网的条件实现不间断的视频播放。
+
+一般的文件扩展名为.rm/.rvm
+
+现在广泛流行的是rmvb格式，即动态编码率的real video.
+
+RMVB（RealMedia Variable Bitrate）是一种由RealNetworks发展的RealMedia多媒体视频文件格式。
+
+与rm的差异
+
+相较于一般使用了固定的比特率的RealMedia视频文件格式.rm，扩展名多出的VB指的是可变动的比特率（Variable Bitrate）。
+也由于变动比特率的缘故，可以在画面变动不大或是简单的影片片段，降低比特率；反之，在画面变动大或是动态的影片片段，
+提高比特率，藉以在文件大小以及画质之间取得一个平衡。一般而言，在较低的平均比特率下，RMVB格式的图像画质会较原先固定
+比特率的RealMedia文件来得要好。
+
+RealMedia用了许多与MPEG-4 Part 10编解码器相似的压缩技术。
+
+*.rmvb 档的最前面4个bytes是 ".RMF"（标准的 RealMedia格式），或是16进制的2E 52 4D 46，这可以让电脑系统更容易的识别文件
+
+互联网大行其道之后，Real Media 出现了。这种文件格式几乎成了网络流媒体的代名词。RA、RMA这两个文件类型就是Real Media里面向音频方面的。
+它是由Real Networks公司发明的，特点是可以在非常低的带宽下（低达28.8kbps）提供足够好的音质让用户能在线聆听。这一特点在互联网的早期简
+直是广大网虫的福音。也就是因为出现了Real Media之后，相关的应用比如网络广播，网上教学，网上点播等等才浮出水面，形成了一个新的行业。
+
+REAL VIDEO 格式由一开始就是定位就是在视频流应用方面的，也可以说是视频流技术的创始者。它可以在用 56K MODEM 拨号上网的条件实现不间断的视频播放
+RealVideo是一種影片格式由RealNetworks於1997年所開發，至2006年時已到RealVideo版本10
+现在广泛流行的是rmvb格式，即动态编码率的real video.
+
+RealNetworks,the company is the creator of RealAudio, a compressed audio format; RealVideo, a compressed video format; RealPlayer, a media player
+
+RealPlayer，是一个由RealNetworks开发的跨平台的播放器
+
+可欣赏各种联机音频和视频数据，包括有：MP3、MPEG-4、QuickTime、Windows Media及其专用的RealAudio与RealVideo格式[1]。
+
+RealPlayer的第一个版本在1995年4月面世，是互联网上首个媒体流播放软件[2]。 RealPlayer最初一直都以数字来命名各个版本，
+但第6版改名为“RealPlayer G2”，第9版又改名为“RealOne Player”。现时最新的版本为第12版，并改名为“RealPlayer SP”。
+RealPlayer一直以来都为客户提供两个不同的版本：分别为免费的基本版本和要付费的"Plus"版本。付费版本提供额外的功能。此外，
+在 Windows推出的第9版曾附载有RealJukebox。
+
+RealPlayer第11版的Windows版本在2007年11月推出，而Mac OS X则迟至2008年5月才推出。此外，现时RealPlayer在以下各个平
+台皆有播放版本：Mac OS X、Linux、Unix、Palm OS、Windows Mobile及Symbian OS[3]。有指程序是以一个开源软件Helix
+作为其核心[4]，但亦有指只有Linux版本才是使用Helix架构。而从RealPlayer SP开始，在Windows版的RealPlayer的左下角亦
+用红色小字标上“Powered by Helix DNA”。
+
+支持的格式
+
+    * RealMedia
+          o RealAudio（.ra, .rm）
+          o RealVideo（.rm, .rv, .rmvb）
+          o RealPix（.rp）
+          o RealMedia Shortcut（.ram, .rmm）
+          o RealText（.rt）
+    * 视频
+          o DVD（.vob）
+          o Video CD (*.dat)
+          o MPEG（.mpeg, .mpe, .mpg , .m2v等）
+          o AVI（.avi, .divx）
+          o Windows Media Video（.wmv）
+          o QuickTime（.mov, .qt）
+          o Adobe Flash（.swf，需要安装Flash或Shockwave播放器）
+          o Flash Video（.flv）〔版本11对应〕
+          o MJPEG video playback from .avi files
+    * 音频：
+          o MP3（.mp3, .mp2）
+          o CD音频（.cda）
+          o WAV（.wav）
+          o Windows Media Audio（.wma）
+          o AAC／aacPlus v1 (*.aac, *.m4a, *.m4b, *.mp4, *.acp, *.m4p)/HE-AAC（.aac, .m4a, .m4b, .mp4, .acp, .m4p）
+          o Apple Lossless
+          o AIFF（.aif, .aiff）
+          o AU（.au）
+          o Panasonic AAC（.acp）
+    * 流：
+          o RealTime流格式（rtsp://）
+          o Progressive Networks流格式（pna://, pnm://）
+          o Microsoft Windows Media流格式（mms://）
+          o Real Scalable Multicast (*.sdp)
+          o Synchronized Multimedia Integration Language (*.smil, *.smi)
+    * 图片
+          o Bitmap（.bmp）
+          o GIF（.gif）
+          o JPEG（.jpg等）
+          o PNG（.png）
+    * Playlists (*.rpl, *.xpl, *.pls, *.m3u)
+
+RealPlayer 与Real one Player有什么区别？
+realplayer的最新版是realplayer10，它已超越了realoneplayer。
+看看专业的报道： 
+
+日前，RealNetworks公司推出了新的Real播放器——RealPlayer 10的测试版，它的目标是取代目前广为流传的RealOne播放器。
+，它的目标是取代目前广为流传的RealOne播放器。这个版本最重要的更新就是加入了新的Real Audio 10及Real Video 10解码器，
+并对Apple及RealNetworks极力推崇的AAC(Advanced Audio Coding)音频格式提供了完美的支持。
+
+另外，它在内部集成了超过30万首歌曲的“音乐商店”。RealPlayer 10是Real播放器两年以来的一次最重大的更新，所以得到了广泛的关注，
+不过，RealPlayer 10究竟是不是我们所必需的呢？或者说安装它会给我们带来哪些好处呢？还是让我们先试用了再说。
+
+ RealPlayer 10 档案
+
+  软件信息：8.15MB/免费软件
+  下载地址：官方下载地址
+  软件亮点：加入了新的Real Audio 10及Real Video 10解码器，支持ACC  音乐格式，可直接通过网络从音乐商店下载歌曲。
+
+
+开发
+
+Google于2005年并购了成立仅22个月的高科技企业Android，展开了短信、手机检索、定位等业务，同时基于Linux的通用平台也进入了开发。
+
+2008 Patrick Brady于Google I/O 演讲“Anatomy & Physiology of an Android”，并提出的 Android HAL 架构图。HAL 以 *.so 档的形式存在，可以把 Android framework 与 Linux kernel 隔开。
+
+2010年2月3日，Linux内核开发者Greg Kroah-Hartman将Android的驱动程序从Linux内核“状态树”（“staging tree”）上除去，从此，Android与Linux核心开发分道扬镳。[5]
+
+
+2.2
+(Froyo)
+基于Linux Kernel 2.6.32
+
+2010年5月20日, 2.2(Froyo)版本SDK发布。[16]
+
+    * 支持安装软件来扩展内存 [17]
+    * 集成Adobe Flash 10.1支持 [18]
+    * 加强软件实时编译的速度 [19]
+    * 新增软件启动"快速"至电话和浏览器 [20]
+    * USB分享器和WiFi热点功能 [21]
+    * 支持在浏览器上传文件 [22]
+    * 更新Market中的"batch"和自动更新 [23]
+    * 增加对Microsoft Exchange的支持 (安全政策, auto-discovery, GAL look-up)
+    * 集成Chrome的V8 JavaScript引擎应用到浏览器
+    * 加强快速搜索小工具
+    * 更多软件能通过Market更新, 类似2.0/2.1中的Map更新
+    * 速度和性能优化 [23
+
+
+
+为了适应不同应用的需求， 在MPEG-2，MPEG-4，H.264，VC-1等编码标准中， 都定义了档次和等级。档次即Profile， 
+定义了对应比特流语法的限定子集。等级即Level， 根据特定档次， 定义了对应采用的限制参数集合。一个档次可包含一个
+或多个等级。不同档次和等级的组合， 定义了适合一类应用需求的解码器能力， 包括分辨率、速率和解码参数等。档次和等级越高，
+ 对应的清晰度越好， 相应的速率也越高,解码越复杂。
+
+对应不同编码标准， 适合IPTV应用的档次和等级为：MPEG2MainProfile/Main Level，MPEG4 Advanced Simple 
+Profile/Level 3，H.264Main Profile/Level 3.1，VC-1 Main Profile/Level Medium。其中，第一种一般
+为国外IPTV运营商所采用， 中国电信根据目前网络状况，适合选择后三种组合作为IPTV业务应用的档次和等级。 
+
+MPEG-4 Part 2 or MPEG-4 Visual (formally ISO/IEC 14496-2[1]) is a video compression technology 
+developed by MPEG. It belongs to the MPEG-4 ISO/IEC standards. It is a discrete cosine transform 
+compression standard, similar to previous standards such as MPEG-1 and MPEG-2. Several popular 
+codecs including DivX, Xvid and Nero Digital are implementations of this standard.
+
+Note that MPEG-4 Part 10 defines a different format than MPEG-4 Part 2 and should 
+not be confused with it
+
+MPEG-4 Part 2 is H.263 compatible in the sense that a basic H.263 bitstream is correctly 
+decoded by an MPEG-4 Video decoder. 
+MPEG-4 Part 2 is partially based on ITU-T H.263.
+
+To address various applications ranging from low-quality, low-resolution surveillance cameras 
+to high definition TV broadcasting and DVDs, many video standards group features into profiles and levels. 
+
+MPEG-4 Part 2 has approximately 21 profiles, including profiles called Simple, Advanced Simple, 
+Main, Core, Advanced Coding Efficiency, Advanced Real Time Simple, etc. The most commonly deployed 
+profiles are Advanced Simple and Simple, which is a subset of Advanced Simple.
+
+
+Most of the video compression schemes standardize the bitstream (and thus the decoder) 
+leaving the encoder design to the individual implementations. Therefore, implementations 
+for a particular profile (such as DivX  or Nero Digital which are implementations of 
+Advanced Simple Profile and Xvid  that implements both profiles) are all technically identical 
+on the decoder side. 
+A point of comparison would be that an MP3 file can be played in any MP3 player, whether it was 
+created through iTunes, Windows Media Player, LAME or the common Fraunhofer encoder.
+
+Simple Profile (SP)
+
+Simple Profile is mostly aimed for use in situations where low bit rate and low resolution
+ are mandated by other conditions of the applications, like network bandwidth, device size 
+etc. Examples are cell phones, some low end video conferencing systems, surveillance systems etc.
+
+Advanced Simple Profile (ASP)
+
+Advanced Simple Profile 's notable technical features relative to the Simple Profile, 
+which is roughly similar to H.263, include:
+Popular software implementations
+
+    * Xvid
+    * DivX (by DivX, Inc.)
+    * Nero Digital
+    * 3ivx
+    * QuickTime
+    * libavcodec - used by MPlayer, xine, and VLC, among others
+
+
+VC-1
+VC-1 is the informal name of the SMPTE 421M video codec standard, which was initially 
+developed as a proprietary video format by Microsoft  before it was released as a formal 
+SMPTE standard video format on April 3, 2006. It is today a widely supported standard 
+found in HD DVDs, Blu-ray Discs, Windows Media Video 9, and Microsoft's Silverlight framework.
+
+Society of Motion Picture and Television Engineers 〈美〉电影与电视工程师学会
+
+VC-1 / SMPTE.421M Spec
+
+
+Comparison of H.264 and VC-1 ：
+来自Wiki的一个VC-1 和 H.264的比较  既然能够比较，就说明有得一比，说明VC-1的性能接近H264
+
+VC-1 is a video codec specification that has been standardized by the Society of Motion Picture and 
+Television Engineers (SMPTE) and implemented by Microsoft as Microsoft Windows Media Video (WMV) 9
+
+NXP平台支持的高清格式：
+Decodes HD programs in the following fromats:
+    MPEG-2 MP@HL MP@ML MP@LL  SP@ML
+    MPEG-4-AVC HP@L4.2 HP@L4.1
+    VC-1 AP@L3 MP@HL
+    MPEG4 ASP Part2   Divx/Xvid up to 1920x1080/60i resulution
+    H.263 (263 也可以高清吗？)
+
+Multi-format TriMedia Video Processor
+   450MHz programmable VLIW DSP for flexible decoding of on-line,
+   internet TV content formats  (这个东西很好啊！)
+   Decodes a single video program up to 720x480/576 at 30Hz/25Hz
+   (只能解到这个级别吗？)
+支持下面的编码格式： On2 （一家公司） VP6 VP7 VP8
+                 RealMedia RV8 RV9
+                 Sorenson Spark
+                 H.263+
+A high performance HD video decoder sub-system is partitioned into
+a hardware slice decoder and an ARM926 processor.
+The ARM926 performs bit-stream header decode. set-up of the hardware engines and display pipeline control. The hardware engines implement
+entropy decoding.motion compensation.inverse quantization.transform.merge with motion compensated pixels and de-blocking filtering.
+
+
+TriMdeia Video Processor
+   A second video decoder unit is implemented using a TriMedia VLIW DsP clocked at 450MHz. This programmable processor provicdes the flexibility to support a wide rang os video codec formats configurable via firmware modules.
+
+Its primary intended use is to provide a dedicated resource for decoding os source formats that are commonly used in the creation os on-line, Internet TV content. The initial formats that are supported include:  上文： 但是只支持到720x576/480 
+
+3D Graphics Processor
+ 3D graphics content rendering is supported using a 266MHz Powervr SGX531 GPU
+
+The SGX531 performance is rated at 500Mpels/sec and 16M polygons/sec.
+PNX8471 能够做到 H264高清输出的同时，输出3D 1280x720p 30Hz的 randering update
+
+
+
+
+Imagination Technologies PowerVR SGX 2D/3D graphics processor supporting dual independent displays
+
+
+视频有两种方式，一种是直接用ARM或NEON加速软解码，另一种是启动DSP以及视频硬加速做媒体加速
+硬件解码器成本低功耗小，但是格式支持有限。 
+
+而beagleboard不同，CPU内置的硬件加速部件是通用的，属于“软解码”，
+
+android git里面的一个注释
+OMX support for VC-1 simple, main, and advanced profiles
+
+
+FFMpeg
+FFmpeg is a complete, cross-platform solution to record, convert and stream audio and video. 
+It includes libavcodec - the leading audio/video codec library.
+
+libavcodec is a free software/open source LGPL-licensed library of codecs for encoding and 
+decoding video and audio data.[1]  It is part of the FFmpeg project.
+
+
+AMR 
+
+FFmpeg is a free software / open source project that produces libraries and programs for 
+handling multimedia  data. The most notable parts of FFmpeg are libavcodec, an audio/video 
+codec library used by several other projects, libavformat, an audio/video container mux and
+ demux library, and the ffmpeg command line program for transcoding  multimedia files. FFmpeg 
+is published under the GNU Lesser General Public License 2.1+ or GNU General Public License 2+ 
+(depending on which options are enabled).[2]
+
+
+VC-1 H264 二者都是针对HD视频和广播而设计的高效视频压缩技术
+评估的结果就是，一些节目供应商更愿意选用H.26?(MPEG-4 AVC)，而另一些则更倾向于VC-1
+
+Windows Media Video (WMV) is a compressed video compression format for several 
+proprietary codecs developed by Microsoft.
+The original video format, known as WMV, was originally designed for Internet 
+streaming applications, as a competitor to RealVideo. 
+
+Through standardization from the Society of Motion Picture and Television Engineers 
+(SMPTE),[1][2]  WMV 9 has gained adoption for physical-delivery formats such as HD DVD 
+and Blu-ray Disc.[3][4]
+
+WiKi上：
+Filename extension：.wmv
+Internet media type： video/x-ms-wmv 【为什么这个名字跟opencorel里面一样呢？ 网络媒体类型用的就是MIME】
+
+MIME的英文全称是"Multipurpose Internet Mail Extensions" 多功能Internet 邮件扩充服务，
+它是一种多用途网际邮件扩充协议，在1992年最早应用于电子邮件系统，但后来也应用到浏览器。
+
+
+M4V is a file container format used by Apple's iTunes application. 
+The M4V file format is a video file format developed by Apple and is very close to MP4 format. 
+The differences are optional Apple's DRM copyright protection and the treatment of AC3
+ (Dolby Digital) audio which is not standardized for MP4 container.
+
+【所以在opencore里面有：
+ addFileType("MP4", FILE_TYPE_MP4, "video/mp4");
+ addFileType("M4V", FILE_TYPE_M4V, "video/mp4");
+】
+However, unprotected M4V files without AC3 audio may be recognized and played by other 
+video players by changing the file extension from ‘.m4v’ to ‘.mp4’.
+
+Besides Apple iTunes and Apple QuickTime Player, M4V files can also be opened and played
+ with the version of Windows Media Player included with Windows 7, Media Player Classic, 
+RealNetworks RealPlayer, VideoLAN VLC media player and Nero Showtime (included with Nero 
+(software suite)). The format, with DRM removed, can also be played in the webOS Video Player 
+for use on the Palm Pre and Palm Pixi smartphones.
+
+File extension 和 MIME type 【 看来MIME跟扩展名有关系啊】
+
+
+VideoLAN：
+VideoLAN is a project that develops software for playing video and other media formats across 
+a local area network (LAN). It originally developed two programs for media streaming, VideoLAN 
+Client (VLC) and VideoLAN Server (VLS), but most of the features of VLS have been incorporated 
+into VLC, with the result renamed VLC media player.
+
+Codecs
+
+The VideoLAN project also develops several audio/video decoding and decryption libraries, such as 
+libdvdcss which allows the content of CSS protected DVDs to be unscrambled, x264 which can encode 
+H.264/MPEG-4 AVC video and libdca which can decode DTS audio.
+
+DTS (sound system)
+theatre [ˈθiətə]
+DTS是“Digital Theatre System”的缩写，是“数字化影院系统”的意思。
+从技术上讲，DTS与包括Dolby Digital在内的其它声音处理系统是完全不同的
+
+Dolby Digital是将音效数据存储在电影胶片的齿孔之间，因为空间的限制而必须采用大量的压缩的模式，这样就不得不牺牲部分音质。
+DTS公司用一种简单的办法解决了这个问题，即把音效数据存储到另外的CD-ROM中，使其与影像数据同步。这样不但空间得到增加，
+而且数据流量也可以相对变大，更可以将存储音效数据的CD更换，来播放不同的语言版本。
+【怎么还跟胶片扯上关系了？】
+DTS技术能够提供比CD和杜比更完美的音效 DTS将更完美的展现5.1立体环绕系统的风采。
+
+DTS公司是一家专注于发展高品质娱乐体验的数码高科技公司。目前，几乎所有的5.1声道环绕声处理器都使用了DTS的解码技术。
+DTS公司推出了多种声场技术，其中DTS Digital Surround是最广为流传的一种，属于5.1声道系统，人们通常说的DTS技术，或者DTS环绕
+
+DTS分左、中、右、左环绕、右环绕5个声道，加上低音声道组成5.1声道，这一点和杜比数字相同。
+因此DTS被很多人认为比Dolby Digital具体更好的效果
+
+DTS技术开发出来以后，一在电影界公布，马上受到大导演斯皮尔伯格和环球影业公司的高度重视，得到斯皮尔伯格大力支持，
+并率先在大型科幻电影“侏罗纪公园”中尝试采用DTS技术。“侏罗纪公园”采用DTS取得空前成功之后，许多好菜坞电影亦纷纷开始引入 
+DTS数字环绕音响系统。许多导演、制作人员以及混音师认为DTS是声音再现性最佳的系统。
+
+然而由于推广程度不够，并且无法兼容5.1声道的Dolby Digital，当1995美国年消费电子产品行业的DVD工作组为新的环绕声格式找到
+最好的音频编码技术时，他们选择了Dolby Digital，所以第一代DVD播放机都是与DTS不相兼容的。目前支持DTS的影碟数量没有支持
+Dolby的多，但是从影碟播放的效果来看，很多人认为DTS的声场效果更加出色，因此支持DTS成为组合音响比较高端的应用。需要说明的
+是由于DTS比dolby digital数据率更高，占用的空间更多，所以2个小时左右DTS格式的DVD电影往往要省去一些多语言、多角度等功能
+或影片花絮、制作特辑等额外的附加内容，除非采用容量更大的双层结构DVD碟片或者双面DVD，以保证画面的质量，这也使得支持DTS的
+DVD碟片比支持Dolby的少。
+
+On the consumer level, DTS is the oft-used shorthand for the DTS Coherent Acoustics codec, 
+transportable through S/PDIF and used on DVDs, CD-DAs, LDs, and in .WAV files. 
+
+
+Adaptive Multi-Rate audio codec---------------------AMR
+Filename extension： .amr
+Internet media type:  audio/amr
+audio/amr: Audio compression format, audio file format
+
+The Adaptive Multi-Rate (AMR or AMR-NB) audio codec is a patented audio data compression scheme optimized for 
+speech coding. AMR was adopted as the standard speech codec by 3GPP in October 1998 and is now widely used in
+ GSM and UMTS. It uses link adaptation to select from one of eight different bit rates based on link conditions.
+
+AMR is also a file format for storing spoken audio using the AMR codec.
+【AMR既是一个声音压缩标准，也是一个文件格式】
+Many modern mobile telephone handsets will allow you to store short recordings in the AMR format, both open 
+source and commercial programs exist (see Software support) to convert between this and other formats such as MP3,
+
+although it should be remembered that AMR is a speech format and is unlikely to give ideal results for other audio. 
+【也就是说：amr 格式 是录影设备用的】
+
+
+Filename extension： .mp4 (also non-standard .m4a, .m4v – see discussion)【注意后面m4v m4a 是苹果搞的】
+The common but non-standard use of the extensions .m4a and .m4v  is due to the popularity of Apple’s iPod, iPhone, and iTunes Store.
+
+我的iPod 录音文件是m4a
+
+.MP4 versus .M4A file extensions
+
+M4A stands for MPEG 4 Audio, it is a file extension used to represent audio files. Most people are 
+familiar with MP3 and how it shrinks down the file size of songs and other audio files. M4A and MP4
+ do the same thing as MP3 does, but the quality is better and file sizes are usually smaller than MP3 files.
+
+The existence of two different file extensions for naming audio-only MP4 files has been a source of 
+confusion among users and multimedia playback software. Since MPEG-4 Part 14 is a container format,
+ MPEG-4 files may contain any number of audio, video, and even subtitle streams, making it impossible
+ to determine the type of streams in an MPEG-4 file based on its filename extension alone. In response,
+ Apple Inc. started using and popularizing the .m4a file extension. Software capable of audio/video playback 
+should recognize files with either .m4a or .mp4 file extensions, as would be expected, as there are no file 
+format differences between the two. Most software capable of creating MPEG-4 audio will allow the user to 
+choose the filename extension of the created MPEG-4 files.
+
+While the only official file extension defined by the standard is .mp4, various file extensions are commonly 
+used to indicate intended content:
+
+    * MPEG-4 files with audio and video generally use the standard .mp4 extension.
+    * Audio-only MPEG-4 files generally have a .m4a extension. This is especially true of non-protected content.
+          o MPEG-4 files with audio streams encrypted by FairPlay Digital Rights Management as sold through the
+ iTunes Store use the .m4p extension. iTunes Plus tracks are unencrypted and use .m4a accordingly.
+          o Audio book and podcast files, which also contain metadata including chapter markers, images, and
+ hyperlinks, can use the extension .m4a, but more commonly use the .m4b extension. An .m4a audio file cannot 
+"bookmark" (remember the last listening spot), whereas .m4b extension files can.
+          o The Apple iPhone uses MPEG-4 audio for its ringtones but uses the .m4r extension rather than the .m4a extension.
+    * Raw MPEG-4 Visual bitstreams are named .m4v but this extension is also sometimes used for video in MP4
+ container format.[19]
+    * Mobile phones use 3GP, an implementation of MPEG-4 Part 12 (a.k.a MPEG-4/JPEG2000 ISO Base Media file 
+format), similar to MP4. It uses .3gp and .3g2 extensions. These files also store non-MPEG-4 data (H.263, AMR, TX3G).
+
+The common but non-standard use of the extensions .m4a and .m4v is due to the popularity of Apple’s iPod, 
+iPhone, and iTunes Store.
+
+
+History
+
+In 2003, Microsoft drafted a video codec specification based on its WMV 9 codec and submitted it to SMPTE 
+for standardization. The standard was officially approved in March 2006 as SMPTE 421M, better known as 
+VC-1, thus making the WMV 9 format an open standard. Since then, VC-1 has become one of the three mandatory 
+video formats for the BD-ROM specifications.[3][4]
+
+
+.wmv  video/x-ms-wmv
+
+WMV 9 has gained adoption for physical-delivery formats such as HD DVD and Blu-ray Disc.[3][4]
+
+【wmv 是一个视频压缩标准 不是一个容器 ！】
+
+------------------------------关于ASF------------------------------
+proprietary [英] [prəˈpraɪɪˌteri  注意发音
+Advanced Systems Format is Microsoft's proprietary digital audio/digital video container format, especially meant for streaming media. 
+ASF is part of the Windows Media framework.
+
+Advanced Systems Format：
+Filename extension： .asf .wma .wmv
+Internet media type： video/x-ms-asf
+Container for： for 	WMA, WMV, MPEG4 etc.
+
+The format does not specify how (i.e. with which codec) the video or audio should be encoded; 
+it just specifies the structure of the video/audio stream. This is similar to the function
+ performed by the QuickTime, AVI, or Ogg container formats.
+
+The most common filetypes contained within an ASF file are Windows Media Audio (WMA) and Windows Media Video (WMV). 
+Note that the file extension abbreviations are different from the codecs which have the same name. Files containing 
+only WMA audio can be named using a .WMA extension, and files of audio and video content may have the extension .WMV.
+ Both may use the .ASF extension if desired.
+
+ASF files can also contain objects representing metadata, such as the artist, title, album and genre for an audio 
+track, or the director of a video track, much like the ID3 tags of MP3 files. It supports scalable media types and 
+stream prioritization; as such, it is a format optimized for streaming.
+
+The ASF container provides the framework for digital rights management in Windows Media Audio and Windows Media 
+Video. An analysis of an older scheme used in WMA reveals that it is using a combination of elliptic curve cryptography
+ key exchange, DES block cipher, a custom block cipher, RC4 stream cipher and the SHA-1 hashing function.
+
+ASF container-based media is usually streamed on the internet either through the MMS protocol or the RTSP protocol.
+
+
+Google提供了一套可扩充的Opencore框架，但是Opencore的结构较复杂，和我们在多媒体方面常用的Mplayer/Gstremer架构不太一样，
+尚需投入较大精力去做移植集成。随着新版本的发布，又提出一套轻便的stage fright架构，值得我们进一步学习和借鉴。在图形方面，
+Android提供了surface,overlay,OpenGL等概念和方法，可以供开发者灵活地自定义显示效果，这一部分的创意空间还是很大的，使得
+更多的用户交互成为可能
+
+
+By default, Android froyo uses StageFright as its Multimedia Framework. To switch to OpenCORE, we need to do some changes.
+
+# vi $ANDROID_SRCDIR/build/core/main.mk
+
+Find the line “BUILD_WITH_FULL_STAGEFRIGHT := true” and comment it.
+
+And you need to make it again to be effective.
+
+
+认识ASF文件
+　　
+[ASF文件]
+
+ASF文件
+ASF是一个开放标准，它能依靠多种协议在多种网络环境下支持数据的传送。同JPG、MPG文件一样，ASF文件也是一种文件类型，
+但它是专为在IP网上传送有同步关系的多媒体数据而设计的，所以ASF格式的信息特别适合在IP网上传输。ASF文件的内容既可以
+是我们熟悉的普通文件，也可以是一个由编码设备实时生成的连续的数据流，所以ASF既可以传送人们事先录制好的节目，也可以
+传送实时产生的节目。 
+
+ASF是（Advanced Streaming Format 高级串流格式）的缩写  【怎么又成 高级流格式了呢？不是高级系统格式吗？】
+
+Advanced Systems Format (formerly Advanced Streaming Format, Active Streaming Format) is 
+Microsoft's proprietary digital audio/digital video container format, especially meant for 
+streaming media. ASF is part of the Windows Media framework.
+
+【原来是以前叫做 streaming format  现在叫做 system format  微软真能搞】
+
+The most common filetypes contained within an ASF file are Windows Media Audio (WMA) and Windows Media Video (WMV). 
+【asf最常封装的格式是 wma  wmv】
+
+。ASF最适于通过网络发送多媒体流，也同样适于在本地播放。任何压缩/解压缩运算法则（编解码器）都可用来编码ASF流。 
+
+补：微软的Windows Media Player SDK中 将ASF解释为 Advanced Systems Format 。
+
+ASF是一个开放标准【 注意 ASF 是微软搞的 但是他是开放的 】
+
+
+
+=================
+1 mediaserver 是什么东西
+
+只有几行代码
+int main(int argc, char** argv)
+{
+    sp<ProcessState> proc(ProcessState::self());
+    sp<IServiceManager> sm = defaultServiceManager();
+    LOGI("ServiceManager: %p", sm.get());
+    AudioFlinger::instantiate();
+    MediaPlayerService::instantiate();  //直接调用类里面的一个函数，那么这个类还没有实例化，如果函数使用了类成员变量又如何呢？
+    CameraService::instantiate();
+    AudioPolicyService::instantiate();
+    ProcessState::self()->startThreadPool();
+    IPCThreadState::self()->joinThreadPool();
+}
+
+知识点：
+静态成员和静态成员函数
+
+声明为static的类成员或者成员函数便能在类的范围内共同享，我们把这样的成员称做静态成员和静态成员函数。
+类的静态成员是属于类的而不是属于哪一个对象的 所以静态成员的使用应该是类名称加域区分符加成员名称的，在上面的代码中就是Internet::count，
+虽然我们仍然可以使用对象名加点操作符号加成员名称的方式使用，但是不推荐的，静态态类成员的特性就是属于类而不专属于某一个对象。
+
+静态成员函数由于与对象无关系，所以在其中是不能对类的普通成员进行直接操作的。
+
+RefBase & sp & wp 实现了类似于智能指针的工作，从而实现了垃圾自动回收的机制。代码见
+frameworks/base/include/utils/RefBase.h
+1.sp并不是所常见的smart pointer，而是strong pointer。
+
+
+编译成一个elf 可执行文件
+
+
+2
+
+/**
+ * Base class and low-level protocol for a remotable object.
+ * You can derive from this class to create an object for which other
+ * processes can hold references to it.  Communication between processes
+ * (method calls, property get and set) is down through a low-level
+ * protocol implemented on top of the transact() API.
+ */
+
+class IBinder : public virtual RefBase {  //知识点 public virtual 是 “虚拟继承”
+
+}
+
+class IInterface : public virtual RefBase {
+
+}
+
+2 http://videojs.com/  关于html5 的说明
+
+20110714 会议
+我想这次会议有划时代意义。我要充分发挥作用
+
+老蒋邮件：
+大家好：
+
+李明、高杰、蒋树峰、常献刚周一(7月11号)开会讨论，有以下方案：
+1). 继续目前的 StageFright+OpenMax 方案；
+2). 和第三方合作，采用第三方的多媒体方案，如武汉泰睿、VisualOn；
+3). 自己开发，使用 Gstreamer 和 FFMpeg 的方案；
+
+我们一致认为，
+方案1肯定行不通；
+方案2作为备选方案；
+方案3作为目前和以后的方案，集中力量进行移植和集成；
+
+今天(7月13号)，多媒体组开会讨论，
+1. 确定技术框架： Gstreamer + (ffmpeg插件+SDK硬解码插件)
+2. 确定人员分工：侯乐武+周金利―移植Gstreamer，杨高强―移植ffmpeg，张志强―暂时继续维护StageFright以应对目前的项目。
+3. 确定里程碑：8月15号移植和集成完成，需要达到的目标和时间计划的细分，另外再出文档明确。
+
+Thanks & Best Regards,
+蒋树峰
+
+李总回复：
+终于有了最关键模块的最明确的决定，恭喜。
+同时也让我们看到了方向，也更加有了足够的信心，其实不怕有问题，关键
+是看是否已经意识到了问题，并且找到了方向和办法。相信如果按照目前
+的梳理和调整，那么我们距离目标一定是越来越近了，不管多长时间。
+恭喜老蒋作为架构师已经开始真正梳理架构了。
+
+【 经理的回复还是很有些深度的 】
+
+
+
+会上我做了人员安排：老蒋带队，候乐武+周金丽 gstreamer，高强ffmpeg 我负责sdk支持以及底层性能优化
+
+讨论了 去除omx的决定
+
+我提议在wiki上创建多媒体知识页（ wiki是个好东西！分享知识（ 但是服务器的安全一定要保证-不要杞人忧天 ））
+老蒋负责此事 （组织大型研发事宜的能力）
+
+
+
+2012 04 11
+侯乐伍 解决卢米诺多媒体字幕问题：某国语言字幕不支持问题。最后发现字母文件（纯文本）是utf-8 的 另存为utf-16 就可以了
+因为在百度上看到一句：java使用utf-8编码，产生此灵感，没想到竟然解决了。
+
+
+========================
+字幕格式共分为两类：图形数据格式和文本数据格式
+图形数据格式 这类字幕数据以图片方式呈现，文件体积较大，不易于修改，有时亦称为“硬字幕”。
+文本数据格式 这类字幕数据以文本格式呈现，文件体积较小，可直接用Windows自带的记事本功能进行修改，有时亦称为“软字幕”。
+
+SRT格式（传统字幕）
+SRT（Subripper）是最简单的文本字幕格式，后缀名为.srt，其组成为：一行字幕序号，一行时间代码，一行字幕数据
+如：
+45
+00:02:52,184 --> 00:02:53,617
+慢慢来
+这表示：第45个字幕，显示时间从该影片开始的第2分52.184秒到第2分53.617秒，内容为：慢慢来
+
+SSA、ASS格式
+SSA（Sub Station Alpha）是为了解决SRT过于简单的字幕功能而开发的高级字幕格式，其扩展名为.SSA。采用SSA V4脚本语言，能实现丰富的字幕功能，除了能设定不同字幕数据的大小和位置外，更能实现动态文字和水印等复杂的功能。ASS（Advanced SubStation Alpha）为是更高级的SSA版本，采用SSA V4+脚本语言编写。它包含了所有SSA的所有特性，它可以将任何简单的文本转变成为卡拉OK的字幕样式，数个项目旨在创建这些脚本。ASS的特点在于它比普通的SSA更为规范，如ASS的编程风格。
+
+
+
+
+SubStation Alpha
+维基百科，自由的百科全书
+SubStation Alpha
+扩展名	.ssa, .ass
+開發者	Kotus
+SubStation Alpha （或 Sub Station Alpha），简称 SSA, 是一个由 CS Low（亦作 Kotus）创建的，比传统字幕（如SRT）更加强大先进的字幕文件格式。该格式在Windows平台上可以经播放器由VSFilter渲染进行播放。这是一款广受欢迎且已停止开发的字幕编辑制作工具。
+该字幕格式常被字幕组所应用,分为内挂字幕、外挂字幕和内嵌字幕三种形式。内挂字幕一般指ASS文件与视频一同封装在MKV文件中，播放时需经过VSFilter渲染。外挂字幕指ASS文件以单独形式存在，播放时经VSFilter渲染到视频上。内外挂字幕又称软字母，是可以提取、取出和查看源代码的。而内嵌字幕则是指字幕被以图形方式硬编码到视频中，所以播放时不需VSFilter等渲染，一般来说，该过程不可逆。
+
+SSA当前版本为V4.00。ASS则使用更高级的V4.00+编码。
+目前有很多免费软件或开源软件支持渲染SSA、ASS字幕。
+
+
+Advanced SubStation Alpha（ASS字幕）
+
+Advanced SubStation Alpha（ASS）是一种比SSA更先进的字幕脚本格式。他基于SSA 4.00+编码构建。他可以将普通的句子转变为华丽动感的卡拉OK特效。 有一部分程序专门为编写此类脚本而设计。 ASS的主要变化就是在SSA编写风格的基础上增添更多的效果和指令。 例：将上面的SSA脚本转化为ASS脚本：
+
+
+==========
+目前主流的流媒体服务器有微软的windows media server、RealNetworks的Helix server和苹果公司的Darwin Streaming Server. 微软的windows media server只能在windows 2000 server和windows 2003 server下使用，不在考虑之列。RealNetworks的Helix server是一款跨平台的软件，功能也很强大，但并非免费软件，只能cut掉了。苹果公司的Darwin Streaming Server是一款跨平台的开源流媒体服务器软件，由苹果公司出品，其品质不用怀疑了，而且还免费。所以在架设流媒体服务器时就选择了Darwin Streaming Server.
+
+==========
+==============================================================================
+20120420
+MX Player 缩略图存放位置：/data/media/Android/data/com.mxtech.videoplayer.ad/cache/image
+并且生成的缩略图就是png格式 但是并没有扩展名。88x66像素
+================================================================
+
+mVideoPlayer
+
+同样不支持全盘扫描，要设置扫描路径，并且在扫描的时候提示：
+Does it take too long time?
+Go to help and read the last setion of the FAQ for information about how you can improve the loading time.
+
+华硕平板，mvideoplayer 扫描android4.0 源码 需要20分钟左右。
+
+-----------------------------------------------------------------
+关于扫描的问题总结,重要。
+
+QuickPic  
+
+关于什么时候触发MediaScaner 
+
+================================
+关于格式：
+rm rmvb只是容器，里面的视频格式都是realvideoi
+版本分为7，8，9 目前海思自己播放器支持到9（硬解码） 7，8 是hiplayer软解的
+wmv 2，3 等hiplayer也是软解的。
+
+海思可以支持DTS
+ 
+
+
+RealVideo is usually paired with RealAudio and packaged in a RealMedia (.rm) container.
+realvideo 分版本，有8，9，10  rv8 rv9 rv10
+
+
+Nokia N82 描述
+
+MPEG-4 Part 2 (DivX/XviD), MPEG-4 Part 10 (H.264), RealVideo up to RealVideo 10
+注意这种写法！
+
+---------------------------------------------------------------------------------
+20120925
+
+在 IMediaPlayerService 中定义
+    virtual sp<IMemory>         decode(const char* url, uint32_t *pSampleRate, int* pNumChannels, audio_format_t* pFormat) = 0;
+    virtual sp<IMemory>         decode(int fd, int64_t offset, int64_t length, uint32_t *pSampleRate, int* pNumChannels, audio_format_t* pFormat) = 0;
+
+一个是 url 网络播放，一个是本地文件播放。
+
+为什么要在decode函数里面 
+
+
+
+MediaPlayer.java 里面的create 没有传到 MediaPlayerService.cpp 里面的 create 啊！
+
+
+MediaPlayer.java 里面的 start 最终调用到了 jni: android_media_MediaPlayer.cpp 的 android_media_MediaPlayer_start
+
+--------------------------------
+MediaPlayer::attachNewPlayer(const sp<IMediaPlayer>& player)
+{
+    mPlayer = player;  // 附着一个新的player
+}
+  
+仅在3个重载函数 MediaPlayer::setDataSource 中调用
+
+status_t MediaPlayer::setDataSource( ... )
+{
+	const sp<IMediaPlayerService>& service(getMediaPlayerService());
+	sp<IMediaPlayer> player(service->create(getpid(), this, mAudioSessionId));
+	err = attachNewPlayer(player);
+}
+ 
+class MediaPlayer : public BnMediaPlayerClient, public virtual IMediaDeathNotifier
+
+
+// establish binder interface to MediaPlayerService
+/*static*/const sp<IMediaPlayerService>&
+IMediaDeathNotifier::getMediaPlayerService()
+{
+	sp<IServiceManager> sm = defaultServiceManager();
+	binder = sm->getService(String16("media.player"));
+	sMediaPlayerService = interface_cast<IMediaPlayerService>(binder);
+	return sMediaPlayerService;
+}
+
+
+---------------------
+java 的 setDataSource 调用到 
+android_media_MediaPlayer_setDataSourceFD
+{
+sp<MediaPlayer> mp = getMediaPlayer(env, thiz);
+mp->setDataSource();
+}
+
+----------
+MediaPlayer.java 的 setDataSource 调用 _setDataSource 通过 jni 调用 MediaPlayer.cpp 里面的 setDataSource
+调用 attachNewPlayer（player）
+const sp<IMediaPlayerService>& service(getMediaPlayerService());
+sp<IMediaPlayer> player(service->create(getpid(), this, mAudioSessionId));
+
+MediaPlayer 3个接口，3组Bnxxxx，难道他们都在一个进程里面运行?
+
+--------------------
+Stagefright 的结构
+
+
+class AudioPlayer : public TimeSource
+
+struct ARTPAssembler : public RefBase
+
+
+android::ProcessState::self()->startThreadPool();  //单独调用这个何用？
+
+struct UDPPusher : public AHandler
+
+
+Session Description Protocol或简写SDP（rfc2327），广泛用于和RTSP以及SIP协同工作。ASessionDescription.cpp 负责解析SDP协议
+
+struct ASessionDescription : public RefBase
+
+
+
+-------------------
+ffmpeg结构分析
+
+android有一个rtp_test.c 测试GTalk's H264 SDP，我能用ffmepg命令做同样测试吗？
+
+-----------
+ftyp
+一个MP4文件首先会有且只有一个“ftyp”类型的box
+
+-----------
+
+AwesomePlayer::initAudioDecoder
+AwesomePlayer::initVideoDecoder
+分别调用 OMXCodec::Create
+
+
+OMX.google.aac.decoder
+OMX.google.h264.decoder
+
+./omx/SoftOMXPlugin.cpp:    { "OMX.google.h264.decoder", "h264dec", "video_decoder.avc" },
+./omx/SoftOMXPlugin.cpp:    { "OMX.google.aac.decoder", "aacdec", "audio_decoder.aac" },
+
+在哪里确定的 音视频 格式的呢？
+
+MPEG4Extractor::getTrack()
+{
+new MPEG4Source
+}
+
+static MediaExtractor::Create( )
+{
+    if (!strcasecmp(mime, "video/mp4") || !strcasecmp(mime, "audio/mp4")) {
+        ret = new MPEG4Extractor(source);
+    }
+}
+
+class MPEG4Extractor : public MediaExtractor
+
+凌乱了，MediaExtractor new MPEG4Extractor  而  MPEG4Extractor 派生自 MediaExtractor
+MPEG4Extractor::readMetaData()
+{
+    parseChunk(...);
+}
+MPEG4Extractor::parseChunk()
+{
+    new MPEG4DataSource(mDataSource);
+}
+
+-----------------
+文件系统明白了fat，其他的基本原理也就明白。而现在视频文件格式，就以mp4入手
+mp4的atom ：FIYP MOOF MOOV MRFA
+
+什么地方调用 read 函数得到文件数据呢？就在 FileSource::readAt 中
+FileSource 类用来读取一个普通文件
+2个构造函数：
+FileSource::FileSource(const char *filename)
+FileSource::FileSource(int fd, int64_t offset, int64_t length)   //AwesomePlayer 用这个，那么文件是什么时候open的？
+
+AwesomePlayer::setDataSource(..)
+{
+    sp<DataSource> dataSource = new FileSource(fd, offset, length);
+}
+
+
+还要关注-----
+libmedia.so
+libmediaplayerservice.so
+
+--------------
+使用gallery播放mp4文件，ps看到
+u0_a10    1019  544   179192 41272 ffffffff 40033a40 S com.android.gallery
+u0_a10    899   544   178260 34100 ffffffff 40033a40 S android.process.media //由zygote启动 是个provider
+
+./DrmProvider/AndroidManifest.xml:    <application android:process="android.process.media"
+./DownloadProvider/AndroidManifest.xml:    <application android:process="android.process.media"
+./DownloadProvider/ui/AndroidManifest.xml:    <application android:process="android.process.media"
+./MediaProvider/AndroidManifest.xml:    <application android:process="android.process.media"
+意思是这些 provider 都在 android.process.media 进程里运行?  那这个进程怎么创建：由zygote创建
+那么，难道是第一个provider 通过解析xml，由zygote创建了一个进程，第二个provider再指定这个进程的时候发现已经创建，就直接使用？！
+
+
+// 899 是 android.process.media 进程
+V/StagefrightMediaScanner(  899): processFile '/mnt/sdcard/gaojie.mp4'. 
+
+MediaScanResult StagefrightMediaScanner::processFile(...)
+{
+    ALOGV("processFile '%s'.", path);
+}
+
+--------------
+在哪里解析xml文件？比如如何解析
+<application android:process="android.process.media">
+
+<service android:name=".app.RemoteService" android:process=":remote">
+这句话的含义是单独起进程运行这个服务：
+
+com.example.android.apis 进程启动上面的服务，新服务进程名为：
+com.example.android.apis:remote  // 它由 zygote 创建
+
+--------------
+在 package/providers/media/mediaprovider
+class MediaScannerService extends Service
+
+为什么用 service 而不是 system service 呢？
+
+
+
+----------------
+题外：
+DefaultContainerService.apk 会导致无法安张apk
+
+
+
+com.android.internal.app 这个包，在哪个jar包里面
+
+AlertActivity.java  在 ./framework.odex 里面
+
+
+---------------------
+20131018 
+harmonic转码出来的视频，amlogic播放正常，但nexus7 播一会就死机。
+
+F/ESQueue (16121): frameworks/av/media/libstagefright/mpeg2ts/ESQueue.cpp:624 CHECK_GE( timeUs,0ll) failed: -1 vs. 0
+F/libc    (16121): Fatal signal 11 (SIGSEGV) at 0xdeadbaad (code=1), thread 16321 (NuPlayerDriver )
+I/DEBUG   (  120): *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+I/DEBUG   (  120): Build fingerprint: 'google/nakasi/grouper:4.3/JWR66Y/776638:user/release-keys'
+I/DEBUG   (  120): Revision: '0'
+I/DEBUG   (  120): pid: 16121, tid: 16321, name: NuPlayerDriver   >>> /system/bin/mediaserver <<<
+
+Vplayer播放harmonic很好，没有问题。
+
+--------------------
+20131022
+vlc录制的ts流，vlc播放无法算出总时间，ffplay无法快进
+
+-20131022-
+1 Vitamio 项目安装到amlogic盒子，可以解h.264,CPU占用率68%，可见是软解
+2 自己的ott程序在amlogic平台，打开后，system_server进程占35%，这不正常。
+
+
+-------------
+广告无缝
+毅晖方案：创建2个播放器实例，第二个启动后“暂停”，第一个播完，立即start第二个。
+
+
+-------------
+20140409
+pts 33bit  2^33/90k =  26.5小时溢出一次
+
+
+------------
+20140805 xss：flv跟mp4 类似
+
+00 00 00 02 (09 30 2bytes) 00 00 00 0e (06...80 14bytes)  
+
+
+
+-----
+20140806 xuss
+ffmpeg seek后要清buffer，重新下载数据。
+
+xuss buffer缓冲通知机制：
+
+罗技C270摄像头：
+UVC设备
+
+
+============
+mp3库移植：
+1 源文件里面有两个mad.h不知道是什么意思
+
+ecommip: warning: secondary license obtained; to avoid poor performance,
+        set GHS_LMWHICH environment variable to "elan"
+
+huffman.h中的位定义方式  编译器竟然不支持
+
+负电数到定点数转换的问题
+请看下面的定义  mad.h
+/*
+ * Fixed-point format: 0xABBBBBBB
+ * A == whole part      (sign + 3 bits)
+ * B == fractional part (28 bits)
+ *
+ * Values are signed two's complement, so the effective range is:
+ * 0x80000000 to 0x7fffffff
+ *       -8.0 to +7.9999999962747097015380859375
+ *
+ * The smallest representable value is:
+ * 0x00000001 == 0.0000000037252902984619140625 (i.e. about 3.725e-9)
+ *
+ * 28 bits of fractional accuracy represent about
+ * 8.6 digits of decimal accuracy.
+ *
+ * Fixed-point numbers can be added or subtracted as normal
+ * integers, but multiplication requires shifting the 64-bit result
+ * from 56 fractional bits back to 28 (and rounding.)
+ *
+ * Changing the definition of MAD_F_FRACBITS is only partially
+ * supported, and must be done with care.
+ */
+
+注意这里的定点表示方式
+位区域的定义GreenHill的支持有些特殊
+
+在int为4个字节的系统上
+mad_fixed_t 就是unsigned int 类型
+---
+
+1 关于解绕 Descrambler  支持 DES  3DES  和 AES
+2 H.264/AVC   AVC叫做高级视频编码  属于mpeg4-10标准 mpeg4标准号为 iso 14496
+3 MPEG4:ASP    divx   VC-1  
+
+音频方面:
+mpeg2 AAC  也就是 13818-7   高级音频编码
+mpeg4 AAC   MPEG4 HE-AAC  这两个有什么区别呢?
+DD+  DD(AC3)
+
+video 解码器
+mpeg4 asp  符合 iso/iec 14496-2(mpeg4 part2) 最大尺寸640x480
+h.264/AVC  最大尺寸 1920x1080
+
+VC-1  最大尺寸 1920x1080
+
+jpeg baseline
+最大尺寸 30720x17280
+驱动只能支持 2048以内的解码. thinning modes  1/2 1/4 1/8 
+(从这里可以看出,jpeg解码是硬件支持的)
+要不然为什么 使用jpeg库的时候 要先初始化 video呢!
+
+音频:mpeg1 mpeg2 layer1 layer2  mpeg2-aac  mpeg4-aac mpeg4-he-aac
+dd(ac-3)   dd+   lpcm
+
+
+2个android电视棒，对mp4和m3u8的支持都很好。可以很好适应ott系统。
+那么他们是软解还是硬解呢？ 怀疑是软解码的。（如何确认一下呢?）
+
+A tip; this can be caused by the m3u-file missing an #EXT-X-ENDLIST (indicating 
+it is in fact a window over a live stream, rather than VOD-type content.
+
+
+
+iPod支持	AAC (16 至 320 Kbps)、受保护的 AAC (来自 iTunes Music Store)、MP3 (16 至 320 Kbps)、MP3 VBR、Audible (2、3 和 4 格式)、Apple Lossless、WAV、AIFF
+
+步骤 1 选取“iTunes”>“偏好设置”，单击“高级”，然后单击“导入”。
+步骤 2 从 “导入使用”弹出式菜单中选取一个编码器。
+
+如果您想要将正在导入的歌曲刻录成高质量的音乐光盘而不损音质，则请选取“Apple Lossless 编码器”或“AIFF 编码器”。（记住，使用这种格式导入的歌曲会占用更多的磁盘空间。）
+
+1)AIFF
+AIFF是音频交换文件格式(Audio Interchange File Format)的英文缩写，是Apple公司开发的文件格式，如今广泛普及的WAV就是参照它“克窿”出来的(个人观点)
+
+2)WAV
+WAV是由微软和IBM联合开发的用于音频数字存储的标准(个人认为是联合开发)，符合RIFF(Resource Interchange File Format)文件格式规范，类似AIFF，都是平台标准(个人理解)。
+
+3)Apple Lossless
+Apple Lossless是苹果公司开发的无损音频编解码方案(无特别详细的资料文档)。
+
+其实很简单的，在OS X 系统 插入CD 然后直接把桌面CD光盘目录中的aiff格式音频文件拷贝到电脑中
+当然，获取高品质音源的途径有很多，比如从HD DVD中提取，APE转换等。。在这里就不一一列举了。
+
+
+1 关于资源冲突问题， 音乐播放器退到后台播放，打开多媒体，音乐要暂停，开始播放多媒体。
+一个音乐播放器推出到后台，打开视频播放器，这种情况需要2个音频硬解码器才可以搞定?我不这样认为。
+
+
+缩略图需要双解码器。
+因为U盘插入，系统会在后台扫描缩略图，而此时可以DVB正在播放，导致冲突。
+并且，在播放器内部，
+
+海思的缩略图也是基于双解码器的吗？   而系统很有可能不配置成双解码器。
+
+要不要设计一套没有缩略图的。
+
+

@@ -1,0 +1,18 @@
+imshow 是matlab 函数  freemat 没有
+Freemat has image/imagesc that can be used to display images (instead of imshow).
+
+f = imread('1.jpg')
+image(f)
+即可
+
+imfilter也没有
+
+ Freemat does not implement the functions imfilter
+
+digits(10)  改变精度  默认4位
+
+难道计算机就只能精确到long型  14位精度吗？ 不可能
+
+如果我需要1000位精度怎么办
+
+

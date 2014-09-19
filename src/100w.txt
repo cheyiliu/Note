@@ -1,0 +1,52 @@
+这里要提醒的是：用apt-get或者ubuntu软件中直接安装的jdk，jre的时候，编译Android是总是编译不过，出现JDK版本不一致的情况；
+
+oracle 官网没有显式提供jdk1.6下载，而是提供最新的。我可以baidu搜索Java SE 6u35 到达oracle，点击archive，
+
+在14.04上配置android编译环境，按照11.10 的sudo apt-get 有    
+ia32-libs 
+lib32readline5-dev 
+装不上，其他多数系统都自带了。
+
+
+
+关于4.2.2 编译器路径，大小的优化
+A20 起始 6.5G
+在prebuilts目录下放置编译器，大小2.4G 
+其中gcc目录放置编译器，提供linux和darwin 2个操作系统，darwin是苹果的一个系统，可以直接删除 425M
+linux-x86 平台支持3个目标平台的编译：x86 mips 和arm。
+x86，mips 2个目标平台删除 174M
+host目录用来编译主机上使用的工具。为什么不用系统的编译器，而是单独准备呢？
+
+重点：
+arm目录包含：arm-eabi-4.6  arm-linux-androideabi-4.6 各200M 有何区别？
+EABI（Embedded Application Binary Interface），嵌入式应用程序二进制接口。
+
+编译器中 一长串和简写的 有什么对应关系呢？
+
+在framework里面有很多实验用的视频，可以删除：
+./base/media/tests/contents/media_api/ 目录下 370M
+
+这几步下来  4.2.2 剩余5.5G
+
+external 目录157个库，这些不能删除，否则可能导致一些apk无法运行。这个4.2.2的标准功能。删除了就不能叫4.2.2了。
+近而：
+prebuilt/qemu-kernel 用来运行模拟器的，我不需要，全部真机调试，内容删除。108M
+
+prebuilt/gcc/linux-x86下面有3个目录
+i686-linux-glibc2.7-4.4.3
+i686-linux-glibc2.7-4.6
+x86_64-linux-glibc2.7-4.6
+用的是哪个呢？
+
+
+device目录 仅有softwinner是有用的   ti samung asus 等删除
+softwinner目录除common和A20_B133  a20_product_base 外都可以删除  200M
+注意，这个还不能删除
+wing-common 也不能删除
+
+
+#add_lunch_combo A20_B133-eng 仅仅为了显示，不写 直接执行 lunch A20_B133-eng 也行！
+
+
+
+

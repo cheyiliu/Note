@@ -1,0 +1,79 @@
+Linux's built-in USB sniffer, usbmon
+
+附：usb设备标识
+usb 1-1.2
+
+1 摄像头插入usb，多出
+/dev/v4l/by-id/xxx
+/dev/v4l/by-path/xxx
+和  /dev/video0  /dev/video1 等设备符
+
+ubuntu上，插入摄像头，执行
+./ffplay -f video4linux2 -i  /dev/video0 或者
+./ffplay -f v4l2 -i  /dev/video0
+就可以显示画面，信息看
+Stream #0:0: Video: rawvideo (YUY2 / 0x32595559), yuyv422, 640x480, 147456 kb/s, 
+30 fps, 30 tbr, 1000k tbn, 1000k tbc
+
+./ffplay -f v4l2 -i  /dev/video0 不行，提示：
+
+Picture size 60038x46361 is invalid //没有识别正确的分辨率
+mjpeg: unsupported coding type
+Can not process SOS before SOF, skipping
+huffman table decode error
+
+Could not find codec parameters for stream 0 (Video: mjpeg, 1280x720, -5 kb/s): 
+unspecified pixel format
+Consider increasing the value for the 'analyzeduration' and 'probesize' options
+/dev/video1: could not find codec parameters
+
+
+guwb： zc301  spca 
+USB摄像头linux下使用最多的是法国人写的一个通用驱动程序spca5xx（现在都是UVC）
+
+
+gw给的摄像头：
+Bus 002 Device 004: ID 0408:20e1 Quanta Computer, Inc. 
+(台湾最大笔记型电脑制造厂:广达电脑有限公司(Quanta Computer))
+
+http://www.ideasonboard.org/uvc/
+
+
+３、先看看摄像头的相关信息：
+lshal | grep cam
+
+$ dmesg | grep uvc
+[19989.340982] uvcvideo: Found UVC 1.00 device HD Webcam (0408:20e1)
+
+说明ubuntu kernel已经支持uvc1.0
+
+
+./media/video/uvc/uvc_driver.c:	case UVC_VS_FORMAT_MJPEG:
+./usb/gadget/webcam.c:	.bDescriptorSubType	= UVC_VS_FORMAT_MJPEG,
+
+安装 v4l-utils 工具包
+C270摄像头：
+v4l2-ctl -d /dev/video0 --list-formats
+
+ioctl: VIDIOC_ENUM_FMT
+	Index       : 0
+	Type        : Video Capture
+	Pixel Format: 'YUYV'
+	Name        : YUV 4:2:2 (YUYV)
+
+	Index       : 1
+	Type        : Video Capture
+	Pixel Format: 'MJPG' (compressed)
+	Name        : MJPEG
+
+
+可以到http://www.linuxtv.org/downloads/v4l-utils/ 下载
+编译需要libjpeg开发库，安装libjpeg-dev，装不上就直接源码编译，
+提示QGLFunctions找不到，需要qt库，
+HAVE_QTGL
+configure的时候
+checking for QTGL... yes 说明系统已经有QTGL
+不知道怎么关闭，只好在config.h中把 #define HAVE_QTGL 1 注释掉，编译成功。
+
+在12.04上这个直接关闭的：/* #undef HAVE_QTGL */
+

@@ -1,0 +1,1520 @@
+对于一个没有被载入或者想要动态载入的界面，都需要使用LayoutInflater.inflate()来载入；
+LayoutInflater localinflater =(LayoutInflater)context.getSystemService (Context.LAYOUT_INFLATER_SERVICE);
+
+****
+20140325
+重要：在numberpicker控件中，也有
+LayoutInflater inflater = (LayoutInflater) getContext().getSystemService( Context.LAYOUT_INFLATER_SERVICE );
+inflater.inflate(layoutResId, this, true);
+
+简单的可以用：（apidemo中 List4.java 的例子）
+
+class SpeechView extends LinearLayout {
+  public SpeechView(Context context, String title, String words) {
+    mTitle = new TextView(context);
+    mTitle.setText(title);
+    addView(mTitle, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+    mDialogue = new TextView(context);
+    mDialogue.setText(words);
+    addView(mDialogue, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+  }
+}
+
+
+想在 一个activity里面迅速放置一个控件:
+
+
+----------------------
+感觉学习apk编程，对于我来说很难啊，一点一点积累吧。重新学习啊！啊！啊！
+20140515 虽然千难万难，还是要坚持学习apk编程。
+^_^
+
+eclipse显示的项目名称在 .project:	<name>RemoteIME_v2013</name> 中记录。
+
+target=android-14  指的是api level
+
+------20140522
+打开amlogic 遥控器项目提示：build path contains duplicate entry:'src' for project
+'xxx'
+原因是，工程需要 remoteClient_ob20130507.jar 但是没有
+把这个拷贝到 libs目录，然后在 Java Build Path -》 librarys 中add jar..
+
+Project -> Properties  -> Java Build Path
+
+
+编译的时候提示：
+[2014-05-22 18:46:17 - Dex Loader] Unable to execute dex: Multiple dex files define Lcom/amlapp/android/RemoteClient/DBOpenHelper;
+[2014-05-22 18:46:17 - RemoteIME_v2013] Conversion to Dalvik format failed: Unable to execute dex: Multiple dex files define Lcom/amlapp/android/RemoteClient/DBOpenHelper;
+因为加载了2个同样的jar包（名字不同）
+
+-----------
+    android:versionCode="1"    用于比较版本
+    android:versionName="1.0"  用于显示  
+
+android.intent.category.HOME  代表launcher程序
+
+--
+在一个有AndroidManifest.xml的目录中有个test目录，里面又有AndroidManifest.xml 用eclipse
+打开，会直接显示2个工程。
+
+--
+打开vitamio-sample工程，工程名称处有个大大的红叹号。这一般是依赖问题，因为这个库依赖另一个
+vitamio库。需要把那个库也打开。 右击看属性，告知哪个依赖没有找到。
+在Projects标签中显示 InitActivity missing   这个恰好是另一个应用工程
+
+--
+关于 .classpath文件
+
+eclipse新建一个工程 自动生成文件：
+AndroidManifest.xml
+proguard-project.txt
+project.properties
+.classpath
+.project
+
+当我添加一个依赖工程的时候（在java build path中Projects卡中 Add一个工程（会显示已经打开的工程））
+在.classpath中自动增加了  <classpathentry combineaccessrules="false" kind="src" path="/InitActivity"/>
+这样以后打开那个工程的时候就要手动打开  InitActivity 这个工程。
+
+提示：Android library projects cannot be launched.
+Android Library Project 是被引用的，不是独立项目，不能单独启动运行，你需要在 Android 
+项目的属性中的 Android 分类下面把 "Is Library" 框去掉打勾的，之后它就是一个普通的 
+Android Application Project 了。
+在：Properties->Android 有 Is Library 选项
+在创建新工程时候 有 Mark this project as a library 选项。
+
+但这种方式，加如的还是源码而不是jar包啊！
+
+也生不成jar包，因为这个测试的vitamio library里面有很多资源
+
+素材也行打包到jar中？对，素材会打包到.class文件中
+怎么打包的呢？
+
+把一个普通apk工程 改成 Is Library 就会在bin 下面生成 工程名.jar文件
+
+Export  - General -Archive file 这个没什么意思，就是把工程目录压缩成 zip包
+
+
+
+dumpsys meminfo com.cn.ccdt
+
+
+最小系统，Hello World
+
+DisplayMetrics.java
+
+DENSITY_MEDIUM = 160;
+DENSITY_DEFAULT = DENSITY_MEDIUM;
+density = DENSITY_DEVICE / (float) DENSITY_DEFAULT;
+设备dpi为160时，density == 1
+设备dpi为320时，density == 2
+如果density == 1，160dip 就是 160pexil
+如果density == 2，160dip 就是 320pexil
+
+TypedValue.java  :
+  case COMPLEX_UNIT_DIP:
+  return value * metrics.density; //即 DIP*density == Pexil
+
+google官方解释
+Density Independent Pixel （dip）
+dpi dots per inch
+
+一代 nexus7  7'' 800x1280  216dpi
+二代 7.02'' 1920x1200  323dpi
+
+
+推理：我在nexus7 一代使用216dp 换算成inch 为216/160 = 
+
+
+我的显示器：1440x900  19''  换算成dpi = 89.37
+所以800像素长度为22.7 cm
+
+在eclipse layout视图中选择nexus7  放大镜（中间带1）zoom to 100% 就占用显示器真实800 
+pexil 用尺子测量就是22.7cm
+
+nexus 水平尺寸9.45cm 
+
+
+--------------------------------------------------------------------------------
+向导生成的app分析
+
+FragmentPagerAdapter extends PagerAdapter
+
+PagerAdapter：Base class providing the adapter to populate pages inside of a ViewPager. 
+FragmentPagerAdapter：Implementation of PagerAdapter that uses a Fragment to manage each page
+
+ViewPager
+extends ViewGroup
+
+ViewGroup
+extends View
+
+
+---------------------
+Unable to get view server version from device emulator
+解决办法：删除工作空间中的.metadata 文件夹
+
+
+
+5.NestedWeights   
+  
+Nested weights are bad for performance  
+  
+  
+Issue: Looks for nested layout weights, which are costly  
+Id: NestedWeights  
+  
+  
+Layout weights require a widget to be measured twice. When a LinearLayout with 
+non-zero weights is nested inside another LinearLayout with non-zero weights, 
+then the number of measurements increase exponentially.  
+
+6 
+ImageButton extends ImageView extends View
+
+7
+RemoteViews 
+
+AppWidgetProvider extends BroadcastReceiver
+
+--------------------
+View.OnTouchListener
+
+Interface definition for a callback to be invoked when a touch event is dispatched
+to this view. The callback will be invoked before the touch event is given to the view.
+
+-----
+mVibrator.vibrate(VIBRATION_LENGTH); //震动
+
+
+理解用 Eclipse 开发SDK的方式
+
+1 Eclipse->File->News->Project...->Android Project  直接选择ApiDemo 目录
+
+android:src="@android:drawable/sym_action_call"
+“@android:”表示引用android所提供，而非自行导入
+实际在 framework/base/core/res/res/drawable-mdpi(hdpi)/smy_action_call.png 
+
+3 测试 TestSurfaceview的时候 must voerride a superclass method 网上说 是java1.5不支持@Override 改为1.6即可 但是Apidemo 也有@Override 为什么就可以呢？
+在Preference->Java->compiler 中改为1.6 果然编译通过并且也可以在2.2 AVD中运行
+
+
+1 setting默认设置在framework里面修改，比如默认ip地址，画面尺寸等。
+core/java/android/setdisplayattr/SetDisplayAttrService.java
+
+2 应用程序透明需2步：xml里面设置view透明，程序里面activity设置 window的背景为透明
+（实际是设置window上面decorview背景）。但是吴昊的Home程序做完这2步后，把系统的默认墙
+纸显示出来了。原来：framework里面把显示墙纸的程序注掉。现在：home调用WallPaperManager类，
+设定一个透明桌面，这方法好。
+
+3 dvb的apk没有在data区创建文件之权限。经查，data分区权限771，dev apk为user权限。将data
+区改为777即可。但这样是否破坏android权限系统？ 可以查查平板电脑的权限如何。
+
+4 home要指定home属性。如果有2个home，开机自动出现选择界面
+String HOME_CATEGORY 类别：主屏幕 (activity)，设备启动后显示的第一个 activity。 
+"android.intent.category.HOME" 
+
+5 替换开机动画，只需 bootanimation.zip 放到system/media 目录即可，不需要更改framework
+
+6 20120227 系统插入usb键盘，不会弹出软键盘，否则弹出软件盘。
+frameworks/base/core/java/android/inputmethodservice/inputmethodservice.java 里面：
+
+    /**
+     * Override this to control when the soft input area should be shown to
+     * the user.  The default implementation only shows the input view when
+     * there is no hard keyboard or the keyboard is hidden.  If you change what
+     * this returns, you will need to call {@link #updateInputViewShown()}
+     * yourself whenever the returned value may have changed to have it
+     * re-evalauted and applied.
+     */
+  onEvaluateInputViewShown()
+  {
+   
+  }
+
+7 
+
+/**
+ * A SoftInputWindow is a Dialog that is intended to be used for a top-level input
+ * method window.  It will be displayed along the edge of the screen, moving
+ * the application user interface away from it so that the focused item is
+ * always visible.
+ */
+
+class SoftInputWindow extends Dialog {
+
+}
+
+class Dialog  注意，这个类不像我想的，不是一个view的继承类
+class AlertDialog extends Dialog
+
+
+new AlertDialog.Builder(this)  //看看，new和.操作可以同时进行。
+
+
+8 可通过修改xml和Android.mk最高获得system权限（要获得root权限需改init，变为服务有些麻烦）
+  system权限仍然没有办法通过调用linux的系统调用设置时间。seting程序调用的是 systemClock.cpp 
+里面的setCurrentTimeMillis 里面操作了/dev/alarm设备节点
+
+9 插入物理键盘不弹软件盘，修改framework可改变此行为。方向键控制软件盘需要修改。
+
+
+10 ApiDemo 包里面
+  ./res/raw/test_cbr.mp3
+
+4.0模拟器是可以播放mp3的，替换一个mp3  重新编译，在模拟器中手动删除，然后再用eclipse 
+安装就可以正常了。否则提示 签名不对。
+
+11 <精通android3> Android java API 包含40多个包和700多个类，并且每一版的数量在不断增加。
+
+12 android.media 包，此包核心是android.media.MediaPlayer类
+
+13 android4.0/frameworks/base/core/java/android/os/Environment.java
+
+
+14 ./AndroidManifest.xml:    android:versionName="0.0.2" 会显示在setting 应用程序管理处
+
+-----------------------------------
+
+创建简单工程，测试surfaceview
+1 apk全屏 在manifast.xml中 android:theme="@android:style/Theme.NoTitleBar.Fullscreen" 
+2 宽高 设置为匹配父窗口，而不是wrap_content
+
+udp socket创建失败，因为没有权限
+在AndroidManifest.xml中，加上这一句话，取得权限。
+<uses-permission android:name="android.permission.INTERNET" />
+
+不能在主线成调用带有阻塞功能的 网络函数
+
+====
+developer -  tools 下面有很多有用的工具。内存分析，cpu时间片使用等。
+
+从Window -> preferences -> Java -> Editor -> Content assist -> Auto-Activation下，
+我们可以在"."号后面加入我们需要自动提示的首字幕，比如"ahiz"。
+
+
+
+2014/02/12
+做手机遥控器的时候，需要发送UDP数据包，执行send。李啸开始是另起一个thread，我觉得没有必要，
+查阅发现udp的send不是阻塞函数。
+调查后，在android里面必须不能在主线程调用，会报异常：
+
+xbmc里在 KeyPressTask extends TimerTask 里面调用的，而 TimerTask 本身也是个线程。
+./libcore/luni/src/main/java/java/util/TimerTask.java
+
+
+
+----------
+1 20111019 彭晖  一个UI死机，在onCreate的时候加载了太多的图片导致死机
+
+1)        安装jdk
+android之前的版本使用jdk1.5编译，而android 2.3默认要求使用jdk1.6
+a)        安装jdk 1.6
+$ sudo apt-get install sun-java6-jdk
+b)        在同一台机器上同时编译android 2.2和android 2.3，用以下方法进行切换
+$ sudo update-java-alternatives -s java-1.5.0-sun
+
+2  修改.bashrc 改变 java路径 
+export PATH=/usr/lib/jvm/java-1.6.0-openjdk/bin:$PATH
+export JAVA_HOME=/usr/lib/jvm/java-1.6.0-openjdk
+export CLASSPATH=.:/usr/lib/jvm/java-1.6.0-openjdk/lib
+
+
+
+1 jar包结构
+首先 jar包可以右击 选择 Extract here 也可以用 open with archive manager
+里面包含若干.class (一个.java文件，生成一个 .class,若干.class 组合一个jar包)
+vi xx.jar 显示若干文件路径，没有显示二进制文件。奇怪，单独处理了
+把扩展名改掉，vi 就可以看二进制了。说明vi对.jar 做了特殊处理。
+
+2 将几个class文件生成jar包：
+jar cvf xx.jar x.class x1.class
+jar uf xx.jar x.class 把x.class增加到xx.jar中  这些命令跟ar命令都类似。
+参数都要加 f 即指定包文件名字。
+
+2个jar合并如何做？ 把2个jar文件解开，合并到一个目录，删除manifest文件，然后jar cvf
+
+
+1 签名工具 keytool 和Jarsigner  不是sdk工具包里的 而是jdk的工具。在/usr/bin/下
+
+2 After you sign your application for release, we recommend that you use the 
+zipalign tool to optimize the final APK package.
+
+3 Keytool utility (included in the JDK)
+
+4 Eclipse Export Wizard
+
+5 key 和 Keystore？？？
+
+6 应用程序的签名，最终签在 META-INF/CERT.RSA文件中，因为经过测试，1个apk用不同的签名
+导出，仅仅这里不同
+
+7 在CERT.SF文件中有 
+Name: res/drawable-mdpi/key_apostrophe1.png
+SHA1-Digest: 00LV63M5kjq5LJvwt9dUZ4qJkiY=
+但是，执行：
+$ sha1sum  key_apostrophe1.png 
+5467485d27f325afc76cecd4a1dc41dd845a61c8  key_apostrophe1.png
+
+再把 5467485d27f325afc76cecd4a1dc41dd845a61c8 进行base64 编码得：
+base64 回车
+5467485d27f325afc76cecd4a1dc41dd845a61c8 回车
+ctl+D
+输出：
+NTQ2NzQ4NWQyN2YzMjVhZmM3NmNlY2Q0YTFkYzQxZGQ4NDVhNjFjOAo=
+所以实测，也不是base64 
+
+`base64': Transform data into printable data
+
+Base64编码在电子邮件中很常见，Foxmail、Outlook等邮件用户代理发邮件时进行SMTP验证，
+就是输入base64编码格式的用户名和密码进行验证的，而邮件的主体内容和附件都很普遍的使用
+base64编码进行传输
+
+使用标准输入的时候，要用ctl+d结束命令，才能执行。
+
+
+META-INF 文件夹:
+MANIFEST.MF: 清单信息（Manifest file）
+CERT.RSA: 保存着该应用程序的证书和授权信息。
+CERT.SF: 保存着 SHA-1 信息资源列表，比如：
+
+
+
+apk闪退。打印：
+E/AndroidRuntime( 5607): java.lang.NullPointerException
+E/AndroidRuntime( 5607): 	at com.ccdt.itvision.ui.homepage.HomePageActivity$2.handleMessage(HomePageActivity.java:82)
+
+原因是，检测192.168.7.32上面的upgrade.json 。
+程序做了判断：如果连接不上或者没有这个文件，正常运行。但是我把这个文件修改了。他找到了，但是字段变了
+结果导致系统崩溃。
+
+
+
+1 关于服务
+
+public abstract class Context {
+  String STORAGE_SERVICE = "storage";
+}
+
+Setting里的memory.java
+
+public class Memory extends SettingsPreferenceFragment {
+
+   public void onCreate(Bundle icicle) {
+      mStorageManager = getSystemService(Context.STORAGE_SERVICE);
+   }
+
+}
+
+getSystemService是context类定义的函数，被activity继承。开始我疑惑：Fragment没有继承context如何使用？
+原来在fragment类里如下：
+
+public class Fragment {
+    /* Return the Activity this fragment is currently associated with. */
+    final public Activity getActivity() {
+        return mActivity;
+    }
+}
+
+public class SettingsPreferenceFragment extends PreferenceFragment
+{
+    /**
+     * Returns the specified system service from the owning Activity.
+     */
+    protected Object getSystemService(final String name) {
+        return getActivity().getSystemService(name);
+    }
+}
+
+public class Memory extends SettingsPreferenceFragment
+{
+     public void onCreate(Bundle icicle) {
+        mStorageManager = (StorageManager) getSystemService(Context.STORAGE_SERVICE);
+     }
+}
+
+
+2 xml layout里面可以放置 view 可以是系统内置控件，当然也可以是用户自定义控件，比如Setting就用了用户自定义控件。
+
+public class PercentageBarChart extends View  //构建自己的控件
+{
+}
+
+<LinearLayout
+    <com.android.settings.deviceinfo.PercentageBarChart
+...
+    </com.android.settings.deviceinfo.PercentageBarChart>
+
+
+3 Preference 首选项
+  Provides classes that manage application preferences and implement the preferences UI. 
+
+
+4 ListActivity  extends  Activity 
+   An activity that displays a list of items by binding to a data source such as an array or Cursor, and exposes event handlers when the user selects an item.
+
+
+5  Fragment 就好比一个子 Activity。但是Activity 是Context的子类，而Fragment是由Object扩展而来。
+
+
+
+以非android.开头的包 不在 frameworks目录中 而是java标准的库，也没有源码吧！
+
+ java.lang.Object -》
+     android.content.res.Configuration
+
+说明android.content.res.Configuration这个类是从java.lang.Object类继承过来的
+
+JAVA中implement和extends的区别？
+extends是继承父类，只要那个类不是声明为final或者那个类定义为abstract的就能继承，JAVA中不支持多重继承，但是可以用接口来实现，这样就要用到implements，继承只能继承一个类，但implements可以实现多个接口，用逗号分开就行了
+比如
+class A extends B implements C,D,E 
+
+一个类通过关键字implements声明自己使用一个或者多个接口。在类的声明中，通过关键字extends来创建一个类的子类。
+class 子类名 extends 父类名 implenments 接口名
+{...
+}
+
+基本上就这样用了。 
+
+class 子类名 extends 父类名 implenments 接口名 
+
+每个java文件，在开头的时候都要写上
+package android.graphics 标明这个文件的类在哪个package里面
+
+android.graphics.drawable.shapes 这个包在
+frameworks/base/graphics/java/android/graphics/drawable/shapes
+这个目录中。
+
+
+---bcm7231--
+192@64  512@512 的配置
+
+朱林 20 Jul 2012
+root@android:/proc # cat meminfo
+MemTotal:         307864 kB
+MemFree:            8328 kB
+Buffers:               0 kB
+Cached:           137620 kB
+
+
+root@android:/proc # cat iomem                                                 
+00000000-0fffffff : System RAM
+  00001000-0063cdbf : Kernel code
+  0063cdc0-00757e9f : Kernel data
+  04000000-0fffffff : bmem.0
+10181000-10190fff : ahci.0
+10406900-1040691f : serial
+10406940-1040695f : serial
+10406980-1040699f : serial
+10410000-104100ff : sdhci.0
+  10410000-104100ff : mmc0
+10412800-10412bff : brcmstb_nand
+10430000-10434fff : bcmgenet.0
+  10430000-10434fff : bcmgenet
+10440000-10444fff : bcmgenet.1
+10480300-104803ff : ehci-brcm.0
+10480400-104804ff : ohci-brcm.0
+10480500-104805ff : ehci-brcm.1
+10480600-104806ff : ohci-brcm.1
+10490300-104903ff : ehci-brcm.2
+10490400-104904ff : ohci-brcm.2
+10490500-104905ff : ehci-brcm.3
+10490600-104906ff : ohci-brcm.3
+20000000-4fffffff : System RAM
+  20000000-3fffffff : bmem.1
+
+
+
+-----------------------------
+启动参数
+
+CPU revision is: 0002a064 (Broadcom BMIPS4380)
+FPU revision is: 00130001
+Determined physical RAM map:
+ memory: 10000000 @ 00000000 (usable)
+ memory: 30000000 @ 20000000 (usable)
+bmem: adding 192 MB RESERVED region at 64 MB (0x0c000000@0x04000000)
+bmem: adding 402 MB RESERVED region at 512 MB (0x19200000@0x20000000)
+Initrd not found or empty - disabling initrd
+Zone PFN ranges:
+  Normal   0x00000000 -> 0x00050000
+Movable zone start PFN for each node
+early_node_map[2] active PFN ranges
+    0: 0x00000000 -> 0x00010000
+    0: 0x00020000 -> 0x00050000
+
+---------------
+重要信息
+#elif defined(CONFIG_BRCM_UPPER_768MB)
+
+/* uncached kseg1 does not exist in this configuration */
+
+
+---------------
+BMIPS应该是专指博通MIPS
+
+Broadcom BMIPS4380
+这个处理器在内容映射上做了修改：
+MIPS 4k系列 CP0 R22 是reserve的，但是在此cpu上做了定义
+
+./brcmstb/vector.S 里
+
+
+#if defined(CONFIG_BRCM_UPPER_768MB)
+        /*
+         * Enable XKS01 1024MB kseg0
+         *
+         * Memory map is documented in <asm/mach-brcmstb/spaces.h>
+         */
+
+#if defined(CONFIG_BMIPS4380)
+        mfc0    t0, $22, 3
+        li      t1, 0x1ff0
+        li      t2, (1 << 12) | (1 << 9)
+        or      t0, t1
+        xor     t0, t1
+        or      t0, t2
+        mtc0    t0, $22, 3
+        BARRIER
+
+
+#elif defined(CONFIG_BRCM_UPPER_768MB)
+
+/*
+ * 1024MB Broadcom 256+768 virtual address map
+ *
+ * 8000_0000 - 8fff_ffff: 256MB RAM @ 0000_0000, cached
+ * 9000_0000 - 9fff_ffff: 256MB EBI/Registers @ 1000_0000, uncached
+ * a000_0000 - cfff_ffff: 768MB RAM @ 2000_0000, cached
+ * d000_0000 - dfff_ffff: TBD
+ * e000_0000 - ff1f_7fff: vmalloc region
+ * ff1f_8000 - ff1f_ffff: FIXMAP
+ * ff40_0000 - ff7f_ffff: CONSISTENT region
+ *
+ * PA 5000_0000 and above are accessed through HIGHMEM (BMIPS5000 only).
+ */
+
+#define TLB_UPPERMEM_VA         _AC(0xc0000000, UL)
+#define TLB_UPPERMEM_PA         _AC(0x40000000, UL)
+#define KSEG0_SIZE              _AC(0x40000000, UL) /*kseg0  1G*/
+#define KSEG1_SIZE              _AC(0x00000000, UL) /*kseg1 0  没有kseg1 了？*/
+#define MAP_BASE                _AC(0xe0000000, UL)
+#define FIXADDR_TOP             _AC(0xff200000, UL)
+/* BASE and END must be 4MB-aligned (PGDIR_SIZE) */
+#define CONSISTENT_BASE         _AC(0xff400000, UL)
+#define CONSISTENT_END          _AC(0xff800000, UL)
+#define BRCM_MAX_UPPER_MB       _AC(768, UL)
+
+#endif /* CONFIG_BRCM_UPPER_MEMORY */
+
+
+
+==================
+Many BMIPS processors have the ability to extend kseg0 to 1024MB in
+order to reclaim large amounts of kernel virtual address space.
+
+
+It is recommended that this option be used in conjuction with
+SPARSEMEM (Kernel type -> Memory model -> Sparse memory).
+SPARSEMEM conserves about 2MB by omitting the page tables for the
+memory hole.
+
+
+reserved的部分，会占用mem_map 空间吗？
+
+
+--------
+./arch/mips/brcmstb/memory.c
+
+
+
+-----------------
+Determined physical RAM map:
+ memory: 10000000 @ 00000000 (usable)
+ memory: 30000000 @ 20000000 (usable)
+bmem: adding 55 MB LINUX region at 8 MB (0x0374b000@0x008b5000)
+bmem: adding 192 MB RESERVED region at 64 MB (0x0c000000@0x04000000)
+bmem: adding 402 MB RESERVED region at 512 MB (0x19200000@0x20000000)
+bmem: adding 366 MB LINUX region at 914 MB (0x16e00000@0x39200000)
+Initrd not found or empty - disabling initrd
+Zone PFN ranges:
+  Normal   0x00000000 -> 0x00050000
+
+early_node_map[2] active PFN ranges
+    0: 0x00000000 -> 0x00010000
+    0: 0x00020000 -> 0x00050000
+################ 81000000  32
+
+打印看出 struct page 是32字节  mem_map 数组建立在0x81000000 位置，即16M位置
+
+
+关注这个文件 ./Documentation/uml/UserModeLinux-HOWTO.txt
+
+开机调用的是 init_bootmem_node  没有调用 init_bootmem
+
+从 arch/mips/kernel/setup.c 中的 bootmem_init 调用过去
+
+
+------------------------
+
+可见，这种内存的处理需要针对特定平台去做。
+
+
+early_param("bmem", bmem_setup); 靠这个宏，使得命令行遇见bmem= 就调用bmem_setup函数。所以命令行写几个bmem= 就会调用几次。
+bmem_setup(char *str)
+{
+}
+这个函数的参数都是char *，会被赋成 bmem=后面的字符串。
+
+----------------
+kernel里面寄存器怎么访问的。
+BDEV_RD(0x00311d00)  //直接写一个相对地址
+
+#define BDEV_RD(x) (DEV_RD(BVIRTADDR(x)))
+#define DEV_RD(x) (*((volatile unsigned long *)(x)))
+#define BVIRTADDR(x)	KSEG1ADDR(BPHYSADDR(x))
+#define BPHYSADDR(x)	((x) | BCHP_PHYSICAL_OFFSET)
+#define BCHP_PHYSICAL_OFFSET                               0x10000000
+#define KSEG1ADDR(a)		(CPHYSADDR(a) | KSEG1)
+#if defined(CONFIG_BRCM_UPPER_768MB) //有定义
+
+#define KSEG0			0x80000000
+
+#define KSEG1			KSEG0  //没有KSEG1了
+#else
+#define KSEG1			0xa0000000
+#endif
+
+化简后即直接操作 0x90311d00   并且是uncache的
+
+好，最后一个老问题：mem_map 数组是如何创建的
+/mm/page_alloc.c
+用map = alloc_bootmem_node(pgdat, size); 函数分配， size= size =  (end - start) * sizeof(struct page);
+其中：start=0; end=0x50000; size=0x50000*0x20/*32bytes*/ = 0xa00000 = 10Mbyte
+256M内存需要2M mem_map空间，现在5*256M 需要10M内存mem_map空间。
+
+只考虑最简单的FLAT模型，没有不连续
+
+所以，mem_map 空间10M（0xa00000）   membitmap 空间 40K(0xa000) 都是0x50000项，前者32字节一项，后者1bit一项 
+
+
+bootmem::init_bootmem_core nid=0 start=0 map=8b5 end=50000 mapsize=a000
+bmem: adding 55 MB LINUX region at 8 MB (0x0374b000@0x008b5000)
+
+init_bootmem_core 函数初始化了位图
+
+
+static unsigned long __init init_bootmem_core(bootmem_data_t *bdata,
+	unsigned long mapstart, unsigned long start, unsigned long end)
+{
+	unsigned long mapsize;
+
+	mminit_validate_memmodel_limits(&start, &end);
+	bdata->node_bootmem_map = phys_to_virt(PFN_PHYS(mapstart));
+	bdata->node_min_pfn = start;
+	bdata->node_low_pfn = end;
+	link_bootmem(bdata);
+
+	/*
+	 * Initially all pages are reserved - setup_arch() has to
+	 * register free RAM areas explicitly.
+	 */
+	mapsize = bootmap_bytes(end - start);
+	memset(bdata->node_bootmem_map, 0xff, mapsize); //全部初始化成0xff
+
+	bdebug("nid=%td start=%lx map=%lx end=%lx mapsize=%lx\n",
+		bdata - bootmem_node_data, start, mapstart, end, mapsize);
+
+	return mapsize;
+}
+
+
+0x8b5个页应该是kernel占用的空间了
+但是cat /proc/iomem
+  00001000-0063cf9f : Kernel code
+  0063cfa0-00759edf : Kernel data
+kernel没有占到那么大啊！多出了1M多。
+
+在bootmem_init()中，用到了 &_end 而 _end 是 System.map 文件的最后一个符号:
+808b45e0 A __bss_stop
+808b45e0 A _end  /*去4k对齐，正好是0x8b5000*/
+经查 00759edf 后面到8b5000  0x15A701这段空间是 init空间和bss空间
+
+Freeing unused kernel memory: 220k freed  
+
+Memory: 420276k/1048576k available (6383k kernel code, 628300k reserved, 1139k data, 220k init, 0k highmem)
+1048576 是1024M   420276k + init释放的220k = 420496 = busybox free 看到的total mem
+
+1048576k-420276 = 628300k（reserved）= 402M+192M +20044k
+20044k = 0x8b5000(code+data+init+bss 8916k) + 40k(bitmap) + (10240k)mem_map  + 212个页（800多k，后面其他alloc_bootmem_core调用）
+
+
+
+192M@64M  402M@512M 这种配置
+
+pc机上cat iomem显示
+  01000000-015f663e : Kernel code
+  015f663f-01aba27f : Kernel data
+  01bb9000-01d0bfff : Kernel bss
+三段，bcm怎么没有显示bss呢？（海思平台也只显示2个，没有bss）
+
+虽然没有在iomem中显示，但是通过
+extern char __init_begin[], __init_end[];
+extern char __bss_start[], __bss_stop[]; 
+用这些符号查System.map 发现init空间释放的就是220k 剩下的就是bss空间！
+
+分配mem_map 的时候调用alloc_bootmem_core函数
+bootmem::alloc_bootmem_core nid=0 size=a00000 [2560 pages] align=40 goal=1000000 limit=0
+align:要求对齐的字节数
+goal:最佳分配起始地址 0x1000000（其实此时空闲地址从0x808b5000+bitmap空间0xa000 为0x808BF000 不到0x81000000）
+
+#define alloc_bootmem_node(pgdat, x)  __alloc_bootmem_node(pgdat, x, SMP_CACHE_BYTES, __pa(MAX_DMA_ADDRESS))
+MAX_DMA_ADDRESS 就是goal参数
+而此平台
+
+/*
+ * The maximum address in KSEG0 that we can perform a DMA transfer to on this
+ * platform.  This describes only the PC style part of the DMA logic like on
+ * Deskstations or Acer PICA but not the much more versatile DMA logic used
+ * for the local devices on Acer PICA or Magnums.
+ */
+#define MAX_DMA_ADDRESS		(PAGE_OFFSET + 0x01000000)
+
+而实际上，这个是针对pc机器的，对于我先在的平台，没有任何限制，我可以把他改成 0  从而让mem_map分配的地址直接在bitmap/*0x808bf000*/的后面
+PC机器上一般：
+ZONE_DMA: 0-16M
+ZONE_NORMAL:16M-896M
+ZONE_HIGHMEM:896M-xx   在嵌入式上没有这种限制
+
+
+
+这样修改后：
+bootmem::alloc_bootmem_core nid=0 size=a00000 [2560 pages] align=40 goal=0（注意这里） limit=0
+打印返回的地址真的就是：808bf000 了
+
+bootmem::alloc_bootmem_core nid=0 size=a00000 [2560 pages] align=40 goal=0 limit=0
+bootmem::__reserve nid=0 start=8bf end=12bf flags=1 （在bitmap里面把这些位置1 ：flag=1 就被reserve了）
+ 0 0 50000 a00000 808bf000
+
+
+现在 code，text，init，bss，bitmap，mem_map就连到一起了。
+
+#define __pfn_to_page(pfn)	(mem_map + ((pfn)))
+#define __page_to_pfn(page)	((unsigned long)((page) - mem_map)  /*这个挺好玩，结构体做减法得到间隔的个数 结构体加法没有意义*/
+
+下面再考察一下mem_map是如何初始化的，应该由bitmap的情况来初始化mem_map吧
+系统不会直接操作mem_map数组了，都是通过 pfn_to_page 操作的
+
+不考虑高端内存
+mem_init函数中：
+在此之前，totalram_pages是0
+totalram_pages += free_all_bootmem();  // 返回 105070 = 420280k
+totalram_pages -= setup_zero_pages();	/* Setup zeroed pages.  */
+设置1个0页，剩余 105069 = 420276k，这个0页不知道做什么用的
+
+free_all_bootmem - release free pages to the buddy allocator
+Returns the number of pages actually released.
+
+bootmem::free_all_bootmem_core nid=0 start=0 end=50000 aligned=1
+bootmem::free_all_bootmem_core nid=0 released=19a6e
+从0-50000页范围检测，释放出19a6e个页
+
+！！！注意free_all_bootmem_core函数的最后面，把bitmap占用的40k 空间也释放了！！强大！终于懂了！
+这个函数的前半部分就是去查位映射区域的0位，但是为了运算方便，做了一个转换，变成检测1位:
+vec = ~map[idx / BITS_PER_LONG];
+if (vec & 1) {
+  page = pfn_to_page(start + off);
+  __free_pages_bootmem(page, 0);
+  count++;
+}
+
+void free_init_pages(const char *what, unsigned long begin, unsigned long end)
+{
+	unsigned long pfn;
+
+	for (pfn = PFN_UP(begin); pfn < PFN_DOWN(end); pfn++) {
+		struct page *page = pfn_to_page(pfn);
+		void *addr = phys_to_virt(PFN_PHYS(pfn));
+
+		ClearPageReserved(page);
+		init_page_count(page);
+		memset(addr, POISON_FREE_INITMEM, PAGE_SIZE);
+		__free_page(page);
+		totalram_pages++;  //释放init内存
+	}
+	printk(KERN_INFO "Freeing %s: %ldk freed\n", what, (end - begin) >> 10);
+}
+
+bmem_get_page （纯粹是博通添加的函数，不是标准linux的机制）
+
+get_user_pages函数的用法（这个是linux标准的）
+发现get_user_pages()接口真是个好东东，它能获取用户区进程使用内存的某个页(struct page)，有什么用呢？
+get_user_pages的作用是得到用户的页面。
+
+用 cp /dev/mem /data/mem.bin 读到256M以上的时候，内核崩溃了，说明读到寄存器了！
+
+我去0x8bf000偏移位置，找到了page结构体，32字节一组
+
+-------------------------
+我用cat /dev/mem >/data/mem.bin的方式拿到了 bitmap 映射数据，前提是
+可是 free_all_bootmem_core 没有处理reserved区域啊？最后在winhex里面看的时候，winhex区域怎么也是初始化了的呢？
+
+free_all_bootmem()函数
+  这个函数用来在引导时释放页面，并清除bootmem分配器。
+   函数原型为：
+       void free_all_bootmem (void);
+       void free_all_bootmem_core(pg_data_t *pgdat);
+
+搜索bootmem位图，找到空闲页，并把mem_map中对应的项标记为空闲。set_page_count()函数把page结构的count域置1，而__free_page()真正的释放页面，并修改伙伴（buddy）系统的位图。 （伙伴系统还有位图？！）
+
+
+关于宏PageReserved
+在./include/linux/page-flags.h 定义
+Page##
+
+/* PageLocked()的生成过程如下 */  
+#define TESTPAGEFLAG(uname, lname)                  /  
+static inline int Page##uname(struct page *page)            /  
+            { return test_bit(PG_##lname, &page->flags); }  
+  
+TESTPAGEFLAG(Locked, locked)  
+/* 上面的宏展开后得到如下代码： */  
+static inline int PageLocked(struct page *page)   
+{   
+    return test_bit(PG_locked, &page->flags);   
+} 
+
+free_all_bootmem_core函数注释掉：
+#if 0
+	page = virt_to_page(bdata->node_bootmem_map);
+	pages = bdata->node_low_pfn - bdata->node_min_pfn;
+	pages = bootmem_bootmap_pages(pages);
+	count += pages;
+	while (pages--)
+		__free_pages_bootmem(page++, 0);
+#endif
+即不要释放这个映射区域，否则就被别的数据冲掉了。
+从这个映射区域可以看出：
+0x8b5000 - 0x8b5270(大概)全是 0xFF 近20M code data init bss bitmap mem_map
+0x8b5270 - 0x8e5800 到64M 全是 0x00 表示空闲
+然后到914M 是ff （512+402） 然后到1024+256 又是0x00
+
+
+init mem 是这样回收的
+void __init_refok free_initmem(void)
+{
+	prom_free_prom_memory();
+	free_init_pages("unused kernel memory",
+			__pa_symbol(&__init_begin),
+			__pa_symbol(&__init_end));
+}
+
+void free_init_pages(const char *what, unsigned long begin, unsigned long end)
+{
+	unsigned long pfn;
+
+	for (pfn = PFN_UP(begin); pfn < PFN_DOWN(end); pfn++) {
+		struct page *page = pfn_to_page(pfn);
+		void *addr = phys_to_virt(PFN_PHYS(pfn));
+
+		ClearPageReserved(page);
+		init_page_count(page);
+		memset(addr, POISON_FREE_INITMEM, PAGE_SIZE);
+		__free_page(page);
+		totalram_pages++;
+	}
+	printk(KERN_INFO "Freeing %s: %ldk freed\n", what, (end - begin) >> 10);
+}
+
+没有用到bitmap 映射表，所以映射表中没有体现出init部分 是0
+----------
+FLAT模型并不代表物理内存真的连续，他只是一个模型。
+
+
+--------------------------------------------------------
+停止思考！
+
+--------------------------------------------------------
+Flash+Ubi+ubifs问题
+
+./mtd/nand/nand_bbt.c
+ *  Overview:
+ *   Bad block table support for the NAND driver
+
+pr_info("Bad block table found at page %d, version "）
+
+坏快表到底建立在什么地方呢？ 上学的时候就没有搞懂。
+一个分区维护一个坏快表还是整个nand flash 维护一个呢？
+Bad block table found at page 262016, version 0x05
+Bad block table found at page 261888, version 0x05
+
+换算出来是第2046M，2047M 位置，也就是整片Flahs的最末端
+ * The auto generated bad block table is located in the last good blocks
+ * of the device.
+
+ * The table uses 2 bits per block
+ * 11b:		block is good
+ * 00b:		block is factory marked bad
+ * 01b, 10b:	block is marked bad due to wear
+
+ * The memory bad block table uses the following scheme:
+ * 00b:		block is good
+ * 01b:		block is marked bad due to wear
+ * 10b:		block is reserved (to protect the bbt area)
+ * 11b:		block is factory marked bad
+
+什么情况，flash里面一个，内存里面还有一个坏快表？
+
+
+setenv -p STARTUP "boot -z -elf nandflash0.kernel: 'root=/dev/nfs nfsroot=192.168.1.87:/home/gaojie/Work-1/BCM7231-Rootfs rw, ip=192.168.11.29:192.168.1.87:192.168.88.1:255.255.0.0:ccdt-stb:eth0:on init=/init bmem=192M@64M bmem=256M@512M mtdparts=brcmnand.0:10M(kernel),300M(system)'"
+这样配置，可以即使用NFS，又有2个mtd分区
+
+root@android:/proc # cat /proc/mtd
+dev:    size   erasesize  name
+mtd0: 00000000 00001000 "DUMMY"
+mtd1: 00a00000 00100000 "kernel"
+mtd2: 12c00000 00100000 "system"
+mtd3: 01000000 00010000 "spi0.0"
+
+/*
+* mtd0 is normally the rootfs partition.  If it is missing,
+* create a dummy partition so that any person or script
+* trying to mount or erase mtd0 does not corrupt the
+* whole flash device.
+*/
+
+add_mtd_device(mtd);  增加一个mtd分区
+
+
+---------------------------------------------
+同时考虑一下，一个新的nandflahs控制器是如何加入到原有kernel内核的
+
+现在的内核
+Creating 5 MTD partitions on "brcmnand.0":
+0x000000000000-0x000000a00000 : "kernel"
+0x000000a00000-0x000001400000 : "recovery"
+0x000001400000-0x000001a00000 : "splash"
+0x000001a00000-0x000001e00000 : "misc"
+0x000001e00000-0x000080000000 : "ubi_fs"
+
+brcmstb_nand.c里面 brcmstb_nand_probe函数
+/*只要从命令行中解析到了mtdpart就add partition 否则就添加mtd设备 跟硬盘一样，即使只有一个分区跟没有分区的mtd设备应该也是不同的*/
+	if (nr_parts)
+		add_mtd_partitions(mtd, parts, nr_parts);
+	else
+		add_mtd_device(mtd);
+	return 0;
+
+
+int add_mtd_partitions(struct mtd_info *master,
+		       const struct mtd_partition *parts,
+		       int nbparts)
+{
+  for (i = 0; i < nbparts; i++) {
+  add_mtd_device(&slave->mtd);
+  }
+}
+
+
+struct mtd_info
+是一个很大的结构体
+
+
+/* Our partition node structure */
+struct mtd_part {
+	struct mtd_info mtd;  /*包含一个mtd_info 实体*/
+	struct mtd_info *master; /*指向父的指针*/
+	uint64_t offset;
+	struct list_head list;
+};
+
+
+static LIST_HEAD(mtd_partitions);
+
+/*描述每个分区的情况*/
+struct mtd_partition {
+	char *name;			/* identifier string */
+	uint64_t size;			/* partition size */
+	uint64_t offset;		/* offset within the master MTD space */
+	uint32_t mask_flags;		/* master MTD flags to mask out for this partition */
+	struct nand_ecclayout *ecclayout;	/* out of band layout for this partition (NAND only) */
+};
+
+
+学习kernel里面链表的使用方法
+
+
+
+static int search_read_bbts(struct mtd_info *mtd, uint8_t * buf, struct nand_bbt_descr *td, struct nand_bbt_descr *md)
+{
+	/* Search the primary table */
+	search_bbt(mtd, buf, td);
+
+	/* Search the mirror table */
+	if (md)
+		search_bbt(mtd, buf, md);
+
+	/* Force result check */
+	return 1;
+}
+/flash里面存在2个坏快表，一个原版一个镜像
+
+
+NAND_BBT_NO_OOB 这个是定义的
+/* Do not store flash based bad block table in OOB area; store it in-band */
+#define NAND_BBT_NO_OOB		0x00040000
+7231平台，使用这个宏
+
+
+----------
+20120728
+cat /proc/meminfo  为方便，删除显示为0k的区域
+fs/proc/meminfo.c
+
+MemTotal:         420504 kB
+MemFree:           86408 kB
+Buffers:             448 kB
+Cached:           159344 kB
+Active:           151384 kB
+Inactive:         145836 kB
+Active(anon):     137448 kB
+Inactive(anon):      268 kB
+Active(file):      13936 kB
+Inactive(file):   145568 kB
+AnonPages:        137428 kB
+Mapped:            44768 kB
+Shmem:               288 kB
+Slab:              18404 kB
+SReclaimable:       3512 kB
+SUnreclaim:        14892 kB
+KernelStack:        3336 kB
+PageTables:         8632 kB
+CommitLimit:      210252 kB
+Committed_AS:    3698120 kB
+VmallocTotal:     509876 kB
+VmallocUsed:      228204 kB
+VmallocChunk:     266104 kB
+
+Cached: 被高速缓冲存储器（cache memory）用的内存的大小（等于 diskcache minus SwapCache ）
+
+
+可以关注./drivers/staging/android/lowmemorykiller.c 这个文件了 用到了
+global_page_state(NR_FILE_PAGES)
+
+
+
+
+root@android:/ # ps
+USER     PID   PPID  VSIZE  RSS     WCHAN    PC         NAME
+root      1     0     408    256   80105d3c 0008bb94 S /init
+root      2     0     0      0     80069370 00000000 S kthreadd
+root      3     2     0      0     80048940 00000000 S ksoftirqd/0
+root      5     2     0      0     80064120 00000000 S kworker/u:0
+root      194   2     0      0     8006121c 00000000 S kblockd
+root      200   2     0      0     8006121c 00000000 S ata_sff
+root      208   2     0      0     803bbe14 00000000 S khubd
+root      212   2     0      0     8006121c 00000000 S kmmcd
+root      314   2     0      0     8013ca54 00000000 S fsnotify_mark
+root      315   2     0      0     8006121c 00000000 S aio
+root      316   2     0      0     8006121c 00000000 S nfsiod
+root      318   2     0      0     8006121c 00000000 S crypto
+root      913   2     0      0     80323010 00000000 S scsi_eh_0
+root      996   2     0      0     8006121c 00000000 S usbhid_resumer
+root      999   2     0      0     8006121c 00000000 S binder
+root      1009  2     0      0     8006121c 00000000 S l2cap
+root      1084  2     0      0     80393584 00000000 S ubi_bgt0d
+root      1896  2     0      0     8023b0c0 00000000 S ubifs_bgt0_0
+root      1972  2     0      0     8011e508 00000000 S flush-ubifs_1_2
+root      1976  2     0      0     e2081248 00000000 S playback_pacing
+
+root      1092  1     372    204   80105d3c 0008bb94 S /sbin/ueventd
+system    1898  1     1096   308   8044ae2c 77756b84 S /system/bin/servicemanager
+root      1899  1     5096   876   ffffffff 770d3544 S /system/bin/vold
+root      1900  1     7680   1252  ffffffff 77170544 S /system/bin/netd
+root      1901  1     4636   4104  80466338 77d5ea24 S /system/bin/debuggerd
+radio     1902  1     4104   840   ffffffff 77056544 S /system/bin/rild
+system    1903  1     657364 8800  ffffffff 77bb7524 S /system/bin/surfaceflinger
+root      1904  1     304000 39772 ffffffff 77248d34 S zygote
+drm       1905  1     23896  4556  ffffffff 771a7b84 S /system/bin/drmserver
+media     1906  1     413580 7300  ffffffff 7723cb84 S /system/bin/mediaserver
+bluetooth 1907  1     2020   780   80105d3c 778a7174 S /system/bin/dbus-daemon
+root      1908  1     1168   400   80532150 76ff17f4 S /system/bin/installd
+keystore  1909  1     2712   596   80466338 77407a24 S /system/bin/keystore
+root      1910  1     683808 12988 ffffffff 77a9eb84 S /system/bin/dvbserver
+root      1911  1     1140   596   8000edac 77063844 S /system/bin/sh
+root      1912  1     1468   192   ffffffff 000943e4 S /sbin/adbd
+root      1969  1     462504 2540  ffffffff 771f8b84 S /system/bin/nexusinit
+
+
+system    2045  1904  1007244 45816 ffffffff 77248b84 S system_server
+system    2112  1904  947144 64060 ffffffff 7724a0b4 S com.android.systemui
+app_10    2269  1904  311612 34940 ffffffff 7724a0b4 S com.android.inputmethod.pinyin
+app_9     2287  1904  1005188 53684 ffffffff 7724a0b4 S com.android.launcher
+app_2     2320  1904  963288 50916 ffffffff 7724a0b4 S com.ccdt
+app_4     2335  1904  421176 36200 ffffffff 7724a0b4 S cn.ccdt.provider
+system    2362  1904  952704 51448 ffffffff 7724a0b4 S com.android.settings
+app_5     2407  1904  311852 34596 ffffffff 7724a0b4 S android.process.media
+system    2561  1904  958920 71132 ffffffff 765b8be4 R cn.ccdt.dvbplayer
+
+由init启动的几个server  
+
+
+service media /system/bin/mediaserver
+    class main
+    user media
+    group audio camera inet net_bt net_bt_admin net_bw_acct drmrpc
+    ioprio rt 4
+
+media     1906  1    S /system/bin/mediaserver
+
+init里对user  group的解析是：
+
+
+init  service_start  函数里面调用了fork和execve
+
+init里面需要parser init.rc里面的字符串。
+
+keywords.h 定义了所有关键字 init_parser.c中使用 K_oneshot 的形式判断关键字。
+
+lookup_keyword 判断所有以s开头的关键字
+
+user media 这个参数，他要创建一个media  uid吗？
+
+ps怎么显示 uid的int形式？
+
+------------------------------
+android_filesystem_config.h中定义android_ids，里面定义了
+{ "media",     AID_MEDIA, },
+#define AID_MEDIA         1013  /* mediaserver process */
+media 用户的uid 是 1013
+
+这里只是一个定义，那么是怎么让系统中就有了这个uid的呢？
+
+#define AID_APP          10000 /* first app user */  应用程序从10000开始
+
+最终在bionic里面的stubs.c中处理
+最终靠 
+app_id_to_passwd
+android_id_to_passwd
+两个函数，向系统中注册了uid
+
+还是不知道如何在系统中创建了一个用户。可以看看useradd命令是如何实现的。
+
+
+------
+
+
+system    147   37    238420 50852 ffffffff 40032b64 S system_server
+system    150   147   238420 50852 c0059428 40033c74 S GC
+system    151   147   238420 50852 c004760c 40033524 S Signal Catcher
+system    152   147   238420 50852 c0207be4 4003372c S JDWP
+system    153   147   238420 50852 c0059428 40033c74 S Compiler
+system    154   147   238420 50852 c0059428 40033c74 S ReferenceQueueD
+system    155   147   238420 50852 c0059428 40033c74 S FinalizerDaemon
+system    156   147   238420 50852 c0059428 40033c74 S FinalizerWatchd
+system    158   147   238420 50852 c019ff30 40032b64 S Binder_1
+system    159   147   238420 50852 c019ff30 40032b64 S Binder_2
+system    160   147   238420 50852 c016fb7c 4003292c S SensorService
+system    161   147   238420 50852 c00b72d0 40033a40 S er.ServerThread  //靠 thr.setName("android.server.ServerThread"); 设置
+system    162   147   238420 50852 c00b72d0 40033a40 S ActivityManager  //20120919线程名字是怎么确定的？
+system    164   147   238420 50852 c005952c 40033c74 S ProcessStats
+system    165   147   238420 50852 c00b72d0 40033a40 S PackageManager
+system    166   147   238420 50852 c00b60cc 4003292c S FileObserver
+system    167   147   238420 50852 c00b72d0 40033a40 S AccountManagerS
+system    168   147   238420 50852 c00b72d0 40033a40 S SyncHandlerThre
+system    170   147   238420 50852 c00b72d0 40033a40 S PackageMonitor
+system    171   147   238420 50852 c0099f1c 40033ab8 S UEventObserver
+system    172   147   238420 50852 c00b72d0 40033a40 S mScreenBrightne
+system    173   147   238420 50852 c00b72d0 40033a40 S PowerManagerSer
+system    174   147   238420 50852 c0181ef0 40032b64 S AlarmManager
+system    175   147   238420 50852 c00b72d0 40033a40 S WindowManager
+system    176   147   238420 50852 c00b72d0 40033a40 S WindowManagerPo
+system    177   147   238420 50852 c0059428 40033c74 S SoundPool
+system    178   147   238420 50852 c0059428 40033c74 S SoundPoolThread
+system    179   147   238420 50852 c00b72d0 40033a40 S er$SensorThread
+system    180   147   238420 50852 c00b72d0 40033a40 S InputDispatcher
+system    181   147   238420 50852 c00b72d0 40033a40 S InputReader
+system    182   147   238420 50852 c00b72d0 40033a40 S MountService
+system    183   147   238420 50852 c0207be4 4003372c S VoldConnector
+system    184   147   238420 50852 c00b72d0 40033a40 S CallbackHandler
+system    185   147   238420 50852 c0207be4 4003372c S NetdConnector
+system    187   147   238420 50852 c00b72d0 40033a40 S CallbackHandler
+system    188   147   238420 50852 c00b72d0 40033a40 S NetworkStats
+system    189   147   238420 50852 c00b72d0 40033a40 S NetworkPolicy
+system    190   147   238420 50852 c00b72d0 40033a40 S WifiP2pService
+system    191   147   238420 50852 c00b72d0 40033a40 S WifiStateMachin
+system    192   147   238420 50852 c00b72d0 40033a40 S WifiService
+system    193   147   238420 50852 c00b72d0 40033a40 S ConnectivitySer
+system    194   147   238420 50852 c00b72d0 40033a40 S Tethering
+system    195   147   238420 50852 c00b72d0 40033a40 S WifiWatchdogSta
+system    196   147   238420 50852 c00b72d0 40033a40 S NsdService
+system    197   147   238420 50852 c0207be4 4003372c S mDnsConnector
+system    198   147   238420 50852 c00b72d0 40033a40 S CallbackHandler
+system    199   147   238420 50852 c00b72d0 40033a40 S AudioService
+system    200   147   238420 50852 c00b72d0 40033a40 S backup
+system    207   147   238420 50852 c005952c 40033c74 S watchdog
+system    220   147   238420 50852 c00b72d0 40033a40 S LocationManager
+system    223   147   238420 50852 c00b72d0 40033a40 S CountryDetector
+system    224   147   238420 50852 c00b72d0 40033a40 S GpsLocationProv
+system    225   147   238420 50852 c00b72d0 40033a40 S ThrottleService
+system    228   147   238420 50852 c00b72d0 40033a40 S NetworkTimeUpda
+system    257   147   238420 50852 c019ff30 40032b64 S Binder_3
+system    270   147   238420 50852 c019ff30 40032b64 S Binder_4
+system    271   147   238420 50852 c019ff30 40032b64 S Binder_5
+system    419   147   238420 50852 c005952c 40033c74 S Timer-0
+system    502   147   238420 50852 c019ff30 40032b64 S Binder_6
+system    503   147   238420 50852 c019ff30 40032b64 S Binder_7
+system    504   147   238420 50852 c019ff30 40032b64 S Binder_8
+system    505   147   238420 50852 c019ff30 40032b64 S Binder_9
+
+
+
+./base/core/java/android/app/ActivityManager.java:    private static String TAG = "ActivityManager";
+./base/core/java/android/app/ActivityManagerNative.java:                Log.v("ActivityManager", "default service binder = " + b);
+./base/core/java/android/app/ActivityManagerNative.java:                Log.v("ActivityManager", "default service = " + am);
+./base/services/java/com/android/server/am/ActivityManagerService.java:    static final String TAG = "ActivityManager";
+./base/services/java/com/android/server/am/ActivityManagerService.java:            super("ActivityManager");
+
+./av/media/libmedia/SoundPoolThread.cpp:    if (createThreadEtc(beginThread, this, "SoundPoolThread")) {
+
+
+Thread.java  void setName(String threadName)  //Sets the name of the Thread
+
+在 MountService.java 中
+        mHandlerThread = new HandlerThread("MountService");  //这里就会调用 setName 设置线程名字
+        mHandlerThread.start();
+        mHandler = new MountServiceHandler(mHandlerThread.getLooper());
+
+
+
+Thread.cpp
+Thread.java
+
+
+  class LooperThread extends Thread {
+      public Handler mHandler;
+
+      public void run() {
+          Looper.prepare();
+
+          mHandler = new Handler() {
+              public void handleMessage(Message msg) {
+                  // process incoming messages here
+              }
+          };
+
+          Looper.loop();
+      }
+
+
+
+Lopper.prepare() 里面 new Looper();
+
+ThreadLocal 模板类 Implements a thread-local storage
+public class ThreadLocal<T> {
+}
+
+-------------------------------
+system server里面的线程，那么像 mount service 这种服务是在这个线程里面运行的吗？
+实际上 MountService 这个线程只是用于处理消息，并不是服务的载体!
+
+public MountService(Context context) {
+    mHandlerThread = new HandlerThread("MountService"); // new 这个线程仅仅是用于处理消息，并不是服务的载体
+
+    mHandler = new MountServiceHandler(mHandlerThread.getLooper());      // 定义了2个 Handler 使用上面线程的looper 而不是当前主线程的looper
+    mObbActionHandler = new ObbActionHandler(mHandlerThread.getLooper()); // 那谁给他们发消息呢？
+    
+    Thread thread = new Thread(mConnector, "VoldConnector"); //又 new 了一个线程 mConnector 是一个 Runnable
+}
+
+比如在 
+unmountVolume
+mHandler.sendMessage(mHandler.obtainMessage(H_UNMOUNT_PM_UPDATE, ucb));
+
+
+
+
+
+系统提供的几个 Provider
+
+ApplicationsProvider
+CalendarProvider
+ContactsProvider
+DownloadProvider
+DrmProvider
+MediaProvider
+PartnerBookmarksProvider
+TelephonyProvider
+UserDictionaryProvider
+
+Provider 单独编译为一个apk
+
+
+当一个apk要对一个数据库执行 insert 操作时，通过ContentProvider 发送一个请求（Binder）
+有Provider进程执行操作。
+
+包括的命令有:
+query
+getType
+insert
+bulkInsert
+delete
+update
+等命令
+
+content 也有一个server ： ContentService
+
+----------------------------------------------
+彻底理解了Content Provider原理，完全基于Binder通讯的。并且也是通过 ActivityManagerService 
+
+ContextImpl.java :
+class ApplicationContentResolver extends ContentResolver {
+
+ActivityThread mMainThread;
+
+protected IContentProvider acquireProvider(Context context, String name) {
+            return mMainThread.acquireProvider(context, name, true);
+        }
+}
+
+ActivityThread.java :
+
+IContentProvider acquireProvider(Context c, String name, boolean stable) {
+IActivityManager.ContentProviderHolder holder = null;
+holder = ActivityManagerNative.getDefault().getContentProvider(...);
+return holder.provider;
+}
+
+ActivityManagerNative.getDefault() 只是建立跟 ActivityManager的连接返回 IActivityManager
+这里通过binder 调用 ActivityManager 的 getContentProvider 函数返回 ContentProviderHolder
+
+ActivityManagerProxy 中：
+
+public ContentProviderHolder getContentProvider(IApplicationThread caller, String name, boolean stable)
+{
+	//还要给ActivityManager写一个Binder过去
+	data.writeStrongBinder(caller != null ? caller.asBinder() : null); 
+	mRemote.transact(GET_CONTENT_PROVIDER_TRANSACTION, data, reply, 0);
+	ContentProviderHolder cph = null;
+	// 就是用Parcel做参数 new 一个 ContentProviderHolder 对象
+	cph = ContentProviderHolder.CREATOR.createFromParcel(reply);
+	return cph;
+}
+ 
+//看看 ContentProviderHolder 的构造函数吧：
+
+public IContentProvider provider;
+
+private ContentProviderHolder(Parcel source) {
+    info = ProviderInfo.CREATOR.createFromParcel(source);
+    // readStrongBinder 得到 content provider 的 Binder   asInterface 得到 interface
+    provider = ContentProviderNative.asInterface( source.readStrongBinder());
+    connection = source.readStrongBinder();
+    noReleaseNeeded = source.readInt() != 0;
+}
+
+class ContentProviderHolder implements Parcelable {
+
+}
+
+=======
+广播接收：
+也会用到Binder吗？
+
+BroadcastReceiver :
+Base class for code that will receive intents sent by sendBroadcast().
+
+You can either dynamically register an instance of this class with 
+Context.registerReceiver() or statically publish an implementation through the 
+<receiver> tag in your AndroidManifest.xml.
+
+public abstract class BroadcastReceiver {
+//这个类很短，700多行
+里面调用了 AM 的 finishReceiver
+
+}
+
+ContextImpl.java 定义 sendBroadcast( Intent intent )
+void sendBroadcast(Intent intent) 
+{   //调用了ActivityManagerService.java 里面的定义
+    ActivityManagerNative.getDefault().broadcastIntent( ... )
+}
+
+
+public int broadcastIntent(IApplicationThread caller, ... IIntentReceiver resultTo）
+{
+	//写2个Binder 过去到ActivitymanagerService
+	data.writeStrongBinder(caller.asBinder());
+	data.writeStrongBinder(resultTo.asBinder());  //谁来使用这个Ibinder 呢？
+	mRemote.transact(...);
+	return res; //int 类型
+}
+可见，广播不需要得到别人的Binder，而是要把自己的Binder 发出去 （IIntentReceiver）
+
+IIntentReceiver 靠 IIntentReceiver.aidl 定义实现，仅定义一个函数
+void performReceive( Intent intent, ... Bundle extras );
+
+
+systemReady()
+{
+    finisher = new IIntentReceiver.Stub() {
+         public void performReceive(Intent intent, ... Bundle extrasy) {
+            mHandler.post(new Runnable() {
+                public void run() {
+
+                    writeLastDonePreBootReceivers(doneReceivers);
+                    showBootMessage(mContext.getText( R.string.android_upgrading_complete), false);
+                    systemReady(goingCallback);  //是递归吗？ 不一定啊，可能在不同的线程中吧！！！邪门！
+                }
+            });
+        }
+    }
+}
+
+mHandler 定义在 ActivityManagerService 类中，所以，应该在System_Server进程的主线程中运行。
+需要实验证明一下！！！！！ 明天用模拟器证实！（20121009）
+------------------------------------
+Intent
+
+An intent is an abstract description of an operation to be performed.
+
+intent.writeToParcel(data, 0);  //把intent写到 Parcel 里面。parcel本身只支持4种基本类型，其他的都是基本类型的组合。
+
+Intent intent = Intent.CREATOR.createFromParcel(data);  //服务端重新构建一个 Intent 
+
+
+
+
+./widget/NumberPicker.java
+
+
+
+
+
+
+Android 內有提供一個指令，稱為bugreport。可以透過指令adb bugreport adb shell 
+bugreport來取得Bugreport中的資訊
+
+
+20130408
+1分析4.2.1 launcher程序
+ 明显用到了opengl技术，但源码搜不到 .gl 函数
+ draglayer.java
+
+2 View.setLayerType()
+LAYER_TYPE_NONE
+LAYER_TYPE_SOFTWARE
+LAYER_TYPE_HARDWARE
+
+
+
+
+
+
+
+
+
+

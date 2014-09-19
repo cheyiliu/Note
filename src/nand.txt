@@ -1,0 +1,961 @@
+1 坏块
+	Nand在生产及使用时会产生坏块，导致Block Erase命令不能将某些位拉高。
+	固有坏块：生产时产生的坏块，芯片厂将坏块第1个page的spare area第6 byte(厂商约定)标记为非0xff值
+	使用坏块：使用时产生的坏快，若Block Erase或Page Program错误，就用如上方法将其标记为坏块
+
+	块擦除前，要检查spare area第6字节是否为0xff，是可以擦除；否不可擦除
+	但这样处理可能会错杀伪坏块，因为芯片操作过程中可能由于电压不稳定等因素造成NAND操作的错误。
+	但为了数据的可靠性及软件设计的简单化，我们就要奉行“宁可错杀一千，也决不放过一个”的宗旨。
+	
+	在对一个块的某个page编程的时发生了错误就而标记的坏块，首先要把其
+	他好的page里面的内容备份到另外一个空的好块里面，然后把这个块标记为坏块。
+	这可能会错杀，一个补救的办法是在页备份之后，再将这个块擦一遍，如果Block Erase发生错误，就证明是真坏块。
+
+	坏快是在这一个block里有1个或多个bit的状态不能稳定的编程
+	出厂前都对nand进行了测试，erase了所有的block，所以内容会都是0xFF，同时标记了bad block(固有坏块)
+	nand允许的最多坏块数有规定的，时低于98%的可用块，会认为这块nand很不稳定。
+	
+	initial bad block的标记是保证坏块的前2个page里的spare area里的第一个字
+	节的内容不会是0xFF。即如果前2个page其中一个的2048地址（从0开始计数，以后都
+	是这种计数方式）上的数据（就是spare area的第一个字节）是0xFF，那么这个块不
+	是initial bad block。值得注意的一点是bad block的标记会被erase掉成0xFF，
+	所以有可能会误被认为是good block。所以在对每一个block earse之前一定要判
+	断是不是bad block，否则将bad block的标志erase了，以后使用的时候会误被当
+	作good block，从而有可能带来数据损失。
+	　　对于runtime的bad block，就是使用中出现的bad block，可以从erase或program
+	后对成功与否的判断来决定这个block是否变成bad block，如果是的话则标记。一般标
+	记的法则和initial bad block一样，在前两个page的spare area的第一个byte上写
+	非0xFF值，一般写0。
+	　　对于bad block的处理办法就是驱动层的问题了，做的好的话会很复杂，这个以后
+	再介绍诸如三星的pocketstoreII这样的专门的nand driver来提供高可靠性和高
+	perfermance。最简单的就是遇到坏块向后跳，但也是效率最差的，因为访问第n块时，
+	你要知道0--(n-1)块一共有多少个bad block才能决定操作的偏移量，而扫描n-1块
+	对于n比较大的情况无疑会很慢。
+
+
+Uu说mlogic用的文件系统不行，容易坏块起不来，建议跟小米盒子一样，用UBI
+
+
+2 Ecc
+一般每256字节原始数据生成3字节ECC校验数据，这三字节共24比特分成两部分,6比特的列校验和16比特的行校验，多余的两个比特置1
+ECC能纠正单比特错误和检测双比特错误，1比特以上的错误无法纠正，2比特以上的错误不保证能检测。
+
+写保护引脚的问题
+E3SLP使用SPI+NandFlash
+
+
+3 uboot里nand驱动
+	擦除是将块的所有位变1。写操作只能使位从1变为0。OOB第6字节用非ff标志坏块，OOB前3个字节存放ECC。
+
+	uboot 的nand的ecc，oob的放置是否和kernel中同步？
+
+	static int nand_write (struct mtd_info *mtd ... const u_char * buf)
+	{
+		return (nand_write_ecc (mtd, to, len, retlen, buf, NULL, NULL));
+	}
+
+	static int nand_write_ecc (struct mtd_info *mtd, ... struct nand_oobinfo *oobsel)
+	{
+		/* if oobsel is NULL, use chip defaults */
+		if (oobsel == NULL)
+		   oobsel = &mtd->oobinfo;
+
+		/* Autoplace of oob data ? Use the default placement scheme */
+		if (oobsel->useecc == MTD_NANDECC_AUTOPLACE) {
+		   oobsel = this->autooob;
+		   autoplace = 1;
+		}
+		if (oobsel->useecc == MTD_NANDECC_AUTOPL_USR)
+		   autoplace = 1;
+		...
+	}
+
+	uboot中的oob都是autoplace？
+
+
+
+1 ubifs,yaffs2,ext2 over block
+  博通，nxp用的是ubifs。博通生产发现，system分区开机数次（几千）出现坏快。调查发现，
+  即使system挂载成read only，ubifs的内部机制在每次挂载的时候还是会多次擦写分区。如果
+  将MTD直接设置成read only，ubifs不能工作。最后，system使用了只读文件系统cramfs。
+  隐患：data分区也有损坏可能，只是不会导致系统无法启动。
+
+2 amlogic竟然使用了ext4，可行吗？
+  rockchip用的是什么？
+
+Samsung K9F1208U0B,数据存储容量为64MB,采用块页式存储管理。8个I/O 引
+脚充当数据、地址、命令的复用端口。
+
+    芯片内部存储布局及存储操作特点:
+    一片Nand flash为一个设备(device), 其数据存储分层为:
+    1 (Device) = 4096 (Blocks)
+    1 (Block) - = 32   (Pages/Rows) 页与行是相同的意思,叫法不一样
+    1 (Page)   = 528 (Bytes) = 数据块大小(512Bytes) + OOB 块大小(16Bytes) 
+
+
+     在每一页中,最后16个字节(又称OOB)用于Nand Flash命令执行完后设置状态用,
+剩余512个字节又分为前半部分和后半部分。可以通过Nand Flash命令00h/01h/50h分
+别对前半部、后半部、OOB进行定位通过
+Nand Flash内置的指针指向各自的首地址。
+
+    存储操作特点:
+    1. 擦除操作的最小单位是块。
+    2. Nand Flash芯片每一位(bit)只能从1变为0,而不能从0变为1,所以在对其进
+行写入操作之前要一定将相应块擦除(擦除即是将相应块得位全部变为1).
+    3. OOB部分的第六字节(即517字节)标志是否是坏块,如果不是坏块该值为FF,否则为坏块。
+    4. 除OOB第六字节外,通常至少把OOB的前3个字节存放Nand Flash硬件ECC码。 
+
+BBT：bad block table，即坏块表。各家对nand的坏块管理方法都有差异。比如专门
+用nand做存储的，会把bbt放到block0，因为第0块一定是好的块。但是如果nand本身
+被用来boot，那么第0块就要存放程序，不能放bbt了。 
+
+有的把bbt放到最后一块，当然，这一块不能为坏块。 
+
+
+有的bbt中用2个bits表示1个block的状态,所以1个字节可以表示4个blocks。 
+
+bbt的大小跟nand大小有关，nand越大，需要的bbt也就越大。 
+
+当往NAND Flash的page中写入数据的时候，每256字节我们生成一个ECC校验和，
+称之为原ECC校验和，保存到PAGE的OOB（out-of-band）数据区中。其位置就是eccpos[]。
+校验的时候，根据上述ECC生成原理不难推断：将从OOB区中读出的原ECC校验
+和新ECC校验和按位异或，若结果为0，则表示不存在错（或是出现了 ECC无法
+检测的错误）；若3个字节异或结果中存在11个比特位为1，表示存在一个比特
+错误，且可纠正；若3个字节异或结果中只存在1个比特位为1，表示 OOB区出错；
+其他情况均表示出现了无法纠正的错误。 
+
+
+S3C2410板的Nand Flash支持由两部分组成:Nand Flash控制器(集成在S3C2410 CPU)和
+Nand Flash存储芯片(K9F1208U0B)两部分组成。当要访问Nand Flash中的数据时,
+必须通过Nand Flash控制器发送命令才能完成。所以Nand Flash相当于S3C2410的
+一个外设,而不位于它的内存地址区.
+
+    Nand flash芯片型号为Samsung K9F1208U0B,数据存储容量为64MB,采
+用块页式存储管理。8个I/O
+引脚充当数据、地址、命令的复用端口。
+
+    芯片内部存储布局及存储操作特点:
+    一片Nand flash为一个设备(device), 其数据存储分层为:
+    1 (Device) = 4096 (Blocks)
+    1 (Block) -= 32   (Pages/Rows) 页与行是相同的意思,叫法不一样
+    1 (Page)   = 528 (Bytes) = 数据块大小(512Bytes) + OOB 块大小(16Bytes)
+     在每一页中,最后16个字节(又称OOB)用于Nand Flash命令执行完后设
+置状态用,剩余512个字节又
+分为前半部分和后半部分。可以通过Nand Flash命令00h/01h/50h分别对前
+半部、后半部、OOB进行定位通过
+Nand Flash内置的指针指向各自的首地址。
+
+
+性能方面：写和擦除 Nand Flash快   读取方面 NOR Flash 更快。
+
+nand Flash相邻单元之间比较容易发生位翻转而导致坏块出现。
+EDC DCC  BBM                nand Flash擦写次数为100万次 Nor 为10万次
+
+nandflash 擦除有问题,遇到坏块的时候：擦除长度没有增加坏块的长度
+导致 写的时候没有报错  读的时候报错了 就是说找到坏块后，跳过去了，但是总长度没有减去坏块。
+
+
+Nand Flash 启动时， CLE 信号出一下 ALE  WE 都不多  就RD信号多。
+
+normal  page  and flash rom （nor and nand）  那 normal 和page 又是什么意思呢？
+
+设置成nand Flash启动后，就
+
+nand 的读写信号是2个 io口 
+2个片选信号跟 Nor Flash的共用。
+和 串行Flash的2个信号也共用
+
+内部有一个40k的 mini boot
+nand Flash 启动的时候 能够读出内部的mini boot
+
+
+1 关于Nand写使能信号
+  NorFlash的BROI_ROMIF_MODE写使能位控制的是WE信号，关闭后不能发出WE信号。但是Nand的情况比较发杂。他的读写使能与Nor的不共用。在写使能位关闭的情况下，可以擦除可以读但是不能写。可见，命令周期的写信号不受写使能位控制，只有写ROM地址空间的时候（ program 操作的写数据阶段）才受此位控制。显然serialFlash没有写信号不受此位控制。
+
+2 关于NandFlash的 Sequential Mode
+  BROI_NAND_CNT3(offset:0x30h)  SEQ_MODE_EN 。什么是Sequential模式还不清楚。好像不是所有NandFlash都支持sequential操作。并且512字节和2048字节page操作略有不同。
+
+3 解读NandFlash的读命令
+ (1)2048字节大页 发读命令00h后紧跟地址需要发送30h(confirm command code).有两种类型的读操作：随机读和page读。随机读可以从page的某一个地址直接读。
+标准读命令有：
+Read0 00h
+Read1 01h
+Random Read 05h (貌似512字节page的不支持 nand_base.c里面有支持)
+The Random Data Output Command can be used to skip some data during a sequential data output.
+ReadOOB 50h
+
+Extended commands for large page devices
+Read Start 30h
+RndOutStart e0h
+
+从NandFlash手册中看，是可以从page的中间某个地方读的。因为读命令是可以指定列地址的
+试验证明，CPU端也支持直接从一个page的中间读取数据。
+Random Data Output During Sequential Data Output 连续数据输出中的随机数据输出
+
+samsung：Random Data Output in a Page p21
+一个2048字节page内的随机地址读
+这张图说得一清二楚:
+发一个读命令00h 然后发4个地址周期：2个列地址2个行地址，然后就可以从指定page的内部的偏移列（2字节列地址指定）开始读数据。然后执行05h命令，再次指定列地址，发e0h命令，然后就可以从新指定的列地址开始读数据了
+但是目前的 nand_emma.c不支持这种读操作。
+
+我现在还不知道nec为什么另起炉灶单写了一个nand_emma.c 而不去用nand_base.c 下面会单独分析u-boot中nand驱动的结构。
+
+4 关于1G NandFlash的寻址问题
+  1G NandFlash：
+  每个 page 2048字节 A0-A11是page内部寻址也叫做column Address
+  每个 block 64个page A12-A17 是page寻址
+  整个芯片 有1024个block A18-A27 是block寻址
+
+  所以对于1Gbit的NandFlash，需要4个地址周期
+  A0-A7 A8-A11（列地址）  A12-A19  A20-A27 （行地址即page地址）
+
+  512Mbit 也需要4个地址周期
+  A0-A7 （列地址） A9-A16 A17-A24 A25 （行地址即page地址）
+  
+  2Gbit的才需要第五个地址周期
+
+  这里有一个问题：1Gbit的需要4个地址周期，那么我要是输出5个地址周期可以吗？boot程序貌似输出的是5个地址周期。
+
+===============================================================================
+【u-boot NandFlash驱动的结构】
+chip结构体中重新定位的函数有：
+cmdfunc = emma_nand_cmdfunc_lp （默认的叫做nand_command）
+write_buf = emma_nand_write_buf
+read_buf = emma_rand_read_buf
+类似这些函数，都有一个默认版本，但是都没有使用，而是用了nand_emma.c里面的东西
+并且nec在u-boot的基本架构之外又增加了一个 
+emma_nand_info.seq_cmdfunc = emma_nand_seq_cmd_lp;
+显得不伦不类
+===============================================================================
+
+1 支持的最大的rom为64M   page ROM 的最大访问长度是4字节 （ 什么是page ROM ）
+2 对于Nand Flash 有硬件ECC   串行Flash不支持：HOLD 特性 hold 端口固定接高   硬件保护模式（HPM） 写入/擦除 加速功能
+最大支持的Nor Flash是64M字节 当ROM_MAX_SIZE设置成64M的时候，需要用 CS_SEL 决定使用 CS0 还是 CS1 
+3 关于Nand Flash的 ECC  分为LP CP  实际上528字节 512+16  根本用不了16个字节
+4 6.2.7.2 Nand 控制和 GIO 控制 
+
+
+NAND_FOEB: 输出使能 跟pport67 共享   为什么不跟NorFlash 共享呢？
+NAND_FWEB: 写使能   跟pport68 共享
+
+NAND_FCSB0：FCSB0 共享
+NAND_FCSB1: FCSB1 共享
+
+FCSB2  FCSB3  属于 CS 的扩展  
+
+总结来说：Nand Flash 跟Nor Flash  串行Flash 片选信号都共享  读写信号不共享。
+GIO 有专门的GCSB0  GCSB1
+
+串行Flash  片选信号共享， RData0-4  SCK 和SI SO 或者  SIO0-SIO3 
+外部是48M 时钟。
+
+Nand-GIO Access ？？？
+
+7.2.3 ROM 总线仲裁 arbiter
+使用 Round robin policy
+
+GIO还有一个间接访问模式。
+
+NAND 和 GIO 同时使用的时候 需要特殊处理  NAND-GIO
+
+因为 NAND 有一个问题：就是他是一个控制器，写了一个寄存器后，会自己在总线上发送一坨信号。
+而此时写寄存器的指令已经完成了， 所以此时有可能 程序又去访问 了GIO
+
+
+
+6.3 串行Flash访问   串行Flash的控制依靠 串行Flash 控制 地址 数据长度 3个寄存器。
+访问串行Flash ROM 有两种模式：单字访问模式和连续字访问模式。 靠SINGLE_WORD_MODE位来控制。
+
+这种Flash叫做SPI Flash   SPI总线的mode 0 和mode 3   SPI Flash兼容SPI mode0 和mode3 
+
+SPI是什么意思来着？？  其实IIC是什么意思我也不知道啊
+串行Flash 有一个Auto Address increment 模式 AAI  （以此为契机 记住increment这个词 increase decrease decrement这个词没有啊   奇怪 有increase  decrease   有increment 却没有decrement）
+这种模式可以减少 单字节编程的时候的片选时间 （那么AAI是不是对应了cpu端的continue模式呢？）
+
+串行Flash的 HOLD引脚的作用（低有效）：可以暂时停止与SPI flash的通讯。
+CPU端没有这个控制线 ，所以固定接高。
+
+原理图上（包括NEC的demo）Rdata3 Rdata4 竟然接到了wp 和 hold  这两个信号没事的时候是高，到是符合wp和hold的要求，但是这样太不合理了吧。
+【这个SPI接口应该是可以读写SD卡的】 
+
+在SST的串行Flash中，WP引脚用来enable/disable 状态寄存器中的 BPL 位 （状态寄存器？？？）
+
+SST串行Flash的特性中：
+uniform 4kbyte sector
+uniform 32kbyte overlay blocks
+uniform 64kbyte overlay blocks
+这是什么意思？？  难道说，32k block  64kblock 可以随便设置吗？
+
+因为命令集里面提供了擦除32k block 和64k block的命令
+
+winbond 和 SST  的串行Flash  状态寄存器的定义是不同的  winbond 没有AAI好像。
+
+
+6.3.1.2 连续字访问模式。SINGLE_WORD_MODE = 0 
+使用连续访问模式的时候，代码必须放到UM里面（内存），驱动代码（指访问Flash的代码）不能放到rom中。
+由于：CS信号在连续传输过程中一直为低，所以此时不能访问其他的Flash。。。。
+* 此模式下可以执行写，擦， 获得ID和状态。 但是除了读。  难道连续模式下不能做读的操作吗？
+
+写的时候最大连续256字节  读的时候最大65536字节（上面不是说不能读吗？）
+
+======================================================
+串行启动情况下的调试问题：
+2 so  5 si 6 clk
+======================================================
+Flash模块 为什么叫做BROI？？？
+
+
+5 20100512 14:59
+当设置成串行Flash启动的时候，启动后b000045c 也就是 Serialrom_access_mode 寄存器 的值为0x00010001 
+手册上有注释：复位之后，【手册中这个地方写反了， 两个位的名字跟说明反掉了 】
+
+Boot_Mode[2:0] = 10x时候， 此位值为1， 否则为0.
+也就是说。
+
+【 题外：孟瑞：上电后，访问模式为1  就是单字节模式，这时候要想再访问串行Flash，需要把这里改成0，即连续模式.即使这样改了，也是用slinshort好使
+在boot里面就不好使了 】
+
+Restriction of using serial flash [一次为契机 记住restriction这个单词]
+
+手册的p183  in case of BOOT_MODE = 100 by strap setting (串行flash启动) single word access mode is  selected after reset.
+
+连续字节访问模式是个什么模式？？？？
+
+串行Flash的几个寄存器：访问模式  控制寄存器， 地址寄存器， 数据长度寄存器  状态寄存器  5个寄存器。
+虽然是串行的，但是没有中断之类的东西。不像IIC  SPI 串口之类的。
+
+串行Flash里面有一个状态寄存器的：：：：
+
+串行Flash启动的情况下，上电后，alternate寄存器里面，串行Flash的相应位就已经置1 了
+
+手册第四章：clock 产生器
+基地址便宜1b4   peripheral clock select 这里可以选择串行Flash的工作频率
+
+这里面有 serial Flash接口 内部时钟频率 32M 72M 64M 18.514M （这个指的是外部CLK线上的频率吗？）
+【20100513 可以确定就是clk引脚的频率 因为串行Flash启动 在芯片clk上测到了32M左右的时钟】
+SST和winbond的区别：SST有一个0x50命令：状态寄存器写使能，winbond 就没有这个命令 
+
+读状态寄存器05 写状态寄存器 01 这个倒是一样的。
+
+关于状态寄存器：Winbond
+状态寄存器里面的位：
+1 BUSY 只读的 S0 当芯片正在执行 页编程， 扇区擦除 block擦除 芯片擦除 或者正在写状态寄存器的时候，这个位是1 。
+这段时间里面，芯片会忽略除了读状态寄存器外的所有指令。
+上面这些操作完成之后， busy位会自动清除成 0 
+
+2 WEL 叫做write enable latch 也是一个只读状态寄存器。
+
+[ 关于serial Flash不能写的问题： 改变模式后，slinshort可以写，loader可以写，主程序可以写，但是在boot里面没有办法写，有啥区别呢？
+ 但是，boot代码也是在mem中执行的啊，也没有在flash里面执行 。？？？ ]
+
+连续模式是什么意思？？？
+
+串行Flash的块保护机制：  BP0 - BP2
+S7 的意思是 SRP   状态寄存器保护  保护状态寄存器的位，是不是有病啊。
+S5 TB  意思是Top Bottom 写保护。？？？？
+
+关于串行Flash保护这块的详细说明：
+
+通过TB 和 BP0-BP2  可以灵活的保护各个区域。
+一个扇区是4k  一个block 64k
+状态寄存器里面的 WEL 写使能， 是一个只读的状态位。
+
+写使能指令 06h  作用是设置WEL位。
+
+一上电的时候 WEL 是没有设置的   做了各种写擦操作后也会复位  所以要不停的写使能
+
+winbond 也有 Auto-increment Read capability
+
+
+设置成串行启动的时候：
+测试 cs信号和so信号：
+CLK上的频率是 32M左右。
+
+通过测试总结的波形信息（没有保存图片 通过描述来记录）
+clk 和 cs： 一次cs有效 上面会对应一坨 clk信号。 上电的时候， cs 会不停的有效。此时cpu在读串行Flash，并且是single模式
+clk空闲的时候为低  所以应该是模式0  
+
+注意：数据输入的时候绝对是上升沿锁存。  
+
+串行Flash 启动的时候传几字节地址怎么确定啊？？？ 寄存器里面有一个地址周期数 说要根据数据手册设置 那么启动的时候又如何设置呢？??
+反正strap里面没有这个设置。
+
+winbond 16Mbit 的手册里需要24个周期。
+通过保存下来的图片分析得出重要结论：串行Flash 启动模式，上电后每次读 4 个字节 没读一次都要发0x03命令 后面接着24bit地址（winbond）
+通过我捕捉到的波形 每次发命令03  后面的3字节地址由0x0007c8 变成了 0x0007cc  地址增加了4   每读一次4字节 cs有效一次。
+这是不是就是所谓的 “单字”模式  SINGLE_WORD_MODE  一个字不就是4个字节嘛。
+对应 【连续字访问模式】 
+
+p183 6.3.1.1
+单字访问模式的时候：
+（1）串行Flash被映射到 ROM 地址空间 ，意思是：当访问rom地址空间的时候（ 应该只是读rom地址空间 ） 串行Flash的控制器会自动发读命令03 和地址 然后跟着32个clk读出4字节（1字）数据。
+（2）所谓的映射，也只是支持读命令，并且每次读4字节。
+（3）设置为串行Flash启动后，上电默认是单字模式。因为串行Flash启动，必须要把串行Flash映射到Rom地址空间，并且可以通过普通的读指令访问 
+（4）访问Nor 和 Nand后再访问串行Flash的情况：有必要确认：Serialrom_data_count是不是 4 ******
+
+连续字访问模式:
+访问期间，CS一直为低，所以此时不能访问其他Flash
+（3）此模式 except读 都能操作  ？？？ 难道此模式下不能读flash？？？
+哈哈 这句话有歧义：Accesses for writing,erasing and getting ID/status except reading, are executed in this mode.
+到底是包括还是不包括 reading啊。
+如果意思是：在连续模式下，除了读操作还可以有写 等等的操作  那么意思是说 single模式下就只有写模式吗？
+
+连续读，最大是65536字节一次。
+
+184也第3条，写好了命令和数据长度后，还要访问一下 rom地址空间，才能把命令和数据长度 地址等发送到串行Flash中。
+可见在连续模式下：没有flash的自动映射，也是需要访问flash空间 发送命令和读取数据的 读一次就发32个时钟。
+（实际上也有两种模式，一个是写完命令寄存器就执行 另一种才是需要访问rom地址空间
+这两种模式分别用于有数据的命令和没有数据的命令，比如写使能的命令 和 读写数据的命令。）
+
+
+COMMAND_START_TIMING = 1 靠访问rom地址空间 启动命令
+COMMAND_START_TIMING = 0 写完命令寄存器就启动命令
+
+写的时候，先要写使能，0x06  这个命令 直接使用 写完寄存器就执行的模式。
+连续写最多256字节一次。
+
+185也 第5条：
+
+注意CS_COMM_STAR_TIM_IS_0这个参数  当使用直接发命令的方式的时候才有意义。（只有命令没有数据的命令 比如写使能命令）
+使用访问ROM空间的时候才发命令的时候这个位被忽略，因为rom地址空间已经决定了片选信号。
+
+单字模式
+
+
+写命令的时候 地址BROI_SERIALROM_ADDRESS 必须是256的倍数  multiple of 256 ？？？？？ 那我要是不想从256倍数的地方写数据又如何？？？
+
+
+
+下面开始测试 串行Flash启动设置模式下的特性（用串行Flash，必然是串行Flash启动 不用他启动就没有必要用它。）
+我用slinshort调试的时候，如何才能读到串行Flash的数据呢？
+直接用memory view 看的话  两次访问的间隔很长！
+
+所以这个时候可以看到一个很好玩的现象：我把memory view 调整到可以显示很多数据 然后刷新 示波器捕捉clk 和 SI  我可以看到SI上显示03 读命令
+同时地址区域 以 “动画” 的形式显示了地址增加的过程 很好玩 可以看到地址增加的过程 没有办法存下来 呵呵（由于memory view 读数据的间隔很大）
+【两次访问间隔很大的情况下 示波器可以把每次访问显示的波形显示到同一个地方  】  频率默认是33MHz的
+
+但是读上来的数据为什么都不对呢？ 都是fc fd 什么的。 为什么读不上来呢？ 从示波器看，波形都是正确的，03h命令也发出去了啊？？？
+我知道了，发出去的地址是bfc00000  而串行Flash需要的地址是以0 为基准的地址
+把示波器调成单次触发模式， 刷新memory view  这时候可以捕捉到 0xbfc00000 这个地址的读的时序  发现：【发出去的地址是0xc00000 没有0xbf了】
+
+哈哈，明白了，cpu上电默认flash空间的大小不是手册上说的4M， 而是64M  默认值不是00003800 而是00003804  ！！！
+
+cs0 改成4M后 （修改b0000400寄存器） 串行Flahs总线上的地址是0 而不是c00000了 但是memory view里面还是看不到正确数据。
+调试4M后  示波器显示的地址完全正确，访问0xbfc00004  总线就会发出000004 这个地址。但是memory view中显示的还是不对
+memory view里面好像读出来的还是NOR总线上的数据 因为我动了高速下载后会影响memory view显示的值
+我把高速下载线的rdata7 接地后，memory View中原来所有显示fc fd的地方都显示7c 7d了  哈哈奇怪吧 但是serial Flash上却是发出去东西了比如clk SI信号。
+此时NAND Flash 是没有打开的。
+
+在slinshort里面 用程序 读bfc00000 就能读上来
+
+现在发现：要想再memory view中看到 Serial Flash数据关键在于要把0xb0000400 寄存器中 ROM_MODE0设置成串行Flash
+只有启动模式串行还不行啊，不设置这个，虽然CLK上有了时钟，SI（相对于芯片）也有了命令和地址，但是SO上就是没有输出
+测试cpu得到的就是NOR接口上的数据（奇怪了）
+不对啊？？ 串行Flash收到了命令和地址，应该就有输出了，示波器怎么看不到呢？？？
+如果serial Flash的输出引脚悬起来可能就看到输出了，
+
+那cpu启动的时候是怎么做的啊？？？好像也没有设置什么 ROM_MODE0 啊！！！
+难道直接启动和用slinshort调试不同？？？？有可能啊！！
+
+关于串行Flash上的地址问题： 3字节地址是默认的吗？？？？3字节只支持到16M字节的串行Flash啊？？
+设置成CS0 = 4M的时候 访问bfc00000 总线上出现0地址
+设置成CS0 = 8M的时候  访问bf800000 总线上出现0地址
+		       访问bfc0000 总线上出现0x400000 也就是4M位置 但是因为我焊接的flash是2M的 
+			所以也能读上来Flash物理地址0的数据  高位地址无效（可以说得过去）
+
+
+串行Flash启动的时候 不需要mini boot？？？
+
+【现在不明白的地方：cpu启动是，从串行Flash中读指令，然后用memcpy拷贝代码，这时候也没有设置ROM_MODE0寄存器啊，怎么就可以直接读呢？？？】
+
+串行Flash操作只有page program指令  也就是说 不能一次写一个字节。
+
+明白了一点：现在可以这样认为：单字模式 只能读操作 不能写操作。
+
+SST Flash有单字节写入指令  而Winbond只有page写入指令，就是一次256字节。  cpu端也是写地址要 256的倍数。说明什么问题呢??
+SST同时也提供了一个AAI编程模式。
+
+Winbond的flash 的page program 02h 命令也可以不写256字节而只写一个字节。当写256字节的时候，地址必须是256的倍数。
+原文：if an entire 256byte page is to be programmed , the last address byte(the 8 least significant address bits)
+should be set to 0. if the last address byte is not zero , and the number of clocks exceed the remaining page length
+the addressing will wrap to the beginning of the page.
+( 这个貌似跟eeprom  24c01 之类的那个类似啊 )
+
+关于 【page】 这个概念  这里的page这个概念跟24c01 的一样。
+{
+24c01 中 有 partial page writes are allowed  写一部分page
+24c01 一个page 8字节 
+if more than eight data words are transmitted to the e2prom
+the data word address will "roll over" and previous data will be overwritten.
+这句话也说明了  一次可以写不到一个page的数据
+
+The address "roll over" during read is from the last byte of the last  memory page
+to the first byte os the first page. The address "roll over" during write is from the last byte of the 
+current page to the first byte of the same page  [关于page的一个说明]
+也就是说 page操作的时候，地址超出 会返回到这个page的头部。 当时好像是张俊遇到了这个问题。
+}
+Winbond： The w25x16 array is organized into 8192 programmable pages of 256 bytes each
+使用page program 指令 一次可以编写256字节数据
+16个page一组 叫做一个 sector
+256个page一组叫做一个 block
+
+CPU那一端的限制：说明编写的时候一次只能写256字节即使
+
+从winbond手册中 p24 11.2.10 Page program 02h说明中可以看出 page 编程 可以每次写不足256字节的。 但是如果想写256字节，地址必须是256字节倍数。
+
+【【【 单字节模式下 只能读操作吗？？】】】
+
+CPU中写的page program 是02  Winbond 也是02 为page program
+但是SST的不是 SST的02 是编写一个字节  下面还有其他命令 AAI方式编程。
+
+写的时候 cpu要求必须是地址256对齐 数据长度小于256  （那么如果数据长度小于256 剩下的空间怎么写啊）
+
+=================================
+想想：写状态寄存器的操作方法：
++++++++++++++++++++++++++++++++++
+在单字 和 连续 字的模式下测试 写状态寄存器的操作
+
+1 连续字模式
+  CONTROL 寄存器写 0x01000003  01 写状态寄存器命令  03 是先不执行命令
+ Length 寄存器 1  表示需要些一个字节  因为状态寄存器只有8个bit
+然后： *(UI32*)0xbfc00000 = 0x00  这里虽然用的是UI32  但是只会发出8个clk发送数据 应为数据长度设置的是1
+试验证明 这里写 *(UI8*)0xbfc00000 = 0x00（或者0xaa） 也没有问题 
+这里有一个大小端的问题 如果 *(UI32*)0xbfc00000 = 0xaa; 这时候 0xaa是写不进去的 写进去的是00  也就是说
+ 先出的是高位字节。
+
+UI32 FlashData1 = 0x12345678;
+UI8  big;
+	big = ((UI8*)(UI32)(&FlashData1))[0];
+	big = ((UI8*)(UI32)(&FlashData1))[1];
+	big = ((UI8*)(UI32)(&FlashData1))[2];
+	big = ((UI8*)(UI32)(&FlashData1))[3];
+
+EMMA上依次是 12 34 56 78
+VC上依次是   78 56 34 12
+
+
+对于一个普通的写状态寄存器的操作：在连续模式下是正常的。
+在单字节模式下，无法执行这个命令！！！！！！哈哈
+单字节模式下，我竟然在示波器上看到了如下波形：
+程序：
+	write_register( BROI_BASE, BROI_SERIALROM_CONTROL, 0x01000003); //写状态寄存器
+	write_register( BROI_BASE, BROI_SERIALROM_DATA_LENGTH, 1);
+	*(UI8*)0xbfc00000 = 0xaa;
+
+先发了一个0x03 这个是读命令，然后是24个clk 数据线上为0（因为写的地址是0xbfc00000） 然后是8个时钟，数据位0xaa
+整个都乱了，这个时序是毫无意义的。
+
+	write_register( BROI_BASE, BROI_SERIALROM_CONTROL, 0x01000003); //写状态寄存器
+	write_register( BROI_BASE, BROI_SERIALROM_DATA_LENGTH, 1);
+	*(UI32*)0xbfc00000 = 0x12345678;
+先发了一个0x03 这个是读命令 后加24个clk  再加32个clk 数据为 0x12345678
+
+也就是说0x01 这个命令根本就没有发出来，而是一访问ROM地址 就发0x03 24为地址， 然后把数据发送到SI上。
+03 是读命令，后面SI上却有数据，所以这个时序是毫无意义的。
+
+而实际上是，不需要操作任何serial flash 寄存器
+直接写 *(UI32*)0xbfc0f0f0 = 0x12345678; 也可以发出时序。
+发的是 命令03  地址00f0f0 数据12345678  显然这个毫无意义的。
+所以可以得出结论： 单字模式下，只能读不能做其他任何操作！！
+
+关于是否立刻执行命令：没有数据，就选择立刻执行 有数据就访问ROM地址空间的时候执行
+
+单字节访问的时候，执行命令 0x01000001  01是些状态寄存器， 最后的01 代表立刻执行，结果总线上什么都没有。
+而是在执行 *(UI32*)0xbfc0f0f0 = 0x12345678;的时候 有了输出并且不对，毫无意义的输出。
+
+
+下面的更为重要：
+当我设置成连续模式的时候，如果选择了立刻执行，如
+write_register( BROI_BASE, BROI_SERIALROM_CONTROL, 0x01000001); //写状态寄存器
+则立刻发出了01这个命令  并且执行完这个命令 CS就无效了 也就是clk上发送8个clk之后，数据线上出现01 后CS就无效。
+以后再执行
+	write_register( BROI_BASE, BROI_SERIALROM_DATA_LENGTH, 1);
+	*(UI32*)0xbfc0f0f0 = 0x12345678;
+两句的时候，总线上没有任何动静。
+
+可见，只有不需要数据的命令才能够使用这种方式访问。需要数据的命令要使用 另一种方式。
+
+到现在为止，应该明白得差不多了。
+
+快速验证一下：boot程序里面访问串行Flash死机的问题：
+
+新发现：如果访问模式设置成连续模式，slinshort中的memory view 就无法查看bfc00000了 一查看就死机 slinshort都停了
+
+设置访问模式之前是可以的。
+
+我实际测试发现：CPU是可以一次写一个字节的  地址也没有256字节对齐的限制啊！？
+
+-----------------------------------------------------------------------
+关于 -WEL-  Write Enable 指令设置状态寄存器中的WEL位， 在page program、 sector erase 、block erase 、chip erase 和 写状态寄存器之前，必须先设置 WEL 位。 这是一个典型的 无数据的指令。
+
+SRP winbond 的状态寄存器保护。 可以阻止写状态寄存器。  【口才！！！】
+他的 定义 比较 怪异。  首先这个位可以通过写状态寄存器读写 没有单独的指令控制，不像 WEL 
+这个位 与 WP引脚配合使用 来阻止写状态寄存器。 SPR为0（出厂默认），wp引脚无法控制状态寄存器。
+当SRP设置为1的时候，写状态寄存器指令在WP有效的时候被锁住。WP无效的时候，写状态寄存器可以操作。
+
+=================================================================================
+下面看 NandFlash 
+先搞清楚，行地址和列地址
+NandFlash只有page 编程指令。
+
+命令：
+00h  0-255字节  01h 256-511字节  50h 512-527字节
+A8 is set to "Low" or "High" by the 00h or 01h command.
+
+Nand跟Serial一样有Command start 分两种模式：1 command enable就执行 2 访问ROM空间。
+
+BROI_NAND2_ADR1 ： 当使用第二个8bit Nand Flash ROM 的时候
+
+关于EMMA上面的NandFlash 操作问题。
+
+ALE: Address Latch Enable
+
+
+spare field 指的是额外的16个字节。
+
+0x01 读命令只在x8的Flash上有效。
+
+ALE和CLE都是高有效。
+
+BROI_INTERRUPT 寄存器 SEQ_END_INT; This bit indicates that Page Write or Page Read is 
+completed in NAND Flash Rom sequential mode.
+
+为什么需要这样一个位呢？ 难道不是执行一次读操作就 读出一个字节吗？
+while ((readl((void *)NAND_ROM_INTERRUPT) & 0x00000100) == 0);/* wait seq end */
+writel(0x00000000, (void *)NAND_ROM_INTERRUPT); 这个位是手动清除的。
+难道说，读操作都完成了，信号还可以没有发送完吗？ 下面我要测试一下
+nand 的读写信号是单独的两个 跟io口共用。
+
+保定板子：FOE信号 R182
+测试方法：读512字节，然后迅速操作一个pport，
+
+alternate bit15 控制nand Flash
+用的是cs1  下面对于8位 大小端的设置很重要的。 又是大小端的问题。 CS0 的位数和大小端不能通过寄存器配置而是通过
+上电电阻配置的。
+
+NandFlash的CS1 需要配置成 8位  大端还是小端？？？？
+有一句话：When little endian is selected, bytes are swapped in the 8-bit mode,and halfwords are swapped in
+the 16-bit mode.
+那么，8位的时候，到底什么时候取数据线的高8位，什么时候取数据线的低8位？？
+
+
+ROM_MOD 默认是00003804  0x38 这个地方 实际上是reverved  但是应该不能写成0
+
+Nand Flash 16条数据线跟NOR Flash共用。
+CLE ALE 分别是RADD1 RADD2  （ 而不是RADD0 RADD1 ）
+保定板子：CLE R180   ALE  R181
+
+
+关于串行Flash和NandFlash 共同使用的问题：
+1 孟瑞总结：ROM_MODE0/1  不能同时打开 串行和NandFlash   alternate寄存器里面也不能同时打开。
+但是我测试的时候发现：读ID的时候，不用关闭alternate里面的串行Flash 同样可以读上来。
+并且,在读ID的时候也能体现出大小端的设置问题，比如 k9f1208u0c  的ID号为
+0xec 0x76 0x5a 0x3f  
+我用UI32类型的指针往回读， 如果 ROM_MODE 寄存器设置为大端 greenHill里面的UI32 数据位0xec765a3f
+如果ROM_MODE的设置为小端（只有CS1 可以设置 CS0 固定为strap引脚了） 则读上来的UI32 数为 ?0x3f5a76ec 
+哎又乱套了。 CPU的大小端和Flash接口的大小端。  所以这里的大小端问题还是比较乱套的。
+但是设置成小端后，读一个字节 （用UI8*）体现不出来的 读上来的仍然是0xec  
+对于读ID的命令，顺序出来的数据是 0xec 76 5a 3f 
+
+小端的情况下 UI8* 读的时候也是 ec 76 5a 3f
+如果用UI16* 读的话 返回的是 76ec  3f5a
+用UI32* 读的话，返回的是 0x3f5a76ec   
+
+大端情况下：
+UI8*  读出来的是 ec 76 5a 3f
+UI16* 读出来的是 0xec76 0x5a3f
+UI32* 读出来的是 0xec765a3f
+注意，读的地址都是bf800000  （当然这个地址没有意义 对于读ID来说 ）
+但是我用UI32* 读bf800000 可以认为bf800000 的数据是ec bf800001 是76 以此类推
+
+注意两种情况下 UI8* 读出来的结果，恰恰说明了 那两张难懂的表：
+
+31 ......0
+A  B  C  D    A是高位字节  D是低位字节  32bit系统以32bit说事。
+
+8bit模式大端：
+A1  A0   D[7:0]
+0   0     A   看！ 高字节在低地址
+0   1     B
+1   0     C
+1   1     D
+
+8bit模式小端：
+A1  A0   D[7:0]
+1   1    A  看！ 高字节在高地址
+1   0    B
+0   1    C
+0   0    D
+
+通过这种变换，就能够保证：不会出现上面读ID的那种情况。
+举例说明： 8bit 大端
+UI8* bfc00000  读上来A
+UI8* bfc00001  读上来B
+UI8* bfc00002  读上来C
+UI8* bfc00003  读上来D
+
+UI16* bfc00000 读上来的是AB
+UI16* bfc00002 是CD
+UI32* bfc00000 读上来 0xABCD  因为CPU是大端的，所以bfc00000 是A  bfc00001 是B
+
+
+8bit小端：
+其实不去变换A0 A1 两个地址，  UI32* 的时候能区分出大小端的 就比如说上面的read ID的例子  那个操作
+
+但是当你读一个字节的时候就无法区分了 比如read Id 的那个例子， 有一种大小端设置应该能做到UI8* bfc00000 把最后一个字节3f读上来，但是他做不到，
+
+如果有地址线，这时候就需要变换A0 A1了 写的是bfc00000 出现到地址线上的是bfc00003
+那么又出现了一个问题：用bfc00000 访问UI32* 的时候，8位总线上一次出现的是00 01 10 11 还是 11 10 01 00 呢？
+对于Flash来说 所有的设置都没有关系  怎么写进去的怎么读出来吗，
+但是对于 用编程器写 用CPU读就有问题了 所以涉及到2字节调换的问题。
+
+所以总结来说：CPU 大端  ROM大端情况下 不用变换地址，程序写什么就出什么。
+当CPU大端，ROM小端的时候，就出现了我刚进公司遇到的地址变换问题。
+
+现在想想，为什么前几天杨学红涉及到的串行Flash，程序写的和编程器写的不用做调换 直接写就可以启动（不像NorFlash）？？
+
+
+***串行Flash和Nand Flash的大小端体现方式跟Nor Flash应该有所不同。由于没有地址， 读一个字节UI8*  和读4个字节UI32*
+都是按照同一个顺序读出来的 没有办法使得读UI8* 一个字节的时候，直接返回第4个字节（8 位 Nor Flash 通过A0 A1变换可以实现）（某种设置的时候）  但是一次到达cpu的4个字节顺序一样的情况下，通过设置串行Flash和NandFlash的大小端，仍然
+可以在程序中看到不同的UI32* 的数据，顺序是完全相反的。也体现出了大小端的问题。
+
+所以，串行flash 和NandFlash设置成大端的时候，没有问题， 设置成小端问题会很多的！！！
+
+对于读ID的时序
+NandFlash手册上 90h + address 1cycle(00h)  应该对应
+address 的00h 是怎么写出去的？  通过示波器，确实发送了2个WE信号。
+
+Nand Flash命令的执行：
+
+Nand ROM Control 0 寄存器  BROI_NAND_CNT  Address_Cycle= 0  代表1个ALE周期
+因为即使是read ID 也需要一个地址周期。
+
+关于读ID的时候，启动命令的方式（访问ROM空间和写命令的同时）
+串行Flash读状态寄存器的时候，如果设置成立刻执行，再读ROM空间的时候，就没有动静了。
+但是NandFlash好像没有问题，立刻执行和访问ROM空间执行都没有问题。
+
+哈哈!奇怪啊，我在读写信号上加上示波器，读ID结果ec765a3f 变成了 76 3f ec 5a（只要一加上读信号的测试就出现
+挺怪的，出错了结果是初来数据顺序有错）
+读信号时过了一个22R电阻，又4.7K上拉了一下，我在靠近flash的一端量就不会影响，在上拉电阻一端量就会影响ID读出来的顺序
+太奇怪了吧。
+
+【对于 Nand 读ID来说，试验证明，两种命令启动方式都可以操作。当设定成访问ROM空间访问的时候，第一次访问ROM空间发送命令同时读取一个ID，以后访问ROM空间只读取一个ID值。】
+太奇怪了，我用示波器测试读信号的时候，读出来的ID顺序就不对，哈。好像点到电阻上没有问题，用线引出来就不行。
+
+哈！可能跟探头有关系，因为我发现，同样是测试两个信号，写信号有很强的上冲和下冲，但是测试读信号用的探头就很平整，
+说明读信号探头的电容太大了。！！！ 应该是跟探头有关系。
+
+读ID的时候，地址不写0 好像也可以啊！
+
+上电后，Nand的读写信号都是低的，只有打开了NandFlash在alternate里面，才会使得读写信号变高。
+
+重要发现： Nand Flash的写使能不受 ROMIF寄存器里面的write enable位控制。（试验证明）
+原因可能是 NandFlash的写信号不是NoR的，而是2个pport。
+
+另外，串行Flash在alternate里面打卡的情况下可以访问NandFlash
+
+试验证明，ROMMODE 确实不能同时打开serial 和 Nand。 如果同时打开，读Nand ID的时候，
+pport复用的读写信号也能发出正确的波形，但是得到的数据不正确。此时读上来的数据都是FF（有可能是串行Flash上的数据）
+
+如果Rommode0 设置串行，rommode1 设置Nand 同时串行设置成continue模式，此时发送读nand ID的命令可以成功，但是读bf800000 的时候slinshort就死机了。  这种情况下，串行Flash的clk无信号。
+而跟上面条件相同，只是不设置串行Flash的continue模式，那么不会死机，但是读ID 读上来的是串行Flash中的数据（试验证明不是串行Flash里面的数据，因为串行Flash里面不是ff 但是度上来的是ff）。
+这种情况下， 虽然访问的是bf800000 但是
+
+结论： alternate中nand打开，串行Flash确实不能访问了（串启动串alternate打开，rom mode 选择串，单字节模式 在mem view中 读数据，示波器测不到 clk 和 SI） 但是alternate串打开情况下，可以读Nand的ID
+
+所以最保险的就是按照孟瑞说的，访问串行 和 Nand的时候，分别开关alternate 和 rom mode 
+【最终结论：访问串行和nand的时候，需要交替开关alternate 和 rom mode 】
+串行Flash的控制线 跟Nand Flash的 data7：0  是公用的。 不做上面的配置 所以有读不出来的情况，有死机的情况。
+
+GIO跟ROM的大小端情况也不一样。
+
+
+20100519  块擦除命令：60 d0  
+注意当使用ROM空间发送命令的时候，control0 寄存器中的CS0 CS1 选择就被忽略了
+地址周期数，0代表1 周期  3 代表4周期。
+
+
+////////////////////////////////////////////////////////////////
+在alternate 串行不关  rom mode cs0 串行不开的情况下 可以正常访问Nand Flash  但是alternate nand打开不能访问串行Flash
+
+20100519 13:19开始测试nand读操作。alternate 串行开，rom mode 串行关
+
+块擦除的时候， 先写0x60  然后从A9写到A25  然后写D0   然后是0x70 读状态仅存器。
+那么A9 到A25   擦除的时候是3个地址周期   但是读 可以是4个地址周期
+
+对于块擦除操作：时序是 60h + 3周期地址 + D0h   则60h要写到COMD0  d0h 写到COMD1
+那么cpu会自动执行 60h + 3周期地址 + d0h了？？？
+
+
+刚刚从uu那里（20100519 14：15）得到消息，读的时候可以从page中间位置读 ，但是有的时候能成功，有的时候不成功。
+
+
+P17 指针操作
+samsung NAND Flash有3个地址指针命令，00 01 50   可是这个不是说是 读命令吗？ 
+在命令表p9 有说明： the 00 01 命令指定寄存器的第一半和第二半地址。
+这里说的寄存器，每个plane有一个528字节的寄存器。
+
+read ID的时候， 5a代表不支持copy back操作
+		  3f 代表不支持 Multi plane 操作。
+
+
+70h命令对应一个状态寄存器。
+芯片包含一个状态寄存器，指示 编写 擦除操作是否完成并且成功。  写70h到命令寄存器，在读周期就可以得到状态寄存器。
+
+【528字节的数据寄存器】 
+
+Nand Structure 是啥东西？？
+
+
+【坏块在NAND闪存的OOB 区域中标记】  OOB是什么？？  out-of-band   指的就是多出的16个字节。
+YJ：做一批小板子，用于测试各种型号的NandFlash
+需要验证：不停的去读一个Nand 会不会产生坏块，如果读不会产生坏块，就好办了。
+
+u-boot中的定义  #define NAND_CMD_SEQIN 0x80 
+0x10 是真正的program 命令。
+
+那么，page program 命令 0x80  然后发地址，数据， 0x10    那么80  10 写到命令寄存器里面。 能保证在合适的时候发送出 去？
+ 奥！！ Sequence In 命令要单独发送一次。  但是擦除命令：60h  3个地址周期 d0h  可以同时写入command寄存器。
+但是page program 中间除了有地址，还有若干数据。 怎么控制何时输出第二个命令 10呢？
+
+
+CPU支持2片 NandFlash ：P205 Set these bits to output different addresses when two 8-bit NAND Flash ROMs  are used   有第二个NandFlash的 地址寄存器。
+
+
+基地址在 mmac/mtd/nand.h里面定义，具体我定义成bf800000
+赋值是在 nand_init_chip 函数中 给IO_ADDR_R  IO_ADDR_W赋值的。
+
+nand_base.c中 nand_write_page 这个函数 显然把page program分成列2部分。
+先写 seqin 命令 设置rom空间触发方式 当然，地址要先写进去。
+然后 写数据进入 最后执行pageprog命令  
+命令在 emma_nand_cmdfunc_lp 或者 emma_nand_cmdfunc 函数中执行。
+
+但是我还看到一个同时把两个命令写入到command 寄存器的函数又是怎么回事呢？
+就是这个函数 emma_nand_seq_cmd_lp  emma_nand_seq_cmd  里面包括读和写两个操作。
+
+board_nand_init函数里面：
+chip->cmdfunc = emma_nand_cmdfunc;
+emma_nand_info.seq_cmdfunc = emma_nand_seq_cmd;
+
+注意 cmdfunc 和 seq_cmdfunc  两个函数。
+
+emma_nand_do_write_ops 会调用 seq_cmdfunc
+
+u-boot里面 nand的上层函数在 driver\mtd\nand  里面的 nand_util.c 
+这里的函数由 cmd_nand.c调用
+nand_write_skip_bad
+nand_read_skip_bad
+
+
+别总想去改u-boot  就用u-boot 多好的东西啊。 使用nand Flash不在乎这点空间。 开始研究一下只用nand Flash的方案。
+还是先不要冒险了，先把spi+nand弄好再说把
+nand_write 怎么有两个定义。
+
+先把u-boot在串行Flash里面跑起来。
+u-boot 对于串行Flash的支持问题：
+需要修改：
+./board/nec/et61326/lowlevel_init.S
+
+就维护u-boot 就别想着说要改一个boot出来引导linux了，清醒一点吧！！！！工作量太大。
+
+这里注意：串行Flash要想工作，Nand必须关闭，nand打开的时候，串行信号都发不出来。 就这样认为。没错的。
+
+u-boot原来 在lowlevel_init.S 配置的是 ROM_MODE 00080811  即把cs1 配置成了 nand Flash 8bit 大端。
+cs0 配置成nor Flash（这里还是不明：开始上电并没有配置成串行Flash 那么开始的程序时怎么读出来的呢？）
+
+
+20100521  发现ST的 Nand Flash没有读ID的指令   并且读指令也不同  那么葛德亮说驱动可以兼容！！??
+哈哈，有！ 他叫做 Read Electronic Signature  90h
+但是第一块板子，id读出来总是1f （st的 难道是nand Flash坏了？） 我真晕，换了一块板子就好了！！！！！！??????
+(记住这次经历！！)
+ID为 20h f1h 0h 1dh 
+
+对于读命令： 三星和ST就不同  三星 512字节page 的话 page地址8bit  A8 用命令00 01 确定。
+而ST的 2048byte page  列地址 11bit   读命令只有00 
+
+看看这个函数 get_len_incl_bad   在写和读函数的开头都包含这个调用，检测读写长度里面有没有包含坏块。
+
+/* Extended commands for large page devices */
+#define NAND_CMD_READSTART	0x30    也就是说 只有大page 的设备才有这个命令  所以64M的三星 没有这个命令 读开始
+只有large的时候才有  可以在程序中体现出来
+emma_nand_seq_cmd_lp 和 emma_nand_seq_cmd 函数的区别
+
+#define NAND_CMD_RNDOUTSTART	0xE0
+#define NAND_CMD_CACHEDPROG	0x15
+
+
+emma_nand_cmdfunc  emma_nand_cmdfunc_lp
+emma_nand_seq_cmd_lp 和 emma_nand_seq_cmd 
+这两组函数的功能有些类似啊？！
+
+u-boot里面的nand 驱动写得很好，千万不要去改他的结构了！！而是去理解发扬
+
+读操作调用顺序：
+nand_read_skip_bad -> nand_read(是那个inline的) -> emma_nand_do_read_ops ->
+emma_nand_info.seq_cmdfunc(NAND_SEQ_READ 一次写了2个命令 访问ROM空间发送)
+调用完这个函数会有一个 emma_nand_correct_data用来修正数据。
+
+写操作调用顺序：
+nand_write_skip_bad -> nand_write(走的是inline的那个)
+
+注意，系统中存在两个函数 emma_nand_read 和 nand_read 结构几乎一样。 nand_read没用吧！！
+一个在nand_emma.c中  一个在nand_base.c中  
+意思是初始化的时候，nand_scan_tail函数先将 	
+mtd->read = nand_read; 这是一个static 函数 所以不会影响其他
+mtd->write = nand_write;
+赋值了  nand_scan_tail函数中。后来：
+void board_nand_init_tail(struct mtd_info *mtd)
+{
+	mtd->read = emma_nand_read;
+	mtd->write = emma_nand_write;
+}
+这里有给改了
+
+注意：typedef struct mtd_info nand_info_t; 这两个结构体是一样的。
+
+从注释看，u-boot里面的nand mtd之类的东西也是从 linux 代码树中拿过来的。
+
+【关于legacy的说明：】 /doc/README.nand
+
+116 The current NAND implementation is based on what is in recent
+117 Linux kernels.  The old legacy implementation has been disabled,
+118 and will be removed soon.
+119
+120 If you have board code which used CONFIG_NAND_LEGACY, you'll need
+121 to convert to the current NAND interface for it to continue to work. 
+
+nand legacy 是为了兼容之前的 nand驱动，现在显然可以删除了。
+diskonchip.c 也是没有用的  M－System公司推出的DiskOnChip 2000系列闪存器是
+一个既含存储器，又含控制器的新型器件 
+
+我感觉在功能上 nand_emma.c 和 nand_base.c有重复的地方。
+
+整体程序结构，是因为需要兼容多个平台显得很复杂，对于一种平台来显得没有必要。
+几个结构体：
+struct nand_chip   每一片芯片 对应一个这样的结构体
+typedef struct mtd_info nand_info_t;  这完全是从linux上借用过来的概念。
+
+nand_chip结构体包括：
+读写基地址、一组操作芯片的函数指针、还有其他一些芯片相关的变量。
+但是这里面的cmdfunc 函数指针，emma上没有用 而是自己又定义了一个。
+
+在nand_emma.c中   别的平台的nand驱动都没有改多少东西 为什么emma的nand_emma.c写了那么多。
+最上层使用的是mtd_info 也就是nand_info_t结构体 然后nand_chip结构体 赋值给了 mtd_info的void* priv
+nand_init的时候，把nand_chip赋值给了 *priv 指针。
+
+nand_write_skip_bad 这个函数 调用了nand_write 这是一个函数指针调用
+
+串行Flash 新发现
+直接串行启动 ROMMODE寄存器是 0x033800  注意 这里已经是serial flash模式 flash空间也是4M的   nor Flash启动就是64M 这里不同
+另外 用slinshort启动后，就是0x00003804 奇怪吧！！哈哈  明白了之前 为什么启动不去设置 rom mode 为串行就可以工作的问题。
+
+boot里面串行启动后关闭串行Flash 死机是因为，boot代码虽然在mem里面运行了，但是字符串还是在rom里面，所以有打印信息的时候，就死机了。
+细致入微的发现。
+
+
+擦除操作使用nand_base.c里面的代码
+
+
+
+
+

@@ -1,0 +1,396 @@
+过期提示：License key has expired
+
+同一个bin文件可以多次使用不同license。9 Apr 2013又申请一个，expire日期9 May 2013
+SVRT3-hwjvQ-nRAbm-WhKn3-tBFAX-AdDDF-44uK744dyP4c 显示过期日 5月11日
+看看过期之后是什么状态
+
+http://www.hulu.com/#!movies/genres
+
+安装目录:/usr/local/WowzaMediaServer 
+基于Java技术 lib目录下是一些jar包
+
+ios版测试网页：iphone  ipad 华为手机，都可以嵌入式播放。
+nexus7 网页显示不支持hls，把地址直接复制到地址拦，可以直接转到gallery播放
+FX-5 dongle ：可以网页嵌入式播放（rockchip rk3066方案 不会是软解的吧！）
+
+快乐大脚：
+36分钟  292060kbyte  码率 135kbyte/s
+
+100mbps 网口 提供12800kbyte/s
+
+播放一个流：
+
+调试直播功能：
+
+Link Aggregation can also be known as:
+
+"NIC Bonding" (Mainly Linux world)
+"NIC Teaming" (Mainly Windows world)
+"Port Trunking" (Mainly hardware world)
+"Etherchannel" (Mainly AIX and HP-UX)
+"Ether bonding"
+
+Windows  Broadcom 网卡管理套件 BASP
+linux  ifenslave
+
+并发测试软件 loadrunner
+wowza自带负载测试工具 在安装目录/bin 下
+
+HVC400 硬件编码卡
+
+码流服务器对比：
+1 windows media server免费(附带在windows server2003里)，可以发送asf，wmv，支持单播，多播。用mms://地址访问。
+
+关于mp4文件：
+翟建国转码，不是所有mp4都能用ipad播放的。需要再仔细研究mp4 文件格式。
+The.Secret.mp4 虽然是mp4文件但是压缩格式是 mpeg-4 不是h264 所以ipad nexus7 都解不了
+
+不用流化也能播放
+
+dlna能分享avi mkv 文件吗？
+梳理，梳理，再梳理！
+使用Wowza流服务器，使用例子网页
+黑衣人.mp4 1920x1080 H.264+AAc  
+Nexus7 直接访问网页显示
+HTML5 or HLS is not supported in this browser
+直接粘贴在地址栏，能转到gallery播放
+
+ipad2 iphone4s 直接显示 Cannot open 可能因为分辨率太大。
+【网络有评测，不支持1080p。当初小编发现 iTunes 无法同步 1080p 影片到 iPad 上，利用
+VLC 的第三方播放软件，播放也很不顺，因此下了一个 iPad 2 无法播放 1080p，或是 VLC 无
+法很好的处理 1080p 影片的结论。】
+
+Apple tv 3 支持1080p视频，但未破解版本，如何取得片源是个问题。
+
+----------------------------------
+Wowza编码器
+特性：overlay
+------------
+VHost.xml
+Loadtest
+----------------------
+www.wowza.com/resources/LoadTestingTool.pdf
+
+负载均衡 LVS  LVS是Linux Virtual Server
+Haproxy
+-----------------------
+wowza 不支持ts文件的vod 点播
+
+ts直接放到apache服务器，地址传递给android mediaserver 可以渐进下载播放。
+但是 wowza 不支持渐进？
+
+--------------------------
+小米所有流都是ts，
+1 GET xxx.ts
+2 TCP segment of a reassembled PDU(为什么不显示HTTP包)  1514字节，纯数据区域1460字节
+内容：
+HTTP/1.0 206 Partial Content Date:Tue,07 May 2013 01:52:21 GMT
+Server: nginx
+Content-Type:application/octet-stream
+Last-Modified:Fri,29 Mar 2013
+Content-Range:bytes 0-1048575/69968524
+Content-Length:1048576
+Age:1815750
+下面是188字节的ts包罗列，空间不足1个ts包，截断。下一个1460继续后半个ts包
+
+nginx搭建mp4 flv 流媒体服务器
+
+wowza“不支持！”ts文件，我把他伪装成mp4 提示：
+File is missing 'moov' atom.
+
+那么wowza需要的mp4文件需要流化吗？ DSS需要！
+
+存储位置，不支持子目录
+
+小米的码流服务器难道就是 nginx ？ 他的地址就是默认80端口啊怎么
+
+android4.0 默认不支持m3u8
+
+ts 转换成mp4文件后，可以用wowza例子在PC上用Flash播放。看来flash 不但可以flv也可mp4啊
+
+配置文件里 sanjosestreaming 是什么流
+
+-----------
+vlc 里面显示视频格式mpgv 代表mpeg1/2   
+而现在工程机出来的cctv1 cctv2 cctv10 cctv12 cctv15等都是 mpgv
+工程机设置目标地址为接收机器地址，并确定一个端口号，vlc播放udp （需要0.9.6/1.0.6？） 
+要填写本地机器地址！！和工程机设置好的端口号。
+
+苹果和android都显示无法播放,vlcl可以！现在要转码
+
+
+http://www.wowza.com/forums/content.php?326-How-to-specify-a-play-start-time-and-duration-for-HTTP-streaming
+How to specify a play start time and duration for HTTP streaming
+
+
+----------
+google 搜索  wowza content subdir 得到
+
+Content in Subdirectories？
+in that case you must put application instance part:
+http://[wowza-address]:1935/vod/_definst_/mp4:seminars/seminar.mp4/playlist.m3u8
+
+
+----------------
+测试 负载并发
+
+User Agent Switcher
+点“菜单栏”上的“工具”，在下拉菜单中选择“附加组件”
+在“获取附加组件”中，搜索User Agent Switcher，点击“添加至Firefox”，然后在弹出的窗口点击“立即安装”
+
+User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 6_1_3 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10B329 Safari/8536.25\r\n
+
+启动为 服务器模式
+/sbin/service WowzaMediaServer start
+
+
+-----------------
+使用 Wowza GoCoder 作为网络摄像头直播，
+访问地址 192.168.7.95:1935/live/myStream/playlist.m3u8
+延迟30s
+
+使用pc机 flash播放
+Server：rtmp://192.168.7.95:1935/live
+Stream：myStream
+
+rtsp://192.168.7.95:1935/live/mpegts.stream vlc可以把中央十二播放出来
+
+---
+工程机设置：s:192.168.0.52  255.255.0.0 192.168.88.1
+           d:192.168.1.87   rtp协议 spts
+使用vlc 1.1.12  播放 rtp://@192.168.1.87:10000 （不知道为啥要加@）
+可以播放
+
+
+vlc 1.1.12 播放wowza playlist.m3u8  会一段一段的播，显示 xx_1.ts xx_2.ts xx_3.ts
+20140303  测试高码率视频在mx盒子上卡顿问题。
+vlc 2.0以上版本可以播放m3u8
+window版 v2.0.2 工程机设置rtp，vlc播放 rtp://192.168.1.87:10000(不加@也行但是软件
+下面的提示是：rtp://@123456)
+
+选择串流，目标选择文件，不选择转码，就可以原样录制（1.1.12版本即可）
+直接点红色录制按钮，可直接录制到/home/gaojie目录，文件名：
+vlc-record-2013-08-02-15h35m17s-rtp:__192.168.1.87:10000-.mpg
+
+安装libx264
+gaojie@gaojie:~/Work/x264/x264-snapshot-20130702-2245$ sudo make install
+[sudo] password for gaojie: 
+install -d /usr/local/bin
+install x264 /usr/local/bin
+install -d /usr/local/include
+install -d /usr/local/lib
+install -d /usr/local/lib/pkgconfig
+install -m 644 ./x264.h /usr/local/include
+install -m 644 x264_config.h /usr/local/include
+install -m 644 x264.pc /usr/local/lib/pkgconfig
+ln -f -s libx264.so.133 /usr/local/lib/libx264.so
+install -m 755 libx264.so.133 /usr/local/lib
+
+----------
+ffmpeg实时转码，到wowza播放成功
+ffmpeg  -i "udp://192.168.0.2:10000" -vcodec libx264 -vb 150000 -g 60 -vprofile 
+baseline -level 2.1 -acodec aac -ab 64000 -ar 48000 -ac 2 -vbsf h264_mp4toannexb 
+-strict experimental -f mpegts udp://192.168.0.2:10001?pkt_size=1316
+
+注：
+ffmpeg在本地电脑配置成使用libx264编译，上传到服务器，把编译好的libx264.so上传即可。
+
+----------
+硬加速
+NVidia CUDA hardware acceleration
+Intel Quick Sync hardware acceleration
+
+
+If you are going to use a GPU for CUDA computation, you can attach and external 
+GPU to your system over Ethernet. rCUDA does the magic! 1) Setup a additional 
+system with any GPU. 2) Connects new system to your Dell through Ethernet or any 
+media. 3) Install rCUDA on your new system and old Dell. 4) rCUDA forwards CUDA 
+calls from Dell to new system.
+
+
+--------
+性能测试：
+Exception in thread "IOScheduler.386" java.lang.OutOfMemoryError: GC overhead limit exceeded
+
+如果mpeg2视频不经过转码直接进入wowza，当终端（比如vlc）请求是，wowza打印：
+RTPPlayer.describe: No video packetizer[11]: MPEG2
+
+---------
+用nethogs测试网络，到达一定高度时，有时需要先退出再进入，才能显示正常的值。
+
+---------------
+抓包tp-link  更改ssid得到
+GET /userRpm/WlanNetworkRpm.htm?ssid1=chuangyan002&wlMode=2&channel=0&mode=5&chanWidth=
+2&ap=1&broadcast=2&brlssid=&brlbssid=&keytype=1&wepindex=1&authtype=1&keytext=&Save=%B1%A3+%B4%E6 HTTP/1.1\r\n
+前面追加http://192.169.6.1/ 并修改ssid  粘贴在浏览器，可以更改ssid。
+并且无法绕过登录密码！（开始以为能绕过，后来发现是缓存）
+使用的是 BASIC 认证方法
+
+GET /userRpm/StatusRpm.htm HTTP/1.1\r\n
+保存网页里看到了 window.setTimeout("doRefresh()",timeout);//3s刷新一次
+
+家长控制 允许/不允许
+GET /userRpm/ParentCtrlRpm.htm?ctrl_enable=1&parent_mac_addr=50-E5-49-80-BC-32&Page=1 HTTP/1.1\r\n
+GET /userRpm/ParentCtrlRpm.htm?ctrl_enable=0&parent_mac_addr=50-E5-49-80-BC-32&Page=1 HTTP/1.1\r\n
+
+------
+广西卫视 默认设置转码720p 码率1.28Mbps
+可以在transcode.xml中修改视频码率 原默认1300000（1.3M）
+AAC默认码率96000（96k）
+
+原分辨率1280x720，修改为 720x576
+
+------
+rtsp://192.168.7.21:1935/live/mpegts.stream_720p
+
+----------
+wowza 直播流的名字必须以.stream结束，我起名cctv1 收不到流改成cctv1.stream就可以。
+
+
+
+---20130912-----------
+直播性能测试
+INFO session comment 724714510 client connectionClosed [724714510] pingtimeout
+INFO session connect-pending 10.0.0.20
+
+1 万兆网卡 纯测速 3.5Gbps
+直播流 1.5Mbps
+用iftop检测，发现网口速度无论如何上不了1G，貌似是wowza做了限定。
+
+----20130918----
+换成光口万兆网卡，双机测试速度仍然只有3.5Gb/s。开始把1块卡插在了x4槽位，后来换成x8槽位
+仍然不行。在一台机器上，2个虚拟机各分配1个网口互测偶尔能达到5Gb/s
+ixgbe-3.17.3 直接装在ubuntu上不能工作，需要先安装vmware esx(intel官网表明支持此系统)
+
+换成centos6.4 在R810和R710之间测试达到了9.4Gbps，成功
+但是后来又换成R810和R720之间测试，就只有6Gbps
+R720都是PCIe3.0，卡槽都比网卡长。换了一个槽位，速度7.5Gbps，奇怪。
+
+R720 pcie槽位3  R710 pcie槽位3  测出8.5G
+
+-----------------------------
+被测机：R720 HWZR4X1 PCIe G3 3号位   测试机：R710 5B36C3X PCIe G2 3号位
+iperf 独立测试网卡 8.5Gbps
+直播信号，CCTV-1 哈雷  1.5Mbps
+运行到3500时出现不稳定，网络带宽开始不随着并发数稳步增长，运行到5000时，记录如下：
+1 cpu峰值 2400% （3200%为满负荷）
+2 被测试机出现pingtimeout
+3 测试机出现一半：currBehind 1
+4 网络带宽显示3.0Gbps上下，peak值5.9G
+
+
+
+
+万兆网卡型号：
+X520-DA2  芯片82599ES  电口
+光口的：
+82599EB 10-Gigabit SFI/SFP+ Network Connection
+System Interface Type：PCIe v2.0 (5.0GT/s)
+Storage Over Ethernet：iSCSI, FCoE, NFS
+
+=========
+性能测试
+INFO session comment 1067961397 client connectionClosed [1067961397] pingtimeout
+INFO session comment 1249423586 client connectionClosed [1249423586] pingtimeout
+INFO session comment 1163062942 client connectionClosed [1163062942] pingtimeout
+
+INFO session comment 791144616 client connectionClosed [791144616] watchdog
+INFO session disconnect 791144616 -
+INFO session comment 532406255 client connectionClosed [532406255] watchdog
+INFO session disconnect 532406255 -
+-----------------------------------
+
+临时结论
+1 网络license在机房可以安装在多台服务器上。
+2 一个nDVR可以支持多个频道录制（测试4个没有问题）
+
+------------------------
+dvr 存储路径
+WowzaMediaServer/dvr/dvr/_definst_/cctv1.stream.0
+
+0000_00_00  0000_10_00  0000_20_00  manifest.txt
+10分钟一个目录
+
+<WindowDuration>600</WindowDuration>
+设置timeshift时间
+
+timeshift 每段1.92s
+每次请求都不同
+
+media_w2138296121_DVR_0.ts
+#EXTINF:1.92,
+media_w2138296121_DVR_1.ts
+
+
+#EXTINF:0.96,
+media_w1158439516_DVR_0.ts
+#EXTINF:1.92,
+media_w1158439516_DVR_1.ts
+
+注意 w后面的编号是不同的。
+
+在content目录下还会生成cctv1.stream.flv
+删除了还会重新生成。
+dvr启动后就开始了录制。
+--
+组播流端口选择10000，wireshark显示ndmp 什么意思？
+
+注：为什么wireshark不认rtp流，需要右键选Decode as 选rtp。
+因为udp头里面没有表明rtp协议的地方，后面的数据只能认为纯data，rtp协议开头的交互
+wireshark没有捕获到，好比从中间接听谈话，不知到对方在说什么一样。
+--
+录制20多个小时后，iphone可以正常播放，但是android平台就不行了，分析可能因为m3u8文件
+太大了（此时已达到1.9M）
+
+--
+20131009
+打入wowza的组播流原地址必须是192.169.0.x 也就是跟wowza服务器第二个网口地址在同一个网段
+在调试瑞码视频监控器的时候发现不这样就不能工作
+
+hls点播 一段10s 直播2.5s左右
+wowza 时移配置后，在content目录生成了 上百G的  cctv2.stream.flv 文件
+wowza的网页显示  是apache吗？
+
+-----------------------------------------------------------------------------
+20131127
+泰国anywhere apk调查时候发现他的请求地址：
+http://tvsedge120.truevisions.tv:80/liveedge/smil:c12_low_th.smil/playlist.m3u8
+http://tvsedge119.truevisions.tv:80/liveedge/smil:c12_low_th.smil/playlist.m3u8
+
+tvsedge后的编号会不停变化。
+
+---
+模拟推送udp格式ts流，使用vlc 或者 tstools
+
+
+5个transcoder addon授权费用
+$1,975
+
+
+下面是第三方转码器参数，我们是否能适配？
+
+ 
+
+建议的编码参数如下：
+
+视频：
+编码算法：H.264（必须）
+编码档次：Main Profile或以上
+宽高比：按照节目输入确定，保持宽高比（必须）
+视频帧率：25（推荐），值为帧间隔的1/2（播放所需最优性能，必须）
+关键帧间隔：50帧（推荐）
+码率：CBR（必须）
+平均码率和分辨率：按照方案确定。
+GOP：关（必须）
+B帧：关闭（提高解码效率）（必须）
+反交错预处理：以播放效果无横条确定
+ 
+音频：
+编码算法：AAC_LC（必须）
+声道：双声道
+采样率：44.1khz
+音频码率：96kbps（建议不要超过128kbps）
+音频增益：视音频大小调节，建议不要超过15dB
+
+
+

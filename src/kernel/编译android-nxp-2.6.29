@@ -1,0 +1,176 @@
+1 20100730 合并完成 开始编译
+把android-nxp-2.6.29 放到os/oslinux/comps/kernel目录中
+修改makefile 不让他打补丁
+原始的 有.patch  .unpacked  这些步骤会生成空文件，没有任何作用，只是一个target 可以解压缩linux kernel 同时打补丁
+关于配置文件也要合并：nxp合android的配置文件的组合
+改变makefile里面的 KERNEL_OBJ_DIR 使得生成的obj文件 到另一个目录中
+改变makefile里面的 KERNEL_NAME    使得make去编译android-nxp-2.6.29 这个目录
+在config里面添加 pnx8473_android_defconfig 
+
+注意：@$(INSTALL) -d $(@D) 着一条可以创建一个目录！！！！不能去掉
+
+我已经把.config拷贝过去了 怎么在编译的过程中出现 让我选择配置呢？ 难道是现在的make menuconfig 跟 原来的.config 格式 个数不配套？！
+
+我在output/obj/pnx8473_android 目录下 make menuconfig
+
+我用nxp的.config 结合 goldfish_armv7_defconfig 
+下面我比较一下 这两个config文件的区别
+Goldfish: G
+Nxp:N
+
+1 General setup
+  G：Enable the Anonymous Shared Memory Subsystem   
+2 Enable loadable module support 
+  G:没选
+  N：选了
+3 Enable the block layer
+  都选了 一样
+4 System Type
+   G：选择了Support Thumb user binaries -------------------------------------
+    N：没有选
+5 bus support 
+6 kernel features
+   G:选择了Tickless System (Dynamic Ticks)  N没有
+	区别比较大 -----------------------------------------------------------------
+7 boot options 没有区别
+8 cpu power management 没有区别
+9 Floating point emulation 有改动---------------------------------
+  我可以给选择成一样的，但是 goldfish 的 不能选择 写死的形式 这种形式怎么没有合过来呢？
+10 Userspace binary formats有改动 --------------------------------------
+ G：选择1，3两项  N选择1 一项  （G是[]  N是<> 为何）
+11 Power management options 有改动 ----------------------------
+  按照G的来配置 关系不大  但是G N结构不一样啊！！
+
+1x  Device Drivers->Staging drivers->Exclude Staging drivers from being built  (binder)
+
+
+至于有的[]有的<> 是因为[*] Enable loadable module support  这个不选择的话，就没有<>了全部是[]
+[]只有空*两种状态  <>有空*M 3 中状态
+
+
+
+开始编译了：
+1 pagemap.h:399: error: expected string literal before 'ARM'
+  pagemap.h:409: error: expected string literal before 'ARM'
+2 process.c:395: error: 'PSR_ISETSTATE' undeclared (first use in this function)
+  原因：arm/include/asm/uaccess.h 没有合 #include <asm/unified.h> ！！应该合上
+3 module.c:262: error: implicit declaration of function 'unwind_table_add' 
+  原因：没有合 #include <asm/unwind.h>
+4 context.c:34: error: 'mm_context_t' has no member named 'id_lock'
+  原因：mmu.h 中 mm_context_t 中没有合 spinlock_t id_lock; 应该合
+5 pnx8492.c:62: error: static declaration of 'meminfo' follows non-static declaration
+  setup.h:235: note: previous declaration of 'meminfo' was here
+  原因：在S2.6.29中 asm/setup.h 中增加了一句 extern struct meminfo meminfo;
+  先按照竹林的方式改，但是应该有更好的方法，没有明白这里的原因
+6 globaltimer.c:131: error: incompatible types when initializing type 'const struct cpumask *' using type 'cpumask_t'
+  原因：一个是指针，一个不是指针 先按照朱林的改 l131 ，原因待查
+7 localtimer.c:207: error: incompatible types when assigning to type 'const struct cpumask *' from type 'const struct cpumask'
+  原因：同上！
+8 nx_dmac_1902.h:99: error: field 'slave' has incomplete type
+  原因：include/linux/dmaengine.h应该保留S2.6.28 我用的是S2.6.29的（nxp没有改这个文件）
+9 gpio.c:41: error: 'IRQ_MAX_NBR' undeclared here (not in a function)
+  原因：mach-apollo/ gpio.h  把#include <mach/irqs.h>放开（为什么n2.6.28.10不用放开呢？）
+10 cpuset.c:1360: error: 'task' undeclared (first use in this function) #######重要#######
+  原因：cpuset_can_attach函数中有一段
+  	if ((current != task) && (!capable(CAP_SYS_ADMIN))) {
+		const struct cred *cred = current_cred(), *tcred;
+
+		if (cred->euid != tcred->uid && cred->euid != tcred->suid)
+			return -EPERM;
+	}
+  这段是android加的！ nxp并没有改动这个文件
+  current应该是一个全局变量 
+ 网上有人说这个问题。
+  暂时注释掉  ====================================================
+11 i2c-core.c:1128: error: 'const struct i2c_algorithm' has no member named 'algo_control'
+  原因：没有合并include/linux/i2c.h  朱林合了，我的没有合N2.6.28.10  我保留了S2.6.29的
+12 i2c_phlm.c:1130: error: unknown field 'resume' specified in initializer
+  原因：i2c_phlm.c l1128 static struct dev_pm_ops i2c_phlm_dev_pm_ops = { 这行没有合
+
+12 nx_nand.c:2198: error: 'NAND_ALLOW_CLEAR_BBT' undeclared (first use in this function)
+  原因：nand部分没有合  android对mtd/nand/nand_base.c也有少许修改
+  先以朱林的为准，合nxp的代码
+  我不明白为什么nxp改了大量的mtd的代码！他有病啊
+  主要是增加了一个 CONFIG_MTD_PERF_MEAS 宏 和 MTD_SKIP_BB_FOR_SQUASHFS
+  但是都没有选择打开
+13  jffs2/wbuf.c:1137: error: too few arguments to function  >mtd->block_markbad
+  原因：nxp把这个函数的参数个数给改了，你说他是不是吃饱了没事做阿
+  jffs2 我原来没有合，保持了S2.6.29原样，但是不合就编译不过去，只能合了nxp 
+14 LIPP_6300ETH/comps/tmbslPhyEN2512/en2512/GPL/Common/gpl_ctx_abs.c:79: error: 'dk_context_t' has no member named 'priv'
+  原因：nxp在include/linux/netdevice.h 中的 net_device结构体中增加了 
+ void	*priv;	/* pointer to private data	*/ 我没有合 
+15 drivers/usb/host/ehci-hcd.c:1046:2: error: #error "missing bus glue for ehci-hcd"
+  原因：usb nxp也改了很多（android只在gadget中增加了几个文件，其他的没有改） 全和吧，以后再找原因
+
+16 编译的时候怎么没有CC的打印呢？
+  原因：gmake -s -C /home/gaojie/nxpsdk/SRC/target/build/linux/kernel
+  在那个.sh文件中有 
+if [ "$_TMTGTREL" == "debug" ]; then
+   export MAKE='gmake'
+else
+   export MAKE='gmake -s' 【关键是这里】
+fi
+
+17 gmake[3]:正在离开目录 `/home/gaojie/nxpsdk/SRC/target/src/sd/os/oslinux/comps/kernel/android-nxp-2.6.29'
+install: 无法 stat “/home/gaojie/nxpsdk/SRC/target/output/objs/pnx8473_android/arch/arm/mach-apollo/sata.ko”: 没有那个文件或目录
+  原因： 这时已经生成了 vmlinux.bin
+     在build/kernel目录中 定义了编译内核的规则：
+     @$(MAKE) -C $(_TMROOT)/sd/os/oslinux/comps/kernel all kernel_bin_install
+      应该是在 kernel_bin_install 这个阶段出的错误
+      @$(INSTALL) $(KERNEL_OBJ_DIR)/arch/arm/mach-apollo/sata.ko $(MODULE_INSTALL_LOC)/lib/modules/2.6.28.10/sata/ 这步出错
+     sata部分没有合
+      drivers/ata目录  我当时不知道nxp为什么要改标准的驱动 所以没有合  导致kconfig 也没有合 make menuconfig的时候都没有apollo sata
+      的选项。以后有时间仔细看看为什么要改这里
+  选择M后 sata编译不过去 因为 include/linux/libata.h没有合并 哎！
+
+18 这里制作所有.ko的目录
+	kernel_bin_install: 
+	@$(INSTALL) -d $(MODULE_INSTALL_LOC)/lib/modules/2.6.28.10/sata 【AAAAA】
+而：
+export MODULE_INSTALL_LOC=${NXP_BASE_ROOT}/target/output/imgs/${STB_HW_CONFIG}-${STB_SW_CONFIG}-${_TMTOOLCHAIN}-${GCC_VERSION}-${_TMTGTOS}-${_TMTGTREL}/${_TMTGTREL}
+所以最后.ko文件生成到了
+/nxpsdk/SRC/target/output/imgs/summit-singlehd_license_free-gnu-4.4.0-linux-retail/retail
+注意这里的 lib/modules/下面有2.6.28.10 和 2.6.29   
+sata就没有安装到这里 因为 看上面标示【AAAAA】的地方，哪里写死了 2.6.28.10  改成2.6.29 就好了
+
+
+19 终于编译通过
+
+20 运行的时候install KAL的时候出错
+	Running insmod now .......
+	lnxKKALDrv: Unknown symbol down_timeout_interruptible
+  原因：没有合并 kernel/semaphore.c 中的  __down_timeout_interruptible函数，朱林合了，我保留了S2.6.29的原样
+
+问题：
+通过修改 gmake V=1  可以看到实际上使用的编译器是 arm-linux-uclibcgnueabi-gcc 
+注意： kernel的 makefile 中是 CROSS_COMPILE   ?= arm-none-linux-gnueabi-  条件赋值  说明之前已经赋值了
+这个是在过呢sh环境变量文件里面指定的
+
+其他问题：
+drivers/switch   Switch class support  这个是android增加的 但是怎么goldfish的默认配置都没有打开呢？
+Android2.1 编译完成后都生成了什么东西？
+
+segmentation fault
+
+This corresponds to the same emulator-specific machine than "goldfish"
+except that it emulates an ARMv7 CPU with VFP and NEON instructions.
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+

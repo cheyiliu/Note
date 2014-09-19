@@ -1,0 +1,5 @@
+github界面设计简洁，注册用户后，仓库地址如下：
+https://github.com/gaojiexxx/note
+
+支持桌面和移动2个版本。
+在桌面版创建的仓库上点击“star” 才能在手机版上看到，什么逻辑。

@@ -1,0 +1,112 @@
+14 unity & gnome
+	Unity 是由Canonical公司(Ubuntu项目领导者)开发,u11.04开始作为标准桌面
+有gnome classic 和 gnome 
+gnome-shell 功能更强大，是一个开放系统，可随意下载主题。
+Gnome Tweak Tool 设置工具，可以设置Theme。
+Advanced Settings 可以设置的项很多很多这说明
+
+	公司u11.10安装的gnome版本是3.2.1(System Monitor->System显示（14.04没有这个选项卡了）)
+
+GTK(GIMP Toolkit)是一套跨多种平台的图形工具包,最初是为GIMP写的，发展为一个功能强大、
+设计灵活的一个通用图形库。特别是被GNOME选中使得GTK+广为流传
+
+
+
+gnome-session-fallback(2.9k) 依赖 
+gnome-session-flashback(70k) 依赖 
+gnome-panel:launcher and docking facility for GNOME
+metacity: lightweight GTK+ window manager
+nautilus: file manager and graphical shell for GNOME
+
+
+
+
+
+https://www.gnome.org/getting-gnome/
+GNOME 3 
+
+
+http://ubuntugnome.org/download/
+Ubuntu GNOME
+Ubuntu GNOME is an official Ubuntu flavour which provides a complete GNOME 3 experience. Ubuntu GNOME 14.04 includes GNOME 3.10.
+猜测意思是：集成了GNOME 3.10 的ubuntu 14.04
+提供了一个gnome-3.12.iso  900M
+
+
+http://ubuntugnome.org/ubuntu-gnome-14-04-1-lts/
+提供ubuntu14.04.1 版本的Ubuntu gnome （猜测：官方ubuntu14.04.1 加上gnome，那么这跟原版+gnome-session-fallback有何区别呢？）
+
+Ubuntu GNOME 14.04 LTS
+Ubuntu GNOME is an official flavour of Ubuntu, featuring the GNOME desktop environment. Ubuntu GNOME is a mostly pure GNOME desktop experience built from the Ubuntu repositories. This is our very first Long Term Release (LTS) version.
+
+说明ubuntu gnome 也是官方维护，使用纯粹的gnome环境
+下载地址：
+http://cdimage.ubuntu.com/ubuntu-gnome/releases/14.04.1/release/
+
+
+http://cdimage.ubuntu.com/ 目录下有很多dailybuild 内容
+
+
+https://wiki.gnome.org/Projects/Clutter
+Clutter is an open source (LGPL 2.1) software library for creating fast, compelling, portable, and dynamic graphical user interfaces. It is a core part of Gnome3, it is used by the GnomeShell, and is supported by the open source community.
+
+
+
+------------
+公司u11.10 有命令行：
+一下那一组工具的版本一部分是3.2.1
+gnome-calculator  就是我常用的计算器
+gnome-shell(v3.2.1) 见截图，与unity还是有很大区别的（以前总是搞混）
+GNOME Shell：The GNOME desktop environment from where you can search and start applications, switch between windows, etc.
+gnome-shell是 gnome 3 的窗口管理器
+gnome-wm 窗口管理器
+gnome-screenshot: 屏幕截图程序
+gnome-system-monitor： 系统监控程序
+我最常用的那个叫做gnome classic
+
+
+
+
+gnome-panel: launcher and docking facility for GNOME
+这个包提供的程序有：
+gnome-desktop-item-edit 编辑.desktop 或 .directory 文件
+gnome-panel 经典桌面的状态条，程序选择列表等，kill后这些就消失了，之前打开的窗口管理器可以正常工作。
+再运行她，那些内容又恢复了。
+panel-test-applets  能运行很多applet utility 比如eye
+
+
+-------
+安装gnome-session-fallback 包含 gnome-panel 还包含：
+gnome-session-bin ：GNOME Session Manager 啥是session管理（提供gnome-session程序）
+gnome-session-common
+metacity
+nautilus
+notification-daemon 
+unity-settings-daemon（是那个unity吗）
+
+
+选择gnome时系统运行：
+gnome-shell
+gnome-session --session=gnome
+
+选择gnome classic：
+gnome-panel
+gnome-session --session=gnome-classic
+
+选择gnome classic (无效果)
+gnome-panel
+gnome-session --session=gnome-fallback
+
+u14.04 装完，安装 gnome-shell 然后logout
+显示：
+gnome  (这个是gnome-shell)
+gnome flashback xx (经典版本无特效)
+gnome flashback xxxx(经典版本有特效)
+ubuntu (unity)
+
+u14.04 安装gnome-panel 出现选项 gnome(compiz) 和 gnome(metacity) 这与u11.10 不同(或者是因为我没有执行 gnome-session-fallback的缘故?)
+还有安装gnome-panel 并没有安装gnome-session-bin  为什么系统中还是有 gnome-session 命令在运行呢？
+
+
+fedora用的也是gnome
+

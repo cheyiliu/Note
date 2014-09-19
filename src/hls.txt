@@ -1,0 +1,8 @@
+#EXT-X-PLAYLIST-TYPE: EVENT  时移功能
+
+这就是简略的M3U8文件。其中要注意#EXTINF:[int/double]，表示这个片段的总时长，这个字段
+很关键我们可以通过它找见跳转位置的TS片段； #EXT-X-DISCONTINUITY，表示一个新的时间点
+开始，也就是说数据流的时间戳从此刻开始从0开始。那你可要准备好换算了，否则IMediaSeeking::SetPositions
+可就找不见了哦。当然有部分M3U8没有这个字段，大部分是影片总长度比较小的（不是绝对的）。
+
+

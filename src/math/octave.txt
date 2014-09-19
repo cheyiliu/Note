@@ -1,0 +1,13 @@
+公司的octave能用dct2  在家就不行  原因是版本低（3.2.3），需要下载并安装
+sudo apt-get install octave-signal
+
+A= imread('img.jpg')
+[m,n]=size(A)
+B=dct2(A)
+
+octave:1> y=wavread('/root/Multimedia/xxx.wav')
+warning: broken pipe -- some output may be lost
+octave:2> y=wavread('/root/Multimedia/xxx.wav');
+octave:3> plot(y)
+
+

@@ -1,0 +1,104 @@
+系统直接崩溃
+
+gaojie@gaojie:~/Work/Notes/git$ sudo apt-get remove python
+[sudo] password for gaojie: 
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+下列软件包是自动安装的并且现在不需要了：
+  xbmc-pvr-mythtv-cmyth lib32bz2-1.0 vim-gui-common ia32-libs-multiarch:i386 libva-x11-1 libqt4-declarative:i386
+  linux-headers-2.6.38-8-generic liblcms1:i386 libqt4-qt3support:i386 libcupsimage2:i386 xbmc-pvr-nextpvr liblockdev1 xbmc-pvr-vuplus
+  libmicrohttpd5 libbluray1 linux-headers-2.6.38-8 gir1.2-indicate-0.6 linux-headers-3.0.0-12 libqt4-test:i386 libqt4-script:i386
+  libqt4-designer:i386 libqt4-network:i386 libtinyxml2.6.2 libxxf86vm1:i386 libgl1-mesa-dri:i386 libcec2 libgl1-mesa-glx:i386
+  xbmc-pvr-dvbviewer libglapi-mesa:i386 libshairport1 libqt4-opengl:i386 gtk3-engines-unico lib32ffi6 libqt4-xmlpatterns:i386 libpcrecpp0
+  gir1.2-appindicator3-0.1 lib32asound2 libgdbm3:i386 xbmc-pvr-vdr-vnsi xbmc-bin dkms libssl-dev libaacs0 libssl-doc swig xbmc-pvr-argustv
+  libvncserver0 liblzo2-2 libqt4-sql:i386 libqt4-svg:i386 libxss1:i386 xbmc-pvr-tvheadend-hts lib32ncursesw5 gir1.2-wnck-3.0 libqtgui4:i386
+  linux-headers-3.0.0-12-generic libgtkspell3-0 libvdpau1 xbmc-pvr-njoy gir1.2-launchpad-integration-3.0 libgtkhex0
+  xbmc-pvr-mediaportal-tvserver libva-glx1 libqt4-scripttools:i386 libaudio2:i386 python2.7-dev librsync1 libnfs1 libmng1:i386
+  libllvm2.9:i386 libgeis1 libgrail1 libevemu1 libframe1
+使用'apt-get autoremove'来卸载它们
+将会安装下列额外的软件包：
+  compiz-core compiz-plugins compiz-plugins-default docbook-xsl evolution-data-server-common hpijs hplip-cups icoutils kate-data katepart
+  kde-runtime kde-runtime-data kdebase-runtime kdelibs-bin kdelibs5-data kdelibs5-plugins kdoctools kubuntu-debug-installer libattica0
+  libcamel-1.2-29 libclucene0ldbl libdecoration0 libdlrestrictions1 libebackend-1.2-1 libebook1.2-12 libecal1.2-10 libedata-book-1.2-11
+  libedata-cal-1.2-13 libedataserver1.2-15 libedataserverui-3.0-1 libevemu1 libframe1 libgeis1 libgrail1 libhpmud0 libiodbc2
+  libkatepartinterfaces4 libkcmutils4 libkde3support4 libkdecore5 libkdesu5 libkdeui5 libkdewebkit5 libkdnssd4 libkemoticons4 libkfile4
+  libkhtml5 libkidletime4 libkio5 libkjsapi4 libkjsembed4 libkmediaplayer4 libknewstuff3-4 libknotifyconfig4 libkntlm4 libkparts4 libkpty4
+  libkrosscore4 libktexteditor4 libnepomuk4 libnepomukquery4a libnepomukutils4 libntrack-qt4-1 libntrack0 libphonon4 libplasma3
+  libpolkit-qt-1-1 libqapt-runtime libqapt1 libqca2 libqt4-dbus libqt4-dbus:i386 libqt4-declarative libqt4-declarative:i386
+  libqt4-declarative-gestures libqt4-declarative-particles libqt4-declarative-shaders libqt4-designer libqt4-designer:i386 libqt4-dev
+  libqt4-help libqt4-network libqt4-network:i386 libqt4-opengl libqt4-opengl:i386 libqt4-opengl-dev libqt4-qt3support libqt4-qt3support:i386
+  libqt4-script libqt4-script:i386 libqt4-scripttools libqt4-scripttools:i386 libqt4-sql libqt4-sql:i386 libqt4-sql-mysql libqt4-sql-sqlite
+  libqt4-svg libqt4-svg:i386 libqt4-test libqt4-test:i386 libqt4-xml libqt4-xml:i386 libqt4-xmlpatterns libqt4-xmlpatterns:i386 libqtcore4
+  libqtcore4:i386 libqtgui4 libqtgui4:i386 libsane-hpaio libsolid4 libsoprano4 libstreamanalyzer0 libstreams0 libthreadweaver4 libvirtodbc0
+  ntrack-module-libnl-0 oxygen-icon-theme phonon phonon-backend-gstreamer plasma-scriptengine-javascript python3 python3-minimal qapt-batch
+  qdbus:i386 qt4-linguist-tools qt4-qmake qt4-qmlviewer shared-desktop-ontologies soprano-daemon vim vim-common vim-gui-common vim-runtime
+  vim-tiny virtuoso-minimal virtuoso-opensource-6.1-bin virtuoso-opensource-6.1-common
+建议安装的软件包：
+  docbook-xsl-doc-html docbook-xsl-doc-pdf docbook-xsl-doc-text docbook-xsl-doc libsaxon-java libxalan2-java docbook-xsl-saxon fop xalan
+  dbtoepub hpijs-ppds hplip-doc libterm-readline-gnu-perl libterm-readline-perl-perl djvulibre-bin hspell libqca2-plugin-cyrus-sasl
+  libqca2-plugin-gnupg libqca2-plugin-ossl libqt4-declarative-folderlistmodel libqt4-declarative-folderlistmodel:i386
+  libqt4-declarative-gestures:i386 libqt4-declarative-particles:i386 libqt4-declarative-shaders:i386 qt4-qmlviewer:i386 libmysqlclient-dev
+  libpq-dev libsqlite3-dev qt4-dev-tools unixodbc-dev libqt4-dev:i386 qt4-qtconfig qt4-qtconfig:i386 phonon-backend-vlc phonon-backend-xine
+  phonon-backend-mplayer python3-doc python3-tk ctags vim-doc vim-scripts indent
+推荐安装的软件包：
+  libqt4-sql-mysql:i386 libqt4-sql-odbc:i386 libqt4-sql-psql:i386 libqt4-sql-sqlite:i386
+The following packages will be REMOVED
+  aisleriot alacarte apparmor apparmor-utils apport apport-gtk apt-xapian-index aptdaemon apturl apturl-common at-spi
+  banshee-extension-ubuntuonemusicstore bluez bluez-alsa bluez-gstreamer c2esp caribou checkbox checkbox-gtk command-not-found compiz
+  compiz-gnome compiz-plugins-main compiz-plugins-main-default compizconfig-backend-gconf computer-janitor computer-janitor-gtk deja-dup
+  duplicity evolution-data-server evolution-indicator evolution-webcal firefox firefox-globalmenu firefox-gnome-support foo2zjs
+  foomatic-db-compressed-ppds gconf-editor gconf2 gdm gdm-guest-session gedit ghex gimp gir1.2-mutter-3.0 gitosis gksu gnome-about
+  gnome-applets gnome-applets-data gnome-bluetooth gnome-codec-install gnome-control-center gnome-doc-utils gnome-media gnome-media-common
+  gnome-orca gnome-panel gnome-panel-bonobo gnome-panel-data gnome-search-tool gnome-session gnome-session-fallback gnome-shell gnome-sudoku
+  gnome-terminal gnome-terminal-data gnome-themes-standard gnome-tweak-tool gnome-user-share gstreamer0.10-gconf gucharmap gwibber
+  gwibber-service gwibber-service-facebook gwibber-service-identica gwibber-service-twitter hplip hplip-data ia32-libs ibus ibus-pinyin
+  ibus-table indicator-datetime indicator-power jockey-common jockey-gtk language-selector-common language-selector-gnome
+  launchpad-integration libbonoboui2-0 libcompizconfig0 libgksu2-0 libgnome-media-profiles-3.0-0 libgnome-media0 libgnome-vfs2.0-cil
+  libgnome2-0 libgnome2-common libgnome2.24-cil libgnomeui-0 libgnomevfs2-0 libgnomevfs2-common libgweather-3-0 libgweather-common
+  libgweather1 libgwibber-gtk2 libgwibber1 libgwibber2 libmetacity-private0 libmutter0 libpurple-bin libreoffice-calc libreoffice-emailmerge
+  libreoffice-gnome libreoffice-impress libsyncdaemon-1.0-1 libubuntuone-1.0-1 libubuntuone1.0-cil libunity-2d-private0 light-themes
+  lsb-release meld mercurial mercurial-common metacity metacity-common mutter-common mysql-query-browser nautilus-open-terminal
+  nautilus-share network-manager-gnome nvidia-common onboard oneconf openprinting-ppds pitivi ptouch-driver pxljr python python-appindicator
+  python-apport python-apt python-apt-common python-aptdaemon python-aptdaemon-gtk python-aptdaemon.gtk3widgets python-aptdaemon.gtkwidgets
+  python-argparse python-bluez python-brlapi python-cairo python-central python-chardet python-configglue python-crypto python-cups
+  python-cupshelpers python-dateutil python-dbus python-debian python-defer python-dev python-egenix-mxdatetime python-egenix-mxtools
+  python-farsight python-gconf python-gdbm python-glade2 python-gmenu python-gnome2 python-gnomekeyring python-gnupginterface python-gobject
+  python-gobject-2 python-gobject-cairo python-gst0.10 python-gtk2 python-gtksourceview2 python-gtkspell python-httplib2 python-ibus
+  python-imaging python-indicate python-keyring python-launchpad-integration python-launchpadlib python-lazr.restfulclient python-lazr.uri
+  python-libproxy python-libxml2 python-louis python-mako python-markdown python-markupsafe python-notify python-numpy python-oauth
+  python-openssl python-pam python-papyon python-pexpect python-piston-mini-client python-pkg-resources python-problem-report python-protobuf
+  python-pyatspi2 python-pycurl python-pygoocanvas python-pyinotify python-pyorbit python-qt3 python-rdflib python-serial python-setuptools
+  python-simplejson python-sip python-smbc python-software-properties python-speechd python-support python-telepathy python-twisted-bin
+  python-twisted-core python-twisted-names python-twisted-web python-ubuntuone-client python-ubuntuone-control-panel
+  python-ubuntuone-storageprotocol python-uno python-virtkey python-vte python-wadllib python-webkit python-wnck python-wsgi-intercept
+  python-xapian python-xdg python-xkit python-zope.interface rastertosag-gdi sessioninstaller software-center software-properties-common
+  software-properties-gtk splix system-config-printer-common system-config-printer-gnome system-config-printer-udev telepathy-butterfly
+  tomboy totem totem-mozilla totem-plugins ubuntu-artwork ubuntu-desktop ubuntu-minimal ubuntu-sso-client ubuntu-standard
+  ubuntu-system-service ubuntu-wallpapers ubuntuone-client ubuntuone-client-gnome ubuntuone-control-panel ubuntuone-control-panel-gtk
+  ubuntuone-couch ubuntuone-installer ufw unattended-upgrades unity unity-2d unity-2d-launcher unity-2d-panel unity-2d-places unity-2d-spread
+  unity-common unity-lens-applications unity-lens-files unity-place-applications unity-place-files update-manager update-manager-core
+  update-notifier update-notifier-common usb-creator-common usb-creator-gtk vim-gnome virtualbox virtualbox-dkms virtualbox-ose-qt
+  virtualbox-qt xbmc xdiagnose xul-ext-ubufox zeitgeist zeitgeist-core zeitgeist-datahub zeitgeist-extension-fts
+The following NEW packages will be installed
+  docbook-xsl icoutils kate-data katepart kde-runtime kde-runtime-data kdebase-runtime kdelibs-bin kdelibs5-data kdelibs5-plugins kdoctools
+  kubuntu-debug-installer libattica0 libclucene0ldbl libdlrestrictions1 libevemu1 libframe1 libgeis1 libgrail1 libiodbc2
+  libkatepartinterfaces4 libkcmutils4 libkde3support4 libkdecore5 libkdesu5 libkdeui5 libkdewebkit5 libkdnssd4 libkemoticons4 libkfile4
+  libkhtml5 libkidletime4 libkio5 libkjsapi4 libkjsembed4 libkmediaplayer4 libknewstuff3-4 libknotifyconfig4 libkntlm4 libkparts4 libkpty4
+  libkrosscore4 libktexteditor4 libnepomuk4 libnepomukquery4a libnepomukutils4 libntrack-qt4-1 libntrack0 libphonon4 libplasma3
+  libpolkit-qt-1-1 libqapt-runtime libqapt1 libqca2 libqt4-sql-mysql libsolid4 libsoprano4 libstreamanalyzer0 libstreams0 libthreadweaver4
+  libvirtodbc0 ntrack-module-libnl-0 oxygen-icon-theme phonon phonon-backend-gstreamer plasma-scriptengine-javascript python3 python3-minimal
+  qapt-batch shared-desktop-ontologies soprano-daemon virtuoso-minimal virtuoso-opensource-6.1-bin virtuoso-opensource-6.1-common
+下列软件包将被升级：
+  compiz-core compiz-plugins compiz-plugins-default evolution-data-server-common hpijs hplip-cups libcamel-1.2-29 libdecoration0
+  libebackend-1.2-1 libebook1.2-12 libecal1.2-10 libedata-book-1.2-11 libedata-cal-1.2-13 libedataserver1.2-15 libedataserverui-3.0-1
+  libhpmud0 libqt4-dbus libqt4-dbus:i386 libqt4-declarative libqt4-declarative:i386 libqt4-declarative-gestures libqt4-declarative-particles
+  libqt4-declarative-shaders libqt4-designer libqt4-designer:i386 libqt4-dev libqt4-help libqt4-network libqt4-network:i386 libqt4-opengl
+  libqt4-opengl:i386 libqt4-opengl-dev libqt4-qt3support libqt4-qt3support:i386 libqt4-script libqt4-script:i386 libqt4-scripttools
+  libqt4-scripttools:i386 libqt4-sql libqt4-sql:i386 libqt4-sql-sqlite libqt4-svg libqt4-svg:i386 libqt4-test libqt4-test:i386 libqt4-xml
+  libqt4-xml:i386 libqt4-xmlpatterns libqt4-xmlpatterns:i386 libqtcore4 libqtcore4:i386 libqtgui4 libqtgui4:i386 libsane-hpaio qdbus:i386
+  qt4-linguist-tools qt4-qmake qt4-qmlviewer vim vim-common vim-gui-common vim-runtime vim-tiny
+升级了 63 个软件包，新安装了 74 个软件包，要卸载 297 个软件包，有 375 个软件包未被升级。
+需要下载 92.6 MB 的软件包。
+解压缩后将会空出 489 MB 的空间。
+您希望继续执行吗？[Y/n]

@@ -1,0 +1,120 @@
+ubuntu11.10 执行：
+
+sudo apt-get remove  libgtk2.0
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+注意，根据正则表达式 libgtk2.0 选中了 libgtk2.0-0
+注意，根据正则表达式 libgtk2.0 选中了 libgtk2.0-cil
+注意，根据正则表达式 libgtk2.0 选中了 libgtk2.0-common
+注意，根据正则表达式 libgtk2.0 选中了 libgtk2.0-doc
+注意，根据正则表达式 libgtk2.0 选中了 libgtk2.0-dev
+注意，根据正则表达式 libgtk2.0 选中了 libgtk2.0-0-dbg
+注意，根据正则表达式 libgtk2.0 选中了 libgtk2.0-bin
+注意，根据正则表达式 libgtk2.0 选中了 libgtk2.0-cil-dev
+软件包 libgtk2.0-0-dbg 还未安装，因而不会被卸载
+软件包 libgtk2.0-cil-dev 还未安装，因而不会被卸载
+软件包 libgtk2.0-doc 还未安装，因而不会被卸载
+下列软件包是自动安装的并且现在不需要了：
+  libatk1.0-0:i386 vim-gui-common telepathy-indicator libxcomposite1:i386 libxrandr-dev libwrap0:i386 libxdamage-dev libsamplerate0:i386
+  putty-tools gir1.2-indicate-0.6 libxfixes-dev x11proto-xinerama-dev x11proto-render-dev libxi-dev libjack-jackd2-0:i386 libchm1
+  wireshark-common libpixman-1-dev libnspr4-0d:i386 libcairo2:i386 libfontconfig1-dev x11proto-randr-dev libxinerama-dev gtk3-engines-unico
+  libdatrie1:i386 libatk1.0-dev gir1.2-appindicator3-0.1 libjson0:i386 libgdk-pixbuf2.0-0:i386 libgdk-pixbuf2.0-dev libpixman-1-0:i386
+  x11proto-fixes-dev libcairo-script-interpreter2 libxinerama1:i386 libxft2:i386 liboverlay-scrollbar3-0.2-0 libspeexdsp1:i386
+  x11proto-damage-dev libthai0:i386 libcairo2-dev libasound2:i386 libflac8:i386 libpango1.0-dev libvorbisenc2:i386 libasyncns0:i386
+  filezilla-common libjasper1:i386 mysql-gui-tools-common libgtkspell3-0 libxcomposite-dev libxrender-dev gir1.2-launchpad-integration-3.0
+  libpango1.0-0:i386 libxft-dev libpulse0:i386 x11proto-composite-dev libxcb-render0:i386 libvorbis0a:i386 libxcursor1:i386 libxcb-shm0:i386
+  libnatpmp1 libxrandr2:i386 libnss3-1d:i386 libsndfile1:i386 libxcursor-dev libasound2-plugins:i386 libogg0:i386 libgeis1 libgrail1
+  libevemu1 libframe1 gnome-shell-common
+使用'apt-get autoremove'来卸载它们
+将会安装下列额外的软件包：
+  akonadi-backend-mysql akonadi-server apturl-kde brasero-cdrkit checkbox compiz-core compiz-plugins compiz-plugins-default docbook-xsl
+  evolution-data-server evolution-data-server-common gnome-shell-common jockey-common kate-data katepart kde-runtime kde-runtime-data
+  kdebase-runtime kdelibs-bin kdelibs5-data kdelibs5-plugins kdepim-runtime kdepimlibs-kio-plugins kdesudo kdoctools libakonadi-contact4
+  libakonadi-kabc4 libakonadi-kcal4 libakonadi-kde4 libakonadi-kmime4 libakonadiprotocolinternals1 libattica0 libboost-program-options1.46.1
+  libbrasero-media3-1 libcamel-1.2-29 libclucene0ldbl libdecoration0 libdlrestrictions1 libdmtx0a libebackend-1.2-1 libebook1.2-12
+  libecal1.2-10 libedata-book-1.2-11 libedata-cal-1.2-13 libedataserver1.2-15 libedataserverui-3.0-1 libevemu1 libframe1 libgeis1 libgrail1
+  libiodbc2 libkabc4 libkatepartinterfaces4 libkcal4 libkcalcore4 libkcalutils4 libkcmutils4 libkde3support4 libkdecore5 libkdesu5 libkdeui5
+  libkdewebkit5 libkdnssd4 libkemoticons4 libkfile4 libkhtml5 libkidletime4 libkimap4 libkio5 libkjsapi4 libkjsembed4 libkldap4 libkmbox4
+  libkmediaplayer4 libkmime4 libknewstuff2-4 libknewstuff3-4 libknotifyconfig4 libkntlm4 libkparts4 libkpimidentities4 libkpimtextedit4
+  libkpimutils4 libkprintutils4 libkpty4 libkresources4 libkrosscore4 libktexteditor4 libmailtransport4 libmicroblog4 libnepomuk4
+  libnepomukquery4a libnepomukutils4 libnm-gtk-common libntrack-qt4-1 libntrack0 libphonon4 libplasma3 libpolkit-qt-1-1 libprison0
+  libqapt-runtime libqapt1 libqca2 libqrencode3 libqt4-dbus libqt4-dbus:i386 libqt4-declarative libqt4-declarative:i386
+  libqt4-declarative-gestures libqt4-declarative-particles libqt4-declarative-shaders libqt4-designer libqt4-designer:i386 libqt4-dev
+  libqt4-help libqt4-network libqt4-network:i386 libqt4-opengl libqt4-opengl:i386 libqt4-opengl-dev libqt4-qt3support libqt4-qt3support:i386
+  libqt4-script libqt4-script:i386 libqt4-scripttools libqt4-scripttools:i386 libqt4-sql libqt4-sql:i386 libqt4-sql-mysql libqt4-sql-sqlite
+  libqt4-svg libqt4-svg:i386 libqt4-test libqt4-test:i386 libqt4-xml libqt4-xml:i386 libqt4-xmlpatterns libqt4-xmlpatterns:i386
+  libqtassistantclient4 libqtcore4 libqtcore4:i386 libqtgui4 libqtgui4:i386 libsolid4 libsoprano4 libstreamanalyzer0 libstreams0
+  libthreadweaver4 mysql-server-core-5.1 ntrack-module-libnl-0 oxygen-icon-theme phonon phonon-backend-gstreamer
+  plasma-scriptengine-javascript polkit-kde-1 python-kde4 python-qt4 python-ubuntuone-storageprotocol qapt-batch qdbus:i386
+  qt4-linguist-tools qt4-qmake qt4-qmlviewer shared-desktop-ontologies software-properties-kde soprano-daemon unity-common
+  update-notifier-common vim vim-common vim-gui-common vim-runtime vim-tiny xul-ext-ubufox
+建议安装的软件包：
+  akonadi-backend-sqlite akonadi-backend-postgresql dvdauthor readom bonnie++ bootchart bzr cvs fwts nmap smartmontools sox stress
+  docbook-xsl-doc-html docbook-xsl-doc-pdf docbook-xsl-doc-text docbook-xsl-doc libsaxon-java libxalan2-java docbook-xsl-saxon fop xalan
+  dbtoepub evolution evolution-data-server-dbg djvulibre-bin gstreamer0.10-fluendo-mp3 cdrdao hspell libqca2-plugin-cyrus-sasl
+  libqca2-plugin-gnupg libqca2-plugin-ossl libqt4-declarative-folderlistmodel libqt4-declarative-folderlistmodel:i386
+  libqt4-declarative-gestures:i386 libqt4-declarative-particles:i386 libqt4-declarative-shaders:i386 qt4-qmlviewer:i386 libmysqlclient-dev
+  libpq-dev libsqlite3-dev qt4-dev-tools unixodbc-dev libqt4-dev:i386 qt4-qtconfig qt4-qtconfig:i386 phonon-backend-vlc phonon-backend-xine
+  phonon-backend-mplayer libpython2.6 python-qt4-dbg ctags vim-doc vim-scripts indent
+推荐安装的软件包：
+  virtuoso-minimal kubuntu-debug-installer icoutils libqt4-sql-mysql:i386 libqt4-sql-odbc:i386 libqt4-sql-psql:i386 libqt4-sql-sqlite:i386
+The following packages will be REMOVED
+  alacarte apturl at-spi banshee banshee-extension-soundmenu banshee-extension-ubuntuonemusicstore brasero checkbox-gtk chmsee
+  chromium-browser chromium-browser-l10n chromium-codecs-ffmpeg compiz compiz-gnome cssed empathy eog evince evolution-webcal filezilla
+  firefox firefox-globalmenu firefox-gnome-support flashplugin-downloader:i386 flashplugin-installer gbrainy gconf-editor ghex gimp
+  gir1.2-appindicator-0.1 gir1.2-dbusmenu-gtk-0.4 gir1.2-gtk-2.0 gir1.2-vte-0.0 gksu gnome-about gnome-applets gnome-codec-install
+  gnome-control-center gnome-games-common gnome-icon-theme gnome-icon-theme-full gnome-icon-theme-symbolic gnome-mag gnome-mahjongg
+  gnome-panel gnome-panel-bonobo gnome-screensaver gnome-session gnome-session-canberra gnome-session-fallback gnome-shell gnome-sudoku
+  gnome-system-tools gnome-themes-selected gnome-themes-ubuntu gnome-tweak-tool gnomine gnuplot gnuplot-x11 gtk2-engines gtk2-engines-murrine
+  gtk2-engines-pixbuf gwibber gwibber-service gwibber-service-facebook gwibber-service-identica gwibber-service-twitter humanity-icon-theme
+  ibus ibus-gtk ibus-pinyin ibus-table indicator-datetime indicator-power iptux jockey-gtk libappindicator0.1-cil libappindicator1
+  libavahi-ui0 libbonoboui2-0 libcanberra-gtk-module libcanberra-gtk0 libcryptui0 libcvaux2.1 libdbusmenu-gtk3 libecal1.2-8
+  libedata-cal1.2-10 libedataserverui1.2-11 libevince3-3 libevolution libgail-common libgail18 libgcr0 libgimp2.0 libgksu2-0 libglade2-0
+  libglade2.0-cil libgladeui-1-11 libgnome-desktop-2-17 libgnome-media0 libgnome-window-settings1 libgnome2.24-cil libgnomecanvas2-0
+  libgnomekbd4 libgnomeprintui2.2-0 libgnomeui-0 libgoocanvas3 libgtk-sharp-beans-cil libgtk-vnc-1.0-0 libgtk2-perl libgtk2.0-0
+  libgtk2.0-0:i386 libgtk2.0-bin libgtk2.0-cil libgtk2.0-common libgtk2.0-dev libgtkhex0 libgtkhtml-4.0-0 libgtkhtml-4.0-common
+  libgtkhtml-editor-4.0-0 libgtkhtml-editor0 libgtkhtml3.14-19 libgtkmm-2.4-1c2a libgtksourceview2.0-0 libgtkspell0 libgucharmap7
+  libgweather1 libgwibber-gtk2 libgwibber1 libgwibber2 libhighgui2.1 libido-0.1-0 libindicate-gtk2 libindicator3 libindicator6
+  liblaunchpad-integration1 liblaunchpad-integration1.0-cil libmetacity-private0 libmono-addins-gui0.2-cil libnm-gtk0 libnotify0.4-cil
+  libnotify1 liboverlay-scrollbar-0.1-0 liboverlay-scrollbar-0.2-0 libpolkit-gtk-1-0 libreoffice-base-core libreoffice-calc
+  libreoffice-common libreoffice-core libreoffice-draw libreoffice-emailmerge libreoffice-gnome libreoffice-gtk libreoffice-help-en-gb
+  libreoffice-help-en-us libreoffice-impress libreoffice-l10n-en-gb libreoffice-l10n-en-za libreoffice-math libreoffice-style-human
+  libreoffice-writer librsvg2-common libsyncdaemon-1.0-1 libubuntuone-1.0-1 libubuntuone1.0-cil libunique-1.0-0 libunity-misc0 libvte9
+  libwebkitgtk-1.0-0 libwnck22 libwxgtk2.8-0 light-themes meld metacity mysql-admin mysql-query-browser nautilus-share network-manager-gnome
+  nspluginviewer:i386 nspluginwrapper onboard oneconf overlay-scrollbar pitivi policykit-1-gnome putty python-appindicator
+  python-aptdaemon-gtk python-aptdaemon.gtkwidgets python-glade2 python-gmenu python-gnome2 python-gnomekeyring python-gtk2
+  python-gtksourceview2 python-gtkspell python-ibus python-launchpad-integration python-notify python-pygoocanvas python-ubuntuone-client
+  python-ubuntuone-control-panel python-uno python-virtkey python-vte python-webkit python-wnck sessioninstaller shotwell simple-scan
+  software-center ssh-askpass-gnome synaptic system-config-printer-gnome thunderbird thunderbird-globalmenu thunderbird-gnome-support tomboy
+  totem totem-mozilla totem-plugins transmission-gtk ubuntu-artwork ubuntu-mono ubuntu-sso-client ubuntuone-client ubuntuone-client-gnome
+  ubuntuone-control-panel ubuntuone-control-panel-gtk ubuntuone-couch unity unity-asset-pool unity-lens-applications unity-lens-files
+  unity-place-applications unity-place-files update-notifier vim-gnome wireshark xdg-user-dirs-gtk zeitgeist zeitgeist-datahub
+  zeitgeist-extension-fts
+The following NEW packages will be installed
+  akonadi-backend-mysql akonadi-server apturl-kde docbook-xsl gnome-shell-common kate-data katepart kde-runtime kde-runtime-data
+  kdebase-runtime kdelibs-bin kdelibs5-data kdelibs5-plugins kdepim-runtime kdepimlibs-kio-plugins kdesudo kdoctools libakonadi-contact4
+  libakonadi-kabc4 libakonadi-kcal4 libakonadi-kde4 libakonadi-kmime4 libakonadiprotocolinternals1 libattica0 libboost-program-options1.46.1
+  libclucene0ldbl libdlrestrictions1 libdmtx0a libevemu1 libframe1 libgeis1 libgrail1 libiodbc2 libkabc4 libkatepartinterfaces4 libkcal4
+  libkcalcore4 libkcalutils4 libkcmutils4 libkde3support4 libkdecore5 libkdesu5 libkdeui5 libkdewebkit5 libkdnssd4 libkemoticons4 libkfile4
+  libkhtml5 libkidletime4 libkimap4 libkio5 libkjsapi4 libkjsembed4 libkldap4 libkmbox4 libkmediaplayer4 libkmime4 libknewstuff2-4
+  libknewstuff3-4 libknotifyconfig4 libkntlm4 libkparts4 libkpimidentities4 libkpimtextedit4 libkpimutils4 libkprintutils4 libkpty4
+  libkresources4 libkrosscore4 libktexteditor4 libmailtransport4 libmicroblog4 libnepomuk4 libnepomukquery4a libnepomukutils4 libntrack-qt4-1
+  libntrack0 libphonon4 libplasma3 libpolkit-qt-1-1 libprison0 libqapt-runtime libqapt1 libqca2 libqrencode3 libqt4-sql-mysql
+  libqtassistantclient4 libsolid4 libsoprano4 libstreamanalyzer0 libstreams0 libthreadweaver4 mysql-server-core-5.1 ntrack-module-libnl-0
+  oxygen-icon-theme phonon phonon-backend-gstreamer plasma-scriptengine-javascript polkit-kde-1 python-kde4 python-qt4 qapt-batch
+  shared-desktop-ontologies software-properties-kde soprano-daemon
+下列软件包将被升级：
+  brasero-cdrkit checkbox compiz-core compiz-plugins compiz-plugins-default evolution-data-server evolution-data-server-common jockey-common
+  libbrasero-media3-1 libcamel-1.2-29 libdecoration0 libebackend-1.2-1 libebook1.2-12 libecal1.2-10 libedata-book-1.2-11 libedata-cal-1.2-13
+  libedataserver1.2-15 libedataserverui-3.0-1 libnm-gtk-common libqt4-dbus libqt4-dbus:i386 libqt4-declarative libqt4-declarative:i386
+  libqt4-declarative-gestures libqt4-declarative-particles libqt4-declarative-shaders libqt4-designer libqt4-designer:i386 libqt4-dev
+  libqt4-help libqt4-network libqt4-network:i386 libqt4-opengl libqt4-opengl:i386 libqt4-opengl-dev libqt4-qt3support libqt4-qt3support:i386
+  libqt4-script libqt4-script:i386 libqt4-scripttools libqt4-scripttools:i386 libqt4-sql libqt4-sql:i386 libqt4-sql-sqlite libqt4-svg
+  libqt4-svg:i386 libqt4-test libqt4-test:i386 libqt4-xml libqt4-xml:i386 libqt4-xmlpatterns libqt4-xmlpatterns:i386 libqtcore4
+  libqtcore4:i386 libqtgui4 libqtgui4:i386 python-ubuntuone-storageprotocol qdbus:i386 qt4-linguist-tools qt4-qmake qt4-qmlviewer
+  unity-common update-notifier-common vim vim-common vim-gui-common vim-runtime vim-tiny xul-ext-ubufox
+升级了 69 个软件包，新安装了 105 个软件包，要卸载 243 个软件包，有 387 个软件包未被升级。
+需要下载 115 MB 的软件包。
+解压缩后将会空出 526 MB 的空间。
+您希望继续执行吗？[Y/n]n

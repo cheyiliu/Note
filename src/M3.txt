@@ -1,0 +1,856 @@
+1 关于4.0.4环境变量设置
+envsetup.sh 中定义 add_lunch_combo() 函数
+
+
+百事通版本升级检测：
+ro.app_version=1.0.19(单降低这里不行，还要降低下面那行或者只降低下面那行？)
+ro.build.version.incremental=1.0.19
+
+-------------------------------------
+20140707
+m3 的银河，best，华数版本 在代码上是如何区分的。
+
+---------
+M3平台编译问题
+20140629在家用ubuntu 14.04编译，各种错误，提示找不到什么定义。今天在公司就可以编译
+说明家里的环境有问题。
+
+m3 4.0.4 用的编译器是4.4.3
+
+M3编译------------------------
+“
+target SharedLib: libwebcore (out/target/product/generic/obj/SHARED_LIBRARIES/libwebcore_intermediates/LINKED/libwebcore.so)
+out/target/product/generic/obj/STATIC_LIBRARIES/libwebcore_intermediates/libwebcore.a(CSSParser.o): In function `WebCore::CSSParser::lex(void*)':
+/media/master/external/webkit/WebCore/css/CSSParser.cpp:4533: undefined reference to `WebCore::CSSParser::lex()'
+collect2: ld returned 1 exit status
+make: *** [out/target/product/generic/obj/SHARED_LIBRARIES/libwebcore_intermediates/LINKED/libwebcore.so] 错误 1
+
+  出现这个问题，甚是郁闷，在网上苦找答案，结果发现各种方法make 都不行，只能怀疑是内
+存问题，因为我在编译的时候还干着其他的事情。于是只能抱着骁幸心理，make clean，再按步
+骤重新编，这次没在机器上干任何其他的事，因为是晚上编的。第二天早上起来，done,done ,
+done ，编译成功。“ 【没有解决我的问题】
+
+我的错误（4.0.4）：error: undefined reference to 'WebCore::CSSParser::lex()'
+
+--------
+解决M3 百事通版本问题
+【邮件】这个问题在华数M3上面解决过，把华数libplayer的代码跟bestv的合一下就行了！
+./packages/amlogic/LibPlayer/java/src/com/amlogic/libplayer
+这个目录下面有3个 java文件，是共用的，所以不用合并。
+
+-----------
+20140701  m3出版本重要信息：
+./build/tools/buildinfo.sh
+
+## ro.serialtype = 1  shanghai mobile base station---huashu version 
+## ro.serialtype = 2  yinhe 
+## ro.serialtype = 3  bestv 
+
+
+3.6      libwebcore.so
+
+3.6.1     问题描述
+/work/android/Android4.1.2/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.6/bin/../lib/gcc/arm-linux-androideabi/4.6.x-google/../../../../arm-linux-androideabi/bin/ld: out/target/product/grouper/obj/STATIC_LIBRARIES/libwebcore_intermediates/libwebcore.a(CSSParser.o): in function WebCore::CSSParser::lex(void*):external/webkit/Source/WebCore/css/CSSParser.cpp:5925: error: undefined reference to 'WebCore::CSSParser::lex()'
+
+collect2: ld returned 1 exit status
+
+make: *** [out/target/product/grouper/obj/SHARED_LIBRARIES/libwebcore_intermediates/LINKED/libwebcore.so] Error 1
+
+make: *** Waiting for unfinished jobs.....
+
+3.6.2     产生原因
+一种可能是后续的编译过程需要external/webkit/Source/WebCore/css/tokenizer.flex这个文件。但是编译生成这个文件的部分没通过。你touch这个文件之后，因为目标文件时间戳比源文件新，make系统就直接使用这个目标文件了。
+
+3.6.3     解决方法
+1、再次执行/repo sync， 保证代码的完整性。
+
+2、执行一后，问题依然没有解决，按照网上的方法执行touch external/webkit/Source/WebCore/css/tokenizer.flex，再次make -j4。
+
+
+编译过程看到了：
+target Generated: libwebcore <= external/webkit/Source/WebCore/css/tokenizer.flex
+
+没有正确生成，是因为 prebuilt/linux-x86/flex/flex-2.5.4a 没有执行权限。总之都是因为ntfs惹的祸。
+
+这时候需要 mmm -B webkit 强制重编 因为虽然改了权限，已经编译好的 cssparser.o 已经错误，系统不会重新编译这个.o
+
+m3 执行 openlinux.sh后，为啥kernel总是重新编译呢？
+
+
+lunch 可以用数字表示，如
+lunch 5
+
+---------
+kernel 在配置的时候，打 make xxconfig
+
+配置文件在 arch/arm/configs 目录里面
+
+recovery配置的是：
+make meson_reff16_recovery_defconfig
+正常kernel配置的是：
+make meson_reff16_defconfig
+
+一套kernel 两套config   
+
+解释没什么每次都要重新编译kernel：
+因为配置了2次，修改配置会引发大面积重新编译。
+------------
+arch/arm/configs/里面的文件 必须以_defconfig结尾
+
+制作升级包的过程：
+
+build/tools/releasetools/ota_from_target_files  是一个python文件
+
+out/target/product/f16ref/obj/PACKAGING/target_files_intermediates/
+这个目录内容会持续增加，每次编译都会留下记录。
+
+
+./f16ref/BoardConfig.mk
+TARGET_AMLOGIC_RECOVERY_KERNEL := $(PRODUCT_OUT)/uImage_recovery
+build/core/Makefile	
+$(ACP) $(TARGET_AMLOGIC_RECOVERY_KERNEL) $(zip_root)/RECOVERY/kernel
+
+--------------
+20140709
+m3平台管理3个项目的方法，也不算高明，但是我写不出来。表纠结，学习，使用，维护，就好了
+不要想着perfect，优雅啥的。
+
+执行完 . build/env_best.sh 就会建立out/target/product/f16ref目录，然后可以执行拷贝操作。
+
+
+proc/260/cmdline  ？？？？？
+
+
+
+cat /proc/cmdline                                              
+rootfstype=ext3 androidboot.resolution=720p rootwait init=/init console=ttyS0,
+115200n8 nohlt logo=osd1,0x84100000,loaded,720p a9_clk=600M clk81=187500000 
+mem=1024m mac=00:16:fb:82:69:e1 hdmitx=720p
+
+# getprop ro.serialno  可以看到序列号，这个字段是程序拼出来的，在build.prob里没有。
+
+ifconfig eth0 down  关闭网络，关闭了立即右下角出现叉
+
+
+关于m3的amffplay，使用ffmpeg，其中的libavformat 没有用libavformat.so 这个库，而是
+ffmpeg 里面的libavformat目录编译出 libavformat.a 然后由 amlogic/VideoPlayer/jni
+里面的Android.mk 生成 libamplayerjni 静态链接libavformat
+
+packages/amlogic/LibPlayer/amplayer/player/Android.mk
+也要静态连接ffmpeg的一系列静态库，这是多余的
+采用动态连接，压缩成zip后应该减小 3M 
+
+所以我不能mmm libavformat  这样会在system/lib里面多出一个libavformat.so
+
+M3盒子按待机按键后：
+E/StandByService(  556): hasStandByStatus return true ! 
+E/StandByService(  556): startStandByConfirm the ir_power = false 
+E/StandByService(  556): execMCU() start
+
+
+-----------------
+小隆说 短按假待机，长按真待机。我竟然想当然认为是盒子上的待机按键，实验发现盒子按键长按
+短按都是真待机。经孙科提醒才想到是遥控器。经验证确实说的是遥控器。遥控器和盒子都有待机
+按键，怎么就不会多想一想，所以关键时刻大脑还不够清晰。
+
+
+这里开关 ota是否带uboot
+#MTC:Liuese 2013-03-08 Don't need pack uboot +++
+#TARGET_AMLOGIC_BOOTLOADER := $(PRODUCT_OUT)/u-boot-aml-ucl.bin
+
+
+mount -o remount /system
+
+
+---
+修改百事通 版本号：
+修改 device/amlogic/build_id.mk
+然后直接执行  make otapackage
+
+
+----------------------------
+20140711
+
+M3百事通版本：
+问题1：（华数，百事通都存在，同时解决）
+描述1：视频循环播放
+描述2：直播循环重复播放。点开直播的时候，开始播放很短的一段时间，然后开始重复播放这一段视频
+修改了 ./amlogic/LibPlayer/amffmpeg/libavformat 目录
+file_list.h 和 file_list2.c  文件
+
+问题2：
+   在华数上面的直播播放一会，卡着不动的问题，这次在百事通版本上复现
+
+
+
+M3 华数版本：
+问题1：
+点播的时候，播放一段时间，点击返回，退出，再次进入（继续播放，此时位置为1），等一段时间，
+暂停，然后继续播放，会从位置1重新播放！& “点击继续播放的时候，进度条是从开始位置加载的”
+
+7月10日 小隆说 这个问题在百事通版本上没有，百事通应用层规避了这个问题。华数解决这个问题
+的代码在百事通上存在也没有问题，无影响。可是06/27 10:37 AM
+的邮件提到百事通版本也报有这个问题。
+需要修改2个文件： frameworks/base/media/libmediaplayerservice/
+AmlogicPlayer.cpp   MediaPlayerService.cpp
+
+开始的邮件说 2个文件各注掉部分代码：
+AmlogicPlayer.cpp:
+if(PropGetInt("ro.serialtype")==1) {
+if(tmp_pos > 0) {
+//后来小隆回复邮件说：下面这一句屏蔽掉，会出问题，不能屏蔽。
+//mPlay_ctl.t_pos = tmp_pos/1000.0;
+} 
+
+MediaPlayerService.cpp： 
+if (isThreadScreen)
+{
+//if (mLstartTime > 0)
+//p->seekTo(mLstartTime);
+
+后来amlogic 张佳杰 又给一个解决方案，也是改这2个文件，合并后有个变量没有定义，无法编译。待解决
+
+问题2：
+直播时，进行时移操作，播放一段时间会跳动性播放，画面卡着不动，一段时间之后，跳动一下，
+声音一直有，但也不是流畅的播放！（北京卫视、CCTV1，容易复现）  （能解决吗？ 开始百事通没有这个问题
+后来的邮件又说在百事通上复现了）
+
+system.prop 
+-libplayer.netts.recalcpts=1
++#libplayer.netts.recalcpts=1
+
+问题3：
+直播的时候，调不出进度条，而且直播的时候，时移功能不可使用
+
+
+问题4：
+版本回退问题：和视界/本地，播放的时候，视频显示位置不对，点击返回键之后，出现花屏。
+这个问题，孙科之前在的时候已经解决过，但是现在版本中在次复现！！！应该是补丁包没有添加进去的原因
+
+
+
+
+
+=================
+公共问题：
+1 视频刚开始播放或者是时移操作过之后，画面会缓慢播放几秒钟。 修改kernel， 已经修复
+drivers/amlogic/amports/video.c
+- static const u32 rpt_tab[4] = {0x100, 0x100, 0x450, 0x450};
++ static const u32 rpt_tab[4] = {0x100, 0x100, 0x180, 0x180}; 
+
+
+
+
+
+----------
+待机问题：
+ writeSysfs("/sys/class/gpio/mcu_standby_ctrl","2");
+ writeSysfs("/sys/class/gpio/mcu_standby_ctrl","0");
+加上这几句，红灯不亮了
+
+
+-----------
+20140711
+解决问题的思路：
+我编译出来的百事通版本出现了3个新问题，原来的版本是没有的：
+1 播放的时候（直播/点播）会不定时弹出提示框
+2 进高清播放，没有出现节目列表而是直接进入了某个影片
+3 按设置键，先进入首页再进入设置
+
+现在要拿到现网的系统版本。开始我想让小隆发给我一份。他给我的方案是：
+先做一个升级包，版本号定义为1.0.1，这样系统就会去大网上升级现网版本。我就可以拿到了
+
+
+-----
+百事通版本 写进去sn号后，进入启动界面提示无法激活。反复尝试无果
+
+
+通过打印看到一个ota升级地址：http://111.1.56.98/upload/208.zip 
+在pc浏览器中能下载竟然。
+
+下载地址： /cache/update/update.bak
+
+大小 140494075
+
+提示升级,选择“是”，然后：
+[ 1213.052780] init: Save ubootenv to /dev/mtd/mtd7 succeed!
+[ 1217.076889] nftl release flush cache data: 0
+[ 1217.120335] SysRq : Emergency Remount R/O
+[ 1217.160159] Emergency Remount complete
+[ 1217.230416] m3_nand_reboot_notifier 895 
+[ 1217.231109] Restarting system with command 'recovery'.
+
+
+--------------
+系统里有2个recovery：spi flash里面一个，nand flash里一个
+
+20140715
+此时线上版本为1.0.21
+
+D/DownLoadServer(  479): 
+==返回XML==
+<?xml version="1.0" encoding="UTF-8"?>
+<UpgradeVersion>
+<RespCode>200</RespCode>
+<Version>
+<VersionNumber>1.0.21</VersionNumber>
+<UpgradeStrategy>1</UpgradeStrategy>
+<VersionFileURL>http://111.1.56.98/upload/208.zip
+</VersionFileURL>
+</Version><
+/UpgradeVersion> 
+
+
+
+--------------
+按电源按键进入recovery的有：
+4096 KiB GD25Q32 at 0:2 is now current device
+上面这句是：
+./common/cmd_sf.c 里面打印出来的
+
+开机按电源按键，打印 Run recovery！
+在./board/amlogic/m3_mbox/m3_mbox.c 文件里
+
+按电源按键，成功和没成功打印
+Upgrade_step = 2 成功
+Upgrade_step = 0 没成功
+
+这是uboot环境变量。修改过来就好！
+难道是我执行
+update_reboot还是 charging_reboot，的时候，他修改了这个环境变量？！！！！
+
+
+20140723
+ota升级，重启显示 Upgrade_step=1
+
+------------
+启动进入uboot：
+upgrade_step=2
+
+乱套啊：
+./base/core/java/android/os/RecoverySystem.java:
+SystemProperties.set("ubootenv.var.upgrade_step", "1");
+
+那么，ota升级完成，又是谁把 upgrade_step 又改成了2呢？
+在uboot里面 m3_mbox.c有：
+run_command("set upgrade_step 2", 1); 这样的语句，逻辑没有搞清楚。
+----------------------------------------
+按遥控器会有一堆打印：
+
+
+
+----------------------------------------
+如何修改android的mac地址，调试的时候：
+android上层是如何获取系统的mac地址的呢？？
+
+
+build.prob 里面有一个没有字段 ro.mac
+但是getprob 里面有这个字段。
+
+我添加了 ro.mac字段，但是仍然激活失败，查看打印，发送的id信息依然包含原来的mac，用wireshark
+查看通讯过程，盒子使用的是老的mac地址。
+
+使用 busybox ifconfig eth0
+或者 buxybox ifconfig -a  查看到老的mac地址，如何修改呢？
+
+
+cat proc/cmdline 得到：
+rootfstype=ext3 androidboot.resolution=720p rootwait init=/init console=ttyS0,
+115200n8 nohlt a9_clk=600M clk81=187500000 mem=1024m mac=00:16:fb:82:69:d2 hdmitx=720p
+
+
+百事通版本
+小窗口视频是下载到本地的，点击进入全屏播放这个视频，不应该提示02050003这个错误
+小窗口去这个地方找视频：
+/mnt/sdcard/bestv/.guidevideo/1526732.ts
+/mnt/sdcard/bestv/.guidevideo/1526733.ts
+/mnt/sdcard/bestv/.guidevideo/1704603.ts
+
+快速切换小窗口，卡死，问题复现。
+
+打印：
+I/amffmpeg( 3158): [avio_read:847]retry timeout, fill buffer failed
+I/amplayer( 3158): ...ffmpeg callback interrupted...
+
+mediaserver 会重启。
+
+
+=--------------
+恢复出厂设置的时候，进入recovery，也是提示 “系统正在升级，请稍等，断电危险”
+这是一张图片。经查，原始的图上面没有字。
+修改成：“请稍等，断电危险” 这样不论升级还是恢复设置，都提示这个。
+
+这种提示性错误，移动很看重。
+
+----
+更改recovery里面的一个资源图片，如何快速编译呢？
+修改后编译完，不行啊！
+
+
+---------
+百事通版本，我把版本改为1.0.1，在北京无法连接升级服务器。
+
+----------
+20140714
+之前我看到2个kernel相差20个字节那个是哪个平台来着？！！
+recovery的kernel和真正使用的kernel
+
+更新了 bootable/recovery/。。。。/image里面的图片后，开机按着电源键，进入
+的还是改图片之前的recovery， adb reboot recovery 或者恢复出厂设置，进入的就是我改过的recovery
+孙科说系统中有2个recovery，分别在spi flash和 nand flash里面，这，这，这。。。
+
+=====
+
+
+reboot recovery 命令，什么原理？
+加打印验证
+
+static void enter_recovery_mode(int do_reboot)
+{
+        set_recovery_flag(1);
+        if (do_reboot) {
+        android_reboot(ANDROID_RB_RESTART2, 0, "recovery");
+        }
+}
+
+arch/arm/include/asm/unistd.h:#define __NR_reboot			(__NR_SYSCALL_BASE+ 88)
+
+最终查明在：arch/arm/kernel/process.c 这里
+void arm_machine_restart(char mode, const char *cmd)
+{
+if(strcmp(cmd, "factory_reset_reboot") == 0 || strcmp(cmd, "recovery") == 0) {
+                        *sram_vaddr = AMLOGIC_FACTORY_RESET_REBOOT;
+                }
+
+
+# reboot factory_reset_reboot
+[ 4048.681327] Restarting system with command 'factory_reset_reboot'.
+
+直接#reboot
+[xxx.xxx]Restarting system.
+
+
+手欠，好像执行了依次   
+update_reboot还是 charging_reboot，现在竟然进不去recovery了。
+
+
+===
+logcat时候，串口和adb shell 输出同样的东西。串口不停的输出，也是要占用部分cpu资源的吧！
+
+----
+recovery 的 rootfs
+CONFIG_INITRAMFS_SOURCE="../out/target/product/f16ref/recovery/root"
+
+
+------------
+按电源按键重启 打印：
+get_burner_key: 0x3
+AMLOGIC_CHARGING_REBOOT...
+ 
+执行reboot recovery 打印：
+get_burner_key: 0x3ff
+AMLOGIC_FACTORY_RESET_REBOOT...
+
+----------------------------
+uboot修改mac地址：
+1 print bootargs 打印不全，超过一行不能完全显示，并且与cat cmdline相比，少了 root=/dev/cardblksd2 rw 这些
+2 在uboot里面，板子上的待机按键不灵
+  上电，串口无打印，按待机键才有打印（板子或IR的待机按键）
+3 setenv ethaddr= 新mac
+  saveenv  提示擦除了spi flash，写了spi flash 但是重启后又恢复成了原来的mac了！！？？
+4 能够激活的mac应该是 00:16:FB:81:19:CF
+5 setenv bootargs  回车   bootargs变量就消失了
+6 setenv bootargs '  xxxxxx xxx  回车
+                  >xx xx xx ' 回车
+解决一行写不开的问题。
+20140723
+几年不在一线，很多细节问题已经生疏了。王贺超说：minicom -w 可以解决一行显示不全的问题。
+“三人行必有我师”“不耻下问”！！
+
+
+
+
+uboot使用的是：
+uboot/board/amlogic/m3_mbox 的配置目录
+
+
+-----
+测试升级：
+制作一个1.0.1版本程序用adb push 升级。启动进入“系统升级”，开始下载，提示是否升级，选择“是”
+这时候进入 SPI的 recovery ，（因为小机器人提示图片是 spi里面的，那么，这是如何做到的呢？
+因为）
+
+百事通的设置程序是：
+amlogic/bestv/apk/SWSettings_chinamobile.apk
+
+
+
+本地播放，反复进入花屏的问题，小隆说可能是因为切换了分辨率导致的。
+
+
+-=-------
+cat /proc/cmdline
+rootfstype=ext3 androidboot.resolution=720p rootwait init=/init console=ttyS0,115200n8 nohlt a9_clk=600M clk81=187500000 mem=1024m mac=00:16:FB:81:19:CF hdmitx=720p
+
+
+
+---
+系统有2个recovery，一个是通过 spi.bin 写到spi flash里面的，一个是通过ota写到nand里的。
+
+
+
+----
+开机logo显示：
+在device目录下面：aml_logo.bmp，替换了执行 make
+
+
+一个ota zip升级包，解压缩后在用zip压缩就不行了，签名就不对了
+
+
+-----------------
+更改产品型号：
+./amlogic/f16ref/f16ref.mk:PRODUCT_MODEL := bell-kh61068
+更改serailno:
+./build/tools/buildinfo.sh
+
+
+
+------------
+ubuntu版本与gcc版本对应关系：
+10.04  4.4.1
+10.10  4.4.5
+11.04  4.5.x
+11.10  4.6.1  （我现在的11.10 gcc为4.4.6 什么时候装的呢?）
+12.04  4.6.3
+12.10  4.7.x
+13.04  4.7.3
+13.10  4.8.x
+14.04  4.8.2
+
+在我的11.10上：
+gaojie@gaojie:/usr/bin$ update-alternatives --config gcc
+有 3 个候选项可用于替换 gcc (提供 /usr/bin/gcc)。
+
+  选择       路径            优先级  状态
+------------------------------------------------------------
+* 0            /usr/bin/gcc-4.4   50        自动模式
+  1            /usr/bin/gcc-4.4   50        手动模式
+  2            /usr/bin/gcc-4.5   40        手动模式
+  3            /usr/bin/gcc-4.6   30        手动模式
+
+编译开源软件出现奇怪的编译错误多是编译器版本问题
+
+
+然后：
+$ sudo update-alternatives --config gcc
+update-alternatives: 警告: 候选项 /usr/bin/gcc-4.5(链接组 gcc 的一部分)不存在。从候选项列表中移除。
+有 2 个候选项可用于替换 gcc (提供 /usr/bin/gcc)。
+
+  选择       路径            优先级  状态
+------------------------------------------------------------
+  0            /usr/bin/gcc-4.4   50        自动模式
+* 1            /usr/bin/gcc-4.4   50        手动模式
+  2            /usr/bin/gcc-4.6   30        手动模式
+
+
+--------------------
+老侯和贺超编译4.0.4时：
+Combining NOTICE files: out/target/product/f16ref/obj/NOTICE.html
+host Executable: emulator-arm
+(out/host/linux-x86/obj/EXECUTABLES/emulator-arm_intermediates/emulator-arm)
+ld: this linker was not configured to use sysroots
+make: ***
+[out/host/linux-x86/obj/EXECUTABLES/emulator-arm_intermediates/emulator-arm] 错误 1
+
+----------------------
+./recovery.c:static const char *SDCARD_COMMAND_FILE = "/sdcard/factory_update_param.aml";
+./recovery.c:static const char *UDISK_COMMAND_FILE = "/udisk/factory_update_param.aml";
+
+u盘升级，检查脚本文件是在recovery里，而不是在uboot里
+
+
+
+
+
+---------------
+Combining NOTICE files: out/target/product/f16ref/obj/NOTICE.html
+host Executable: emulator-arm
+(out/host/linux-x86/obj/EXECUTABLES/emulator-arm_intermediates/emulator-arm)
+ld: this linker was not configured to use sysroots
+make: ***
+[out/host/linux-x86/obj/EXECUTABLES/emulator-arm_intermediates/emulator-arm] 错误 1
+
+这是ld的问题
+
+编译4.0.4 在王贺超，侯生勇的10.04上都出现这个错误
+在我的11.10上没有出现，把我的ld发给王贺超替换usr/bin/ld 提示一个库找不到，再把
+lib/libbfd-2.21.53-system.20110810.so 发给贺超，竟然就能编译了。
+
+----
+pc上 ld属于gnu binutils  跟gcc不是一套，版本号也不是对应的。
+
+
+===============
+spi.bin 的那个生成工具：
+把uboot写到  0- 0x50000+ 
+参数写到  0x8000开始，并在开头加上  3a 77 59 e3 四个字节，把源文件中行与行之间的回车换行2字节换成0x00
+recovery kernel写到0x82000- 0x2f2c2c+ 位置。
+
+m3_mbox.h 定义了参数区域起始地址等信息。
+
+
+
+--------
+m3 工程模式编译不出来，启动不了。
+
+
+amlogic/目录下的 百事通和移动2个项目的apk 只有lancher不同
+百事通的叫做：Bestv_Inside_2.x.x_YDJD.apk
+移动的叫做：SWOTT_chinamobile.apk
+
+----
+20140722
+ota的zip包，解压缩后，system不是image，而是散开的文件加。并且解开再压缩，就不能升级了，签名不正确
+并且大小也不同。
+
+target arm C: libamplayer <= packages/amlogic/LibPlayer/amplayer/player/version.c 每次都要重新编译，
+因为里面有时间函数。这会导致文件更新吗？ 查看修改时间，还真是每次更新
+去除他，否则每次重编译，导致libamplayer.so  libamplayerjni.so 2文件发生变化。
+
+
+-----------
+kernel里面 CONFIG_AML_NFTL 是定义的
+
+好像是kernel/drivers/amlogic/nand/aml_nftl 这里模拟了sdcard
+
+因为 /mnt/sdcard vfat  所以需要nftl
+
+------
+王贺超，取消 CONFIG_AML_NFTL的定义，系统会自动将flash剩余空间全部追加到data分区，
+达到3.5G左右（要用busybox的 df来看 toobox的只显示G，会把尾数舍弃）
+
+这里，我有些疑问：整个分区的格式化谁来做？
+
+------------
+
+
+
+
+
+----------
+update-binary 是谁生成的？什么生成的?
+
+
+
+---------
+adb启动应用程序的方法：
+
+aapt的用处！！！
+
+---
+Image Name:   Linux-2.6.34-g4ca2551
+Created:      Wed Jul 23 11:06:39 2014
+Image Type:   ARM Linux Kernel Image (lzma compressed)
+Data Size:    3949512 Bytes = 3856.95 kB = 3.77 MB
+Load Address: 80008000
+Entry Point:  80008000
+
+看看生成ota包的最后2步：
+running:  openssl pkcs8 -in build/target/product/security/testkey.pk8 -inform DER -nocrypt
+
+running:  java -Xmx1536m -jar out/host/linux-x86/framework/signapk.jar 
+-w build/target/product/security/testkey.x509.pem build/target/product/security/testkey.pk8 
+/tmp/tmpcL5EaX out/target/product/f16ref/f16ref-ota-1.0.29.20140723110830.bestv.zip
+
+------------
+setenv bootargs rootfstype=ext3 androidboot.resolution=${outputmode} rootwait  init=/init console=ttyS0,115200n8 nohlt logo=osd1,0x8410
+0000,     loaded,     ${outputmode} a9_clk=600M clk81=187500000 mem=1024m
+
+=查看apk包信息=
+./aapt dump badging xx.apk
+
+
+
+-----
+kernel读取mac的流程：
+先检查bootargs有无 mac=字段，若无，读取efuse，若无，随机生成。
+
+----
+未开通时，开机会配置网络，又是命名选择的是自动配置，可是他会显示静态配置的值。这是可以进入
+recovery 清除data分区，或者在串口中/网络adb中，root权限删除之
+
+
+----------
+启动uboot的时候，U盘没有插，显示有1个usb设备，差u盘显示2个usb设备，因为8188wifi模块也是一个usb设备
+并且接在了otg端口上。
+
+
+-----------
+Unable to open "aml_autoscript" from usb 0:1 --- file not exist**
+** Unable to open "aml_autoscript" from usb 0:1 --- file not exist**
+
+
+
+ERROR: can't get kernel image!
+Enter Recovery mode ...
+SF: Got idcode c8 40 16
+
+-----------
+20140724 
+奇怪现象：
+张佳杰解决 问题： 第一张开机logo的图像会跳动一下
+nandargs(给nand启动用) 和 bootargs(给spi里面的recovery kernel启动用) 中的
+ clk81=187500000 改为  clk81=187000000
+改了之后确实有效。但奇怪的是，改之前，我的skyworth电视确实抖动，改后不抖了，但是再改回原来的值
+也不抖了，就是说bug无法恢复了。奇怪。
+
+----------------
+制作rle启动文件
+ImageMagick 带的 convert 
+注：ubuntu 10.04 默认已经安装ImgageMagick工具，如果当前系统没有安装，可以执行下面的命令安装：
+  sudo apt-get install imagemagick
+
+/usr/bin/convert
+
+
+
+
+----
+cpio 命令
+
+-------
+20140724 
+王贺超做的ota包，包含了spi.bin 但是这个spi.bin 有问题，写了之后，就不能再usb升级了
+强制进入recovery提示：
+## Booting kernel from Legacy Image at 82000000 ...
+   Image Name:   Linux-2.6.34
+   Image Type:   ARM Linux Kernel Image (lzma compressed)
+   Data Size:    2647556 Bytes = 2.5 MiB
+   Load Address: 80008000
+   Entry Point:  80008000
+   Verifying Checksum ... Bad Data CRC 
+这个问题还经常出现的
+
+ota升级包里面的脚本包含：
+set_bootloader_env("upgrade_step", "2");
+
+更换 device/../../x.rel logo文件，需要重新编译内核，否则不会更新。
+需要把16：9的图片不保持比例变换成 720x576 然后转换成rel文件。
+
+uImage_recovery 就是 make uImage 生成的，根目录被编译到了kernel里面
+
+remotecfg 这个程序干啥的。
+
+找到了这个：
+./out/target/product/f16ref/symbols/recovery/root/sbin/fw_printenv
+./out/target/product/f16ref/symbols/system/bin/fw_printenv
+
+这2个文件并没有出现在 system/bin中！！
+最终的系统中也没有这个命令程序。
+
+
+m3的系统代码与标准google的有很大不同：
+fw_env.config 是在build/core/Makefile中拷贝的:  !!!
+ifneq ($(fw_env_config),)
+	cp -f $(fw_env_config) $(TARGET_OUT)/etc/fw_env.config
+	cp -f $(fw_env_config) $(TARGET_RECOVERY_ROOT_OUT)/etc/fw_env.config
+endif
+
+
+------------
+spi flash 操作：
+
+#sf probe 2 (选中flash)
+#sf read 82500000 820000 100000
+
+
+#sf write 82000000 100000 10
+实验发现没有写进去。
+
+----
+注意 init的代码在system/core目录
+
+
+-----
+删除sdcard 分区后 recovery kernel crc校验错误问题：
+
+在0x100000 偏移处被莫名其妙的写入了 uboot参数，这里是kernel数据。经过比对，写入的是
+ ./tools/env/fw_env.h 里面定义的。这个位置更加奇怪了 
+
+------------------------------------------------
+
+
+m3 在spi里面什么也没有的情况下（裸板）2个方法：
+1 用编程器烧写spi flash
+2 用SD Card做一个引导卡。如何做？
+
+
+------------------
+升级问题的深入理解：
+1 大网上的data分区+sd卡，升级后
+
+
+最后的解决方案：spi里面增加一个分区，nand里面减少一个分区（sdcard）但是不要合并到data分区。
+因为合并的话可能会产生：data分区由小变大，用户无法访问data分区的问题。
+（这里需要花时间验证，这算是核心竞争力了。扎扎实实的做事情）
+
+-------------
+20140805
+M3华数，验证播放问题时的版本：（包名看出是sunniwell开发）
+SWLocalPlayer.apk         1.2.6
+SWPlayer.apk              1.0.6
+
+
+MediaPlayerListeners(  796): [20140806192537214][net.sunniwell.browser.jsext.MediaPlayerListeners][onInfo][106]:==========  开始缓冲。    MediaPlayerParams.EVENTCODE_MEDIA_INFO_BUFFERING_START========== 
+
+D/MediaPlayerListeners(  796): [20140806192537164][net.sunniwell.browser.jsext.MediaPlayerListeners][onBufferingUpdate][159]:====onBufferingUpdate====percent=6 
+
+
+------------
+packages/amlogic  BUFFERING 调查buffer状态标志
+
+
+
+--------
+20140808
+m3 点播
+I/LiveSession( 1141): onConnect 
+
+http://zjcmcc.cnbn.cn/itv/m3u8/70ccc6c6f569cd0b027b94d4396d233b/aHR0cDovL2NhY2hlLnpqY21jYy5jbmJuLmNuLzIwMTQwODA1LzVlLzVmLzJhOTJkOGMyZDg4MDE3MDIwMjAwZDg5NTdhMDc1ZTZkLm0zdTgsMA==/1407462249532.m3u8'
+
+
+银河：
+D/SysUtils( 2531): Context get mac address : 00:18:95:12:3e:c3
+
+
+
+-----------
+多媒体部分代码，2处：
+package/amlogic/LibPlayer
+frameworks/base/media/libmediaplayerservice  生成libmediaplayerservice.so   ./bin/mediaserver 调用之
+
+
+
+----------
+徐松：
+m3 华数直接推送的是ts流 而不是m3u8 
+m3 银河是m3u8文件，抓出来的m3u8视频源可以直接播放，比如：
+http://zjcmcc.cnbn.cn/itv/m3u8/bd388fc5c96011b5457fd95c8f898e74/aHR0cDovL2NhY2hlLnpqY21jYy5jbmJuLmNuLzIwMTQwODA0LzhkL2U3L2YzMmQwNjRmN2RhNGE4MzJjMzAzZmU2YjZjMTk2ZjYyLm0zdTgsMA==/1407481354431.m3u8
+
+m3 银河直播（栏目点播）
+http://zjcm-m3u8.3atv.cn:10009/m3u8/m3u8?version=123&id=101400
+每个文件里面有5条目
+
+getNextM3u8
+
+
+------
+丁伟:
+a20 因为配置，可以配置成单核工作，导致一些错误。也是因为直播卡顿。
+
+
+
+target thumb C: su <= system/extras/su/su.c
+
+
+

@@ -1,0 +1,100 @@
+http://docs.opencv.org/trunk/doc/tutorials/introduction/linux_install/linux_install.html
+
+Building OpenCV from Source Using CMake, Using the Command Line
+
+系统默认没有cmake 需要安装:
+apt-get install cmake
+
+创建release目录，进入并执行:
+cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local ..
+执行完发现很多组建没有比如 ffmpeg gtk
+
+默认没有编译sample目录
+
+
+sample/c/ 目录下的文件用 build_all.sh脚本编译。
+
+运行例子提示找不到库，已经make install了 需要运行 sudo ldconfig
+
+
+pkg-config 是干什么的？
+
+需要libgtk2.0-dev 否则例子程序无法运行。
+
+--------------
+ubuntu 14.04 LTS
+opencv 2.4.9 执行python程序 dft.py 提示错误：
+  File "./dft.py", line 2, in <module>
+    import cv2.cv as cv
+ImportError: No module named cv2.cv
+因为没有安装 python-opencv库。
+apt-get install python-opencv 可以正常下载（在公司的ubuntu11.10上费了一番周折，apt-get 无效，自行下载了很多库）
+然后就可以正常执行 dft.py了！！！
+
+
+cv.CreateTrackbar 这是谁提供的函数呢？  python-opencv库吗？
+
+cv2扩展库是针对OpenCV 2.x API创建的，它直接采用NumPy的数组对象表示图像
+
+首先当然是加载opencv的动态库  import cv2.cv as cv
+
+离不开  NumPy, SciPy, 这2个库
+
+
+Officially, OpenCV releases two types of Python interfaces, cv and cv2.
+
+And the latest one is cv2. In this, everything is returned as NumPy objects like ndarray and native Python objects like lists,tuples,dictionary, etc. So due to this NumPy support, you can do any numpy operation here. NumPy is a highly stable and fast array processing library.
+
+ I started using new OpenCV-Python interface, cv2.
+
+OpenCV-Python is the Python API for OpenCV
+
+OpenCV-Python makes use of Numpy, which is a highly optimized library for numerical operations with a MATLAB-style syntax. 
+
+安装在了 /usr/lib/python2.7/dist-packages/cv2.so  名字改了就无法执行openvc的py文件了，实验证明就是 这个so
+这个文件不是opencv 编译出来的。
+
+编译环境cmake中有 BUILD_opencv_python 这个宏，可以配置的时候
+cmake -D BUILD_opencv_python=1 ..
+有效！！这样配置后：
+--   Python:
+--     Interpreter:                 /usr/bin/python2 (ver 2.7.6)
+--     Libraries:                   NO  这里为啥还是 NO
+--     numpy:                       /usr/lib/python2.7/dist-packages/numpy/core/include (ver 1.8.1)
+--     packages path:               lib/python2.7/dist-packages
+
+原来只有 Interpreter:                 /usr/bin/python2 (ver 2.7.6)
+
+还是不编译 python模块，可能是因为  Could NOT find PythonLibs (missing:  PYTHON_LIBRARIES PYTHON_INCLUDE_DIRS) (Required is exact version "2.7.6")这个错误
+需要安装 python-dev
+在新立德中显示为：libpython2.7-dev (ubuntu14.04)
+果然，安装后再 cmake：
+--   Python:
+--     Interpreter:                 /usr/bin/python2 (ver 2.7.6)
+--     Libraries--xx:               /usr/lib/x86_64-linux-gnu/libpython2.7.so (ver 2.7.6)  这里不是No了！！！
+--     numpy:                       /usr/lib/python2.7/dist-packages/numpy/core/include (ver 1.8.1)
+--     packages path:               lib/python2.7/dist-packages
+
+这时候编译了 modules/python/ 模块！！
+make install 后： 有如下打印：
+-- Installing: /usr/local/lib/python2.7/dist-packages/cv2.so
+-- Set runtime path of "/usr/local/lib/python2.7/dist-packages/cv2.so" to "/usr/local/lib"
+-- Installing: /usr/local/lib/python2.7/dist-packages/cv.py
+
+这时候在：
+/usr/lib/python2.7/dist-packages/cv2.so
+/usr/local/lib/python2.7/dist-packages/cv2.so
+同时存在 cv2.so 了，用哪个？
+
+python 靠缩进判断if 包含的语句结束。
+语句从 if __name__ == '__main__':处开始执行。
+
+
+Canny 函数
+Finds edges in an image using the [Canny86] algorithm.
+
+[Canny86] John F. Canny于 1986 年开发出来的
+
+
+
+

@@ -1,0 +1,582 @@
+Make & GCC & 他的朋友们
+
+一、Android的编译系统
+1 静态链接库 ./core/combo/TARGET_linux-arm.mk 中的
+
+这个不是用于生成静态库的 而是用来生成.so 或者exe时候静态链接用的
+
+静态链接为可执行文件，因为是静态链接当然不需要 /system/bin/linker
+define transform-o-to-static-executable-inner
+$(TARGET_CXX) -nostdlib -Bstatic -Wl,-T,$(BUILD_SYSTEM)/armelf.x \
+    -Wl,--gc-sections \
+        -o $@ \
+        $(TARGET_GLOBAL_LD_DIRS) \
+        $(TARGET_CRTBEGIN_STATIC_O) \
+        $(PRIVATE_LDFLAGS) \
+        $(TARGET_GLOBAL_LDFLAGS) \
+        $(PRIVATE_ALL_OBJECTS) \
+        $(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+        $(TARGET_FDO_LIB) \
+        $(TARGET_LIBGCC) \
+        $(TARGET_CRTEND_O)
+endef
+
+动态链接的
+define transform-o-to-executable-inner
+$(TARGET_CXX) -nostdlib -Bdynamic -Wl,-T,$(BUILD_SYSTEM)/armelf.x \
+        -Wl,-dynamic-linker,/system/bin/linker \
+    -Wl,--gc-sections \
+        -Wl,-z,nocopyreloc \
+        -o $@ \
+        $(TARGET_GLOBAL_LD_DIRS) \
+        -Wl,-rpath-link=$(TARGET_OUT_INTERMEDIATE_LIBRARIES) \
+        $(call normalize-target-libraries,$(PRIVATE_ALL_SHARED_LIBRARIES)) \
+        $(TARGET_CRTBEGIN_DYNAMIC_O) \
+        $(PRIVATE_ALL_OBJECTS) \
+        $(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \
+        $(PRIVATE_LDFLAGS) \
+        $(TARGET_GLOBAL_LDFLAGS) \
+        $(TARGET_FDO_LIB) \
+        $(TARGET_LIBGCC) \
+        $(TARGET_CRTEND_O)
+endef
+
+那么一个exe 可否静态链接若干库，再动态链接若干库
+
+define transform-o-to-shared-lib-inner
+$(TARGET_CXX) \
+        -nostdlib -Wl,-soname,$(notdir $@) -Wl,-T,$(BUILD_SYSTEM)/armelf.xsc \
+        -Wl,--gc-sections \
+        -Wl,-shared,-Bsymbolic \
+        $(PRIVATE_TARGET_GLOBAL_LD_DIRS) \
+        $(PRIVATE_ALL_OBJECTS) \
+        -Wl,--whole-archive \  [注意这里 下面stagefright编译时候就体现出来了]
+        $(call normalize-host-libraries,$(PRIVATE_ALL_WHOLE_STATIC_LIBRARIES)) \
+        -Wl,--no-whole-archive \
+        $(call normalize-target-libraries,$(PRIVATE_ALL_STATIC_LIBRARIES)) \  [静态库直接写libxx.a全称]
+        $(call normalize-target-libraries,$(PRIVATE_ALL_SHARED_LIBRARIES)) \  [动态库使用-lxx (如果没有-Bdynamic 静态库也可以-lxx) 具体为什么翻译成两种不同的形式，以后再说]
+        -o $@ \
+        $(PRIVATE_LDFLAGS) \
+        $(PRIVATE_TARGET_GLOBAL_LDFLAGS) \
+        $(PRIVATE_TARGET_FDO_LIB) \
+        $(PRIVATE_TARGET_LIBGCC)
+endef
+
+
+
+define transform-o-to-executable
+@mkdir -p $(dir $@)
+@echo "target Executable: $(PRIVATE_MODULE) ($@)"
+$(hide) $(transform-o-to-executable-inner)
+endef
+
+
+executable.mk中
+
+ifeq ($(LOCAL_FORCE_STATIC_EXECUTABLE),true)
+$(linked_module): $(TARGET_CRTBEGIN_STATIC_O) $(all_objects) $(all_libraries) $(TARGET_CRTEND_O)
+        $(transform-o-to-static-executable)
+else
+$(linked_module): $(TARGET_CRTBEGIN_DYNAMIC_O) $(all_objects) $(all_libraries) $(TARGET_CRTEND_O)
+        $(transform-o-to-executable)
+endif
+
+$(linked_module)是一个 target 
+
+-Wl,-shared,-Bsymbolic  -shared有必要用-Wl传入吗？ 直接写不是也可以吗? 那么-Wl什么时候用呢？
+貌似在ld中需要用到 xx=xx的时候采用-Wl，比如
+-Wl,-dynamic-linker,/system/bin/linker  代表
+
+--dynamic-linker=file
+    Set the name of the dynamic linker.  This is only meaningful when generating dynamically linked ELF executables.  The default dynamic linker is normally correct;
+    don't use this unless you know what you are doing.
+
+
+## "-()" 这个的含义
+
+gcc会自动调用ld
+
+android 里面有2个特殊的 link文件
+armelflib.x  armelf.x
+
+arm-eabi/lib/ldscripts 里面也有 armelflib.x 但是跟build/core/里面的有区别。
+
+
+android  SHOWCOMMAND 的实现
+
+ifeq ($(strip $(SHOW_COMMANDS)),)
+define pretty
+@echo $1
+endef
+hide := @
+else
+define pretty
+endef
+hide :=
+endif
+
+
+ld -o <output> /lib/crt0.o hello.o -lc
+       This tells ld to produce a file called output as the result of linking the file "/lib/crt0.o" with "hello.o" and the library "libc.a"（没有加-static和-dynamic 那么默认就是-static吗？）, which will come from the standard search directories.
+
+ -l namespec
+Add the archive or object file （obj文件？） specified by namespec to the list of files to link.
+
+On systems which support shared libraries, ld may also search for files other than libnamespec.a
+
+注意，生成 .so 动态库和 exe 可执行都需要 -o 参数 而生成.o 只需要-c
+
+
+build/tool目录下面是什么东西？！
+
+android中 .so里面是不包含 /system/bin/linker字符串的
+
+1  ld的一个参数 
+       -Bdynamic -dy -call_shared
+           Link against dynamic libraries.  This is only meaningful on platforms for which shared libraries are supported.  This option is normally the default on such
+           platforms.  The different variants of this option are for compatibility with various systems.  You may use this option multiple times on the command line: it
+           affects library searching for -l options which follow it.
+
+       -Bstatic -dn -non_shared -static
+           Do not link against shared libraries.  This is only meaningful on platforms for which shared libraries are supported.  The different variants of this option are
+           for compatibility with various systems.  You may use this option multiple times on the command line: it affects library searching for -l options which follow it.
+           This option also implies --unresolved-symbols=report-all.  This option can be used with -shared.  Doing so means that a shared library is being created but that
+           all of the library's external references must be resolved by pulling in entries from static libraries.【明白！】
+
+2 gcc参数
+       -Wl,option
+           Pass option as an option to the linker.  If option contains commas, it is split into multiple options at the commas.  You can use this syntax to pass an argument
+           to the option.  For example, -Wl,-Map,output.map passes -Map output.map to the linker.  When using the GNU linker, you can also get the same effect with
+           -Wl,-Map=output.map.
+
+
+
+
+分析一下 android 编译一个可执行文件
+include $(CLEAR_VARS) 
+/*CLEAR_VARS:= $(BUILD_SYSTEM)/clear_vars.mk  而这个问价就是把各种变量赋为空*/
+
+LOCAL_SRC_FILES:= 源文件
+
+LOCAL_LDFLAGS :=
+LOCAL_CFLAGS +=
+
+LOCAL_MODULE:= linker  /*生成的文件*/
+
+LOCAL_FORCE_STATIC_EXECUTABLE := true /*init工程加了这个*/
+
+LOCAL_STATIC_LIBRARIES := libcutils libc
+
+include $(BUILD_EXECUTABLE)
+/* BUILD_EXECUTABLE:= $(BUILD_SYSTEM)/executable.mk 此文件判断 LOCAL_FORCE_STATIC_EXECUTABLE 决定静态链接还是动态链接（那么能否既静态又动态呢？）*/
+/* 用-l 加库跟 变成.o 加在文件列表中是不同的，-l只链接用到的函数，那么.o呢？ */
+
+
+
+$(filter pattern...,text)
+Returns all whitespace-separated words in text that do  match any of the pattern words, removing any words that do not match. The patterns are written using `%', just like the patterns used in the patsubst function above.
+
+
+
+
+编译动态库的时候
+
+include $(BUILD_SHARED_LIBRARY)
+/*BUILD_SHARED_LIBRARY:= $(BUILD_SYSTEM)/shared_library.mk 调用 transform-o-to-shared-lib */
+而------------------------------------------------
+define transform-o-to-shared-lib
+@mkdir -p $(dir $@)
+@echo "target SharedLib: $(PRIVATE_MODULE) ($@)"
+$(hide) $(transform-o-to-shared-lib-inner)
+endef
+封装一层完全是为了 加一些信息和hide的处理  就像函数封装
+---------------------------------------------------
+
+
+3 20111219 
+
+###########################################################
+## Look under a directory for makefiles that don't have parent
+## makefiles.
+###########################################################
+
+# $(1): directory to search under
+# Ignores $(1)/Android.mk
+define first-makefiles-under
+$(shell build/tools/findleaves.py --prune=out --prune=.repo --prune=.git \
+        --mindepth=2 $(1) Android.mk)
+endef
+
+
+4 20120116
+android源码里面的编译系统，今天发现一个有意思的小特性(海思平台的时候)：
+编译libhi_mpi.so 里面调用了了 liblog.so
+正常应该写：
+LOCAL_SHARED_LIBRARIES := liblog 但是我发现
+LOCAL_SHARED_LIBRARIES := libutils （实际上根本没有调用这个库 但是这个库依赖liblog.so） mmm showcommands 可以看到
+-llog  （注意这里，我并没有显示的包含liblog）
+-lutils
+
+二 gcc ld 参数系统解析
+
+1  Options for Code Generation Conventions
+Most of them have both positive and negative forms; the negative form of -ffoo would be -fno-foo.
+那么为什么用-f作为前缀呢?
+其中最常用的就是 -fpic/-fPIC  -fpie/-fPIE
+These options are similar to -fpic and -fPIC, but generated position independent code can be only linked into executables
+
+Options starting with -g, -f, -m, -O, -W, or --param are automatically passed on to the various sub-processes invoked by arm-linux-gcc
+那么以这些前缀开头的含义又是什么呢？
+In order to pass other options on to these processes the -W<letter> options must be used. [-W<letter>不同于上面的-W吗？]
+
+man gcc （是pc机上的gcc）发现
+ARM Options
+These -m options are defined for Advanced RISC Machines (ARM) architectures: 【即 -m 开头的都是针对arm结构的】
+比如android里面的
+    -march=armv7-a -mfloat-abi=softfp -mfpu=vfpv3-d16
+ 一直困惑，sotfp 跟后面的 vfpv3-d16不冲突吗？
+
+-mfpu=name 
+This specifies what floating point hardware (or hardware emulation) is available on the target.
+Permissible names are: fpa, fpe2, fpe3, maverick, vfp, vfpv3, vfpv3-d16 and neon
+
+-mfloat-abi=name
+Specifies which floating-point ABI to use.  Permissible values are: soft, softfp and hard.
+Specifying soft causes GCC to generate output containing library calls for floating-point operations.
+softfp allows the generation of code using hardware floating-point instructions, but still uses the
+soft-float calling conventions.  hard allows generation of floating-point instructions and uses FPU-
+specific calling conventions.
+Using -mfloat-abi=hard with VFP coprocessors is not supported.【 这里解释了上面的疑问 】
+Use -mfloat-abi=softfp with the appropriate -mfpu option to allow the compiler to generate code that makes use of the hardware floating-point capabilities for these CPUs.
+
+
+
+
+为什么android的编译都加 -nostdlib 
+
+2 android编译stagefright 的参数分析
+
+-nostdlib
+-Wl,-soname,libstagefright.so
+-Wl,-T,build/core/armelf.xsc
+-Wl,--gc-sections
+-Wl,-shared,-Bsymbolic  【-shared参数也可以不用 -Wl,】
+
+ESDS.o
+MediaBuffer.o
+MediaBufferGroup.o  [ 若干.o文件 ]
+
+-Wl,--whole-archive
+-Wl,--no-whole-archive
+
+libstagefright_aacdec.a
+libstagefright_amrnbdec.a
+libstagefright_amrnbenc.a [若干.a]
+这里要仔细想想，如果是 -lstagefright_aacdec 那么是把调用到的函数静态链接进去，因为.a就是.o的集合，所以这种写法跟直接罗列.o是一样的效果，不论是否调用，所有函数都会收入进去。
+对应 LOCAL_STATIC_LIBRARIES :=
+
+-lbinder
+-lmedia
+-lutils
+-llog
+-lcutils
+-lui  因为前面有-shared 所以这里的库就代表 libbinder.so 而不是libbinder.a
+对应 LOCAL_SHARED_LIBRARIES :=
+
+这个就是典型的有如下两个宏的情况
+LOCAL_STATIC_LIBRARIES :=
+LOCAL_SHARED_LIBRARIES :=
+那么静态库完全当作.o对待了，那么如果我就是要单独链接一个静态读里面的函数形成一个so怎么办呢？！ 好像做不到啊！
+
+
+再看看 init的Android.mk 分析
+
+LOCAL_STATIC_LIBRARIES := libcutils libc
+include $(BUILD_EXECUTABLE)
+
+
+-nostdlib
+-Bstatic
+-Wl,-T,build/core/armelf.x
+-Wl,--gc-sections
+
+init.o 【若干.o】
+
+libcutils.a
+libc.a   [这证明上面的分析是错误的 直接罗列.a 不用-lc，实际跟-lc一样效果，而不是把libc.a当作.o对待全部链接]
+liblog.a [我并没有在 LOCAL_STATIC_LIBRARIES 中写liblog啊？！]
+因为 libcutils libutils 需要调用liblog 所以android make系统就自动给加上了（binary.mk中）
+
+ifneq (,$(filter libcutils libutils,$(LOCAL_SHARED_LIBRARIES)))
+  LOCAL_SHARED_LIBRARIES := $(call insert-liblog,$(LOCAL_SHARED_LIBRARIES))  
+endif
+ifneq (,$(filter libcutils libutils,$(LOCAL_STATIC_LIBRARIES)))
+  LOCAL_STATIC_LIBRARIES := $(call insert-liblog,$(LOCAL_STATIC_LIBRARIES))  
+endif
+
+最终到命令行的时候
+动态链接就加 -llog
+静态链接就加 liblog.a
+但是在Android.mk 级别  不管静态库还是动态库 都是 libcutils 这样描述。
+
+
+
+binary.mk中
+
+# The list of libraries that this module will link against are in
+# these variables.  Each is a list of bare module names like "libc libm".
+#
+# LOCAL_SHARED_LIBRARIES
+# LOCAL_STATIC_LIBRARIES
+# LOCAL_WHOLE_STATIC_LIBRARIES
+
+--终于明白了！--
+# NOTE:
+# WHOLE_STATIC_LIBRARIES are libraries that are pulled into the
+# module without leaving anything out, which is useful for turning
+# a collection of .a files into a .so file.  Linking against a
+# normal STATIC_LIBRARY will only pull in code/symbols that are
+# referenced by the module. (see gcc/ld's --whole-archive option)
+看看上面的 stagefright编译，就有 -Wl,--whole-archive  但是后面有有一个 -Wl,--no-whole-archive 到底要有还是没有啊！
+如果使用了 LOCAL_WHOLE_STATIC_LIBRARIES 那么在
+-Wl,--whole-archive
+-Wl,--no-whole-archive
+之间就会夹着一个.a 
+
+
+--whole-archive 只在生成动态库的时候有用！
+For each archive mentioned on the command line after the --whole-archive option, include every object file in the archive in the link, rather than searching the archive for the required object files.  This is normally used to turn an archive file into a shared library, forcing every object to be included in the resulting shared library.  This option may be used more than once.
+
+Two notes when using this option from gcc: First, gcc doesn't know about this option, so you have to use -Wl,-whole-archive.【 -shared可以用-Wl也可以不用 】
+Second, don't forget to use -Wl,-no-whole-archive after your list of archives, because gcc will add its own list of archives to your link and you may not want this flag to affect those as well.
+
+--no-whole-archive
+Turn off the effect of the --whole-archive option for subsequent archive files.
+【今天又明白不少东西啊！】
+
+
+[Specifically, on ELF and SunOS systems, ld will search a directory for a library called libnamespec.so before searching for one called libnamespec.a.]
+-Bdynamic 参数又起到了什么作用呢？
+[Link against dynamic libraries.]
+[ You may use this option multiple times on the command line: it affects library searching for -l options which follow it.]
+是紧跟在后面的才受到影响吗？
+ -Bstatic
+This option can be used with -shared.  Doing so means that a shared library is being created but that all of the library's external references must be resolved 
+by pulling in entries from static libraries.
+那么
+
+===============================================================================================================================================================================================
+-rpath=dir
+           Add a directory to the runtime library search path.  This is used when linking an ELF executable with shared objects.  All -rpath arguments are concatenated and
+           passed to the runtime linker, which uses them to locate shared objects at runtime.  The -rpath option is also used when locating shared objects which are needed
+           by shared objects explicitly included in the link; see the description of the -rpath-link option.  If -rpath is not used when linking an ELF executable, the
+           contents of the environment variable "LD_RUN_PATH" will be used if it is defined.
+           The -rpath option may also be used on SunOS.  By default, on SunOS, the linker will form a runtime search patch out of all the -L options it is given.  If a
+           -rpath option is used, the runtime search path will be formed exclusively using the -rpath options, ignoring the -L options.  This can be useful when using gcc,
+           which adds many -L options which may be on NFS mounted file systems.
+           For compatibility with other ELF linkers, if the -R option is followed by a directory name, rather than a file name, it is treated as the -rpath option.
+
+-rpath-link=dir
+           When using ELF or SunOS, one shared library may require another.  This happens when an "ld -shared" link includes a shared library as one of the input files.
+           When the linker encounters such a dependency when doing a non-shared, non-relocatable link, it will automatically try to locate the required shared library and
+           include it in the link, if it is not included explicitly.  In such a case, the -rpath-link option specifies the first set of directories to search.  The
+           -rpath-link option may specify a sequence of directory names either by specifying a list of names separated by colons, or by appearing multiple times.
+
+           This option should be used with caution as it overrides the search path that may have been hard compiled into a shared library. In such a case it is possible to
+           use unintentionally a different search path than the runtime linker would do.
+           The linker uses the following search paths to locate required shared libraries:
+
+           1.  Any directories specified by -rpath-link options.
+           2.  Any directories specified by -rpath options.  The difference between -rpath and -rpath-link is that directories specified by -rpath options are included in
+               the executable and used at runtime, whereas the -rpath-link option is only effective at link time. Searching -rpath in this way is only supported by native
+               linkers and cross linkers which have been configured with the --with-sysroot option.
+           3.  On an ELF system, for native linkers, if the -rpath and -rpath-link options were not used, search the contents of the environment variable "LD_RUN_PATH".
+           4.  On SunOS, if the -rpath option was not used, search any directories specified using -L options.
+           5.  For a native linker, the search the contents of the environment variable "LD_LIBRARY_PATH".
+           6.  For a native ELF linker, the directories in "DT_RUNPATH" or "DT_RPATH" of a shared library are searched for shared libraries needed by it. The "DT_RPATH"
+               entries are ignored if "DT_RUNPATH" entries exist.
+           7.  The default directories, normally /lib and /usr/lib.
+           8.  For a native linker on an ELF system, if the file /etc/ld.so.conf exists, the list of directories found in that file.
+           If the required shared library is not found, the linker will issue a warning and continue with the link.
+
+
+-( archives -)
+--start-group archives --end-group
+           The archives should be a list of archive files.  They may be either explicit file names, or -l options.
+
+           The specified archives are searched repeatedly until no new undefined references are created.  Normally, an archive is searched only once in the order that it is
+           specified on the command line.  If a symbol in that archive is needed to resolve an undefined symbol referred to by an object in an archive that appears later on
+           the command line, the linker would not be able to resolve that reference.  By grouping the archives, they all be searched repeatedly until all possible
+           references are resolved.
+
+           Using this option has a significant performance cost.  It is best to use it only when there are unavoidable circular references between two or more archives.
+
+
+=============================================================================================================================================================================================
+
+
+--------------
+8.12 Functions That Control Make
+
+$(info text...)
+    This function does nothing more than print its (expanded) argument(s) to standard output. No makefile name or line number is added. The result of the expansion of this function is the empty string. 
+
+
+
+---------------------------------------------------------------------------
+10 关于Makefile中 export 环境变量
+我们可以在 .sh 文件里面 也可以在 makefile 里面执行 export 命令(实际上makefile里面可以执行任何命令)
+
+
+11 关于kernel生成 built-in.ko 和 .ko 的命令
+一直困惑 .ko 到底是用什么命令生成的  make V=1 modules
+arm-linux-ld -EL -r  -T scripts/module-common.lds --build-id -o logger.ko logger.o drivers/staging/android/logger.mod.o
+
+由若干.o 生成 一个built-in.o
+--build-id
+Request creation of ".note.gnu.build-id" ELF note section. The contents of the note are unique bits identifying this linked file
+
+arm-linux-uclibcgnueabi-gcc -c -o  logger.o logger.c  奇怪，编译ko的时候并没有加 -fPIC 难道ko 不是位置无关代码吗？
+
+20110913 LOCAL_CFLAGS
+
+20110913 由.a 生成 .so
+
+
+生成map文件，gcc间接调用ld，所有的ld选项前必须加上“-Wl,”,因为-Map是ld的选项。需要增加编译参数“ -Wl,-Map,mapfile”
+
+例：gcc -o helloworld helloworld.c -Wl,-Map,helloworld.map
+
+
+
+--------------暂时--------------
+在外面编译 ko 文件
+
+The preferred name for the kbuild files are 'Makefile' but 'Kbuild' can
+be used and if both a 'Makefile' and a 'Kbuild' file exists, then the 'Kbuild'
+file will be used.
+
+即 kernel 里面可以使用 Makefile 也可以使用 Kbuild
+
+这是nxp 编译fb驱动的打印，看得出，需要kernel目录的！呵呵
+gmake -s -C target/output/objs/pnx8473_hirf_moca M=vpmfbDrv/tmp/armgnu_linux_el_cortex-a9_kmodule/kmodule  modules
+
+
+
+init_module 是一个系统调用  insmode 命令就是用这个函数实现的。
+
+在kernel/Documentation/kbuild/modules.txt 文件中有：
+
+--- 2.1 Building external modules
+
+	Use the following command to build an external module:
+
+		make -C <path-to-kernel> M=`pwd` 【这里跟上面的gmake -s 一致】
+
+	For the running kernel use:
+
+		make -C /lib/modules/`uname -r`/build M=`pwd`
+在ubuntu上 /lib/modules/`uname -r`/build指向了 /usr/src/linux-headers-2.6.32-21 里面是kernel去掉所有.c .h 后的一个工程躯壳
+
+
+1 build/core/combo/select.mk 定义 
+  $(combo_target)SHLIB_SUFFIX := .so  
+  $(combo_target)STATIC_LIB_SUFFIX := .a
+
+2 现在我要设置 TARGET_ARCH_VARIANT = armv7-a 需要修改哪里，直接TARGET_linux-arm.mk当然是最直接的
+  make TARGET_ARCH_VARIANT=armv7-a 也行。
+  找到了 ./htc/passion-common/BoardConfigCommon.mk:TARGET_ARCH_VARIANT := armv7-a-neon
+
+-------------------------------------
+20120731
+关于android4.0 源码中的各种 PREBUILT
+
+一个HOST静态库的预编译，十分简单：
+include $(CLEAR_VARS) 
+LOCAL_PREBUILT_LIBS := ../prebuilt/libunz.a 
+include $(BUILD_HOST_PREBUILT) 
+这里还不能用 $(LOCAL_PATH) 用了会出现 external/webkit/external/webkit/../prebuilt 奇怪。
+
+prebuilt.mk和multi_prebuilt.mk，对应的方法宏是BUILD_PREBUILT和 BUILD_MULTI_PREBUILT。
+
+prebuid 动态库的方法
+
+LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS) 
+LOCAL_PREBUILT_LIBS := libA.so libB.so
+include $(BUILD_MULTI_PREBUILT) //不能用BUILD_PREBUILT 提示 dont use LOCAL_PREBUILT_LIBS anymore
+
+include $(CLEAR_VARS) 
+LOCAL_MODULE := libcorecomp.so 
+LOCAL_MODULE_CLASS := SHARED_LIBRARIES 
+LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES) 
+LOCAL_SRC_FILES := pre_built/$(LOCAL_MODULE) 
+OVERRIDE_BUILT_MODULE_PATH := $(TARGET_OUT_INTERMEDIATE_LIBRARIES) 
+include $(BUILD_PREBUILT) 
+
+BUILD_PREBUILT 只能这样用
+
+build/core/base_rules.mk:78: *** Module name: libwebcore.so
+build/core/base_rules.mk:79: *** Makefile location: external/webkit
+build/core/base_rules.mk:80: * 
+build/core/base_rules.mk:81: * Each module must use a LOCAL_MODULE_TAGS in its
+build/core/base_rules.mk:82: * Android.mk. Possible tags declared by a module:
+build/core/base_rules.mk:83: * 
+build/core/base_rules.mk:84: *     optional, debug, eng, tests, samples
+build/core/base_rules.mk:85: * 
+build/core/base_rules.mk:86: * If the module is expected to be in all builds
+build/core/base_rules.mk:87: * of a product, then it should use the
+build/core/base_rules.mk:88: * "optional" tag: 
+build/core/base_rules.mk:89: * 
+build/core/base_rules.mk:90: *    Add "LOCAL_MODULE_TAGS := optional" in the
+build/core/base_rules.mk:91: *    Android.mk for the affected module, and add
+build/core/base_rules.mk:92: *    the LOCAL_MODULE value for that component
+build/core/base_rules.mk:93: *    into the PRODUCT_PACKAGES section of product
+build/core/base_rules.mk:94: *    makefile(s) where it's necessary, if
+build/core/base_rules.mk:95: *    appropriate.
+build/core/base_rules.mk:96: * 
+build/core/base_rules.mk:97: * If the component should be in EVERY build of ALL
+build/core/base_rules.mk:98: * products, then add its LOCAL_MODULE value to the
+build/core/base_rules.mk:99: * PRODUCT_PACKAGES section of
+build/core/base_rules.mk:100: * build/target/product/core.mk
+
+
+include $(CLEAR_VARS)
+LOCAL_MODULE_CLASS := ETC  //这里写成ETC 就被安装到了 system/etc目录了 晕死
+LOCAL_MODULE := init.godbox.sh
+LOCAL_SRC_FILES := $(LOCAL_MODULE)
+include $(BUILD_PREBUILT)
+
+-----------------
+我怎么才能用一个快捷方法做出预编译版本android呢？其实完全针对externel处理完就可以了。
+
+---------------------------------------------------------------------------------
+
+
+
+
+关于configure
+1) If you meant to cross compile, use `--host'.
+
+库的链接原理，库存储路径，基本原则（ubuntu系统）
+
+---
+make的调试方法
+
+
+
+$(wordlist s,e,text)
+Returns the list of words in text starting with word s and ending with word e (inclusive).
+
+
+make 调试方法，如何快速实验一个函数
+
+makefile：
+test:=$(wordlist 3,5, 1 2 3 4 5 6 7 8 9)
+all:
+	echo $(test)
+
+输出3 4 5
+
+
+

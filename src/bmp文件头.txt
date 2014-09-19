@@ -1,0 +1,9 @@
+Save as 16-bit 565 BMP has incorrect header size  可以有16bit bmp？
+
+-bmp           Select BMP output format (Windows style)
+-os2           Select BMP output format (OS/2 style)
+-pnm           Select PBMPLUS (PPM/PGM) output format (default)
+
+GIMP 打开一个bmp，另存，选bmp，save，高级选项选择16bit
+
+

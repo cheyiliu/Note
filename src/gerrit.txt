@@ -1,0 +1,817 @@
+1 安装
+	1) gerrit
+	java -jar gerrit.war init -d review_site
+
+	一直enter即可安装在review_site目录
+	第一个注册的用户将成为管理员，单击register出现 OpenID 的界面。不需要密码，需要注册一
+	个google的openid
+	由./etc/gerrit.config中的[auth]字段决定，修改成HTTP后无法使用，改为LDAP后，出现跟原
+	来一样的sign in 但是点击错误，应该是因为没有安装ldap服务。 
+	gerrit.sh stop
+	gerrit.sh start
+	gerrit.sh restart
+
+	Gerrit Code Review is not shipped with Bouncy Castle Crypto v144
+	If available, Gerrit can take advantage of features
+	in the library, but will also function without it.
+	Download and install it now
+
+	[theme]
+	trimColor = e1c3f1
+
+	2) ldap lam
+	ldap挺难配置，就用openid做实验吧。在http://openid.net/get-an-openid/ 获得一个openid
+	apt-get install slapd ldap-utils
+
+
+	[anth]  使用http的配置方法
+	增加字段：
+	[ldap]
+		    server = ldap://localhost
+		    groupBase = ou=group,dc=vision-com,dc=com
+		    accountBase = ou=People,dc=vision-com,dc=com
+		    accountFullName = cn
+	我的机器没有ldap服务，所以把server改成192.168.1.4
+	申请git权限需要执行 echo User mengrui >>config
+
+
+2 安全问题
+	http
+	ssh 2种协议下载
+
+
+3 基本操作
+	1 操作数据库删除组和用户
+	2 隐藏仓库：General-State-Active/Read Only/Hidden
+	2 Gitweb的代码位于git的源码库中
+	192.168.7.32就是正常步骤 apt-get install 的git
+	find . -name "gitweb.cgi"
+	./usr/share/gitweb/gitweb.cgi
+	修改gerrit配置文件gerrit.config 加入
+
+	[gitweb]
+		cgi = /var/www/git/gitweb.cgi
+	重启gerrit2
+
+4 数据库结构
+	默认使用H2数据库。
+	远程登录数据库： ssh -p 29418 user@my_server gerrit gsql
+
+
+ssh-keygen -t rsa -C "xx@xxx.com"  (填写你的邮箱)
+
+
+1 删除组和项目
+Google做法：重命名组名为"zzz DELETE THIS 1" or
+whatever, and then use a DB query to delete all groups where name LIKE
+'zzz DELETE THIS %'. Ugly, but it allows us to batch delete every once
+in a while.
+
+2.7中 在all-projects 中 Global Capabilities添加Access Database权限（默认关闭）
+
+------------- 工作的时候不能使用
+gerrit2@vcs:~/review_site$ java -jar bin/gerrit.war gsql
+fatal: DbInjector failed
+fatal: Unable to determine SqlDialect
+fatal:   caused by org.h2.jdbc.JdbcSQLException: Database may be already in use: "Locked by another process". Possible solutions: close all other connection(s); use the server mode; SQL statement:
+fatal: null/1432263210642c8fca74c3f4d112af40f04851e4ae1 [90020-147]
+-------------
+
+java -jar bin/gerrit.war gsql （本地登录，下面是远程登录）
+ssh -p 29418 192.168.7.32 gerrit gsql （无需密码，只能靠只给管理员开通数据库访问控制）
+Welcome to Gerrit Code Review 2.7
+(H2 1.3.168 (2012-07-13))
+
+Type '\h' for help.  Type '\r' to clear the buffer.
+
+gerrit> 
+
+gerrit>  delete from ACCOUNT_GROUPS  where NAME = 'Anonymous Users'; （注意，是单引号）
+
+select * from CHANGES
+
+
+show tables；
+
+数据库文件就是 /db/ReviewDB.h2.db 包含 show tables；显示的那些表。
+
+gerrit> select * from ACCOUNT_GROUPS 
+DESCRIPTION                               | GROUP_TYPE | GROUP_UUID                               | NAME                  | OWNER_GROUP_UUID                         | VISIBLE_TO_ALL | GROUP_ID
+ ------------------------------------------+------------+------------------------------------------+-----------------------+------------------------------------------+----------------+---------
+ Gerrit Site Administrators                | INTERNAL   | 274101ed30111e3a2868e5d457ac04e2ac6946da | Administrators        | 274101ed30111e3a2868e5d457ac04e2ac6946da | N              | 1
+ Any user, signed-in or not                | SYSTEM     | global:Anonymous-Users                   | Anonymous Users       | 274101ed30111e3a2868e5d457ac04e2ac6946da | N              | 2
+ Any signed-in user                        | SYSTEM     | global:Registered-Users                  | Registered Users      | 
+
+
+gerrit> select * from ACCOUNTS;
+ CONTACT_FILED_ON | FULL_NAME | COMMENT_VISIBILITY_STRATEGY | COPY_SELF_ON_EMAIL | DATE_FORMAT | DOWNLOAD_COMMAND | DOWNLOAD_URL | MAXIMUM_PAGE_SIZE | RELATIVE_DATE_IN_CHANGE_TABLE | REVERSE_PATCH_SET_ORDER | SHOW_SITE_HEADER | SHOW_USERNAME_IN_REVIEW_CATEGORY | TIME_FORMAT | USE_FLASH_CLIPBOARD | INACTIVE | PREFERRED_EMAIL            | REGISTERED_ON           | ACCOUNT_ID
+ -----------------+-----------+-----------------------------+--------------------+-------------+------------------+--------------+-------------------+-------------------------------+-------------------------+------------------+----------------------------------+-------------+---------------------+----------+----------------------------+-------------------------+-----------
+ NULL             | NULL      | NULL                        | N                  | NULL        | NULL             | SSH          | 25                | N                             | N                       | Y                | N                                | NULL        | Y                   | N        | gaojie@cyclecentury.com    | 2013-12-09 12:11:19.359 | 1000000
+ NULL             | NULL      | NULL                        | N                  | NULL        | CHECKOUT         | SSH          | 25                | N                             | N                       | Y                | N                                | NULL        | Y                   | 
+
+
+gerrit> select * from  ACCOUNT_SSH_KEYS;
+ SSH_PUBLIC_KEY                                                                                                                                                                                                                                                                                                                                                                                                              | VALID | ACCOUNT_ID | SEQ
+ ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------+------------+----
+ ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDT4UN9Tg2KkikJqmTYnlp/rwbomNRTSbIjAIcxa1QLpqlhiS8yZIrKlRh9oJWpRGtjapnlS/o5M0errV6pd4ZIbA00U9u1XlZUvPl6DCYvPnxh5VoZKf3DlUcoUBrMQFLLlxsaDvFrRDzmFoRKf4LU7O4hftWC7UD5vp/acVPXOby8zmkaoIgAN4tzMISnAtr9v7ct7cslnqCSgyLJESf6YWiPNPAC210DAPU7ofZYAM+b5q1E7k45OpvEpFRGYBTCoMHNfGubxJ+ctj8HKE5R+zEV/B/nUUptDSd/RFOSC5FRyCdqAYs65uJyPpDGtbC3NE3pixFZa4DKMc34oibl gaojie@cyclecentury.com        | Y     | 1000000    | 1
+ ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAvgHtScHfM0cQ5JFQwoJt2skqwJNB/vGzXiO6BagiBM2nmV/Q+ZG74MIlTPl9EcUauaCrAScJSR5NEessGIyk4uS51cKxoQgVJwcP7w9bFfDuqM5MFsnxn2DVEpE/PcYNf3HEsoCraFP/V3n12IFD1mMk1hvy6g21VodLKmVnjzUq72Ldrqgf3PsEpPal+M/B88f4shMPRcCJuLafOPwXE1N6TTEpmllFFpicFhCD0Vl/tMdKVj79S3tlQrbG/TDM8T26iC20LHl8vs0IBPKKUQe956RsZMoTEQktAZeBv/YG+Y90VZW2rt50uWKE86bJZNrRqH1PvQFWuKg+qaXZIQ== xuss@xuss-desktop              | Y     | 1000001    | 1
+
+
+ ADMIN_GROUP_ID | ADMIN_GROUP_UUID | ANONYMOUS_GROUP_ID | BATCH_USERS_GROUP_ID | BATCH_USERS_GROUP_UUID | OWNER_GROUP_ID | REGISTER_EMAIL_PRIVATE_KEY | REGISTERED_GROUP_ID | SITE_PATH                | WILD_PROJECT_NAME | SINGLETON
+ ---------------+------------------+--------------------+----------------------+------------------------+----------------+----------------------------+---------------------+--------------------------+-------------------+----------
+ NULL           | NULL             | NULL               | NULL                 | NULL                   | NULL           | NULL                       | NULL                | /home/gerrit/review_site | NULL              | X
+(1 row; 2 ms)
+
+
+gerrit> select * from CHANGES; （I开头的是Change-ID）
+ CHANGE_KEY                                | CREATED_ON              | CURRENT_PATCH_SET_ID | DEST_BRANCH_NAME  | DEST_PROJECT_NAME | LAST_SHA1_MERGE_TESTED | LAST_UPDATED_ON         | MERGEABLE | OPEN | OWNER_ACCOUNT_ID | SORT_KEY         | STATUS | SUBJECT             | TOPIC | ROW_VERSION | CHANGE_ID
+
+
+ I8082fa73d2c07bca12b83681e60260522f40f2e7 | 2013-12-09 13:40:04.97  | 1                    | refs/meta/config  | GateWay/app       | NULL                   | 2013-12-26 14:56:32.305 | Y         | N    | 1000000          | 002a04a000000001 | M      | Modify access rules | NULL  | 6           | 1
+ I6becc812c3122b8a890fe6b002591f244c3d9916 | 2013-12-12 12:07:22.738 | 1                    | refs/meta/config  | GateWay/kernel    | NULL                   | 2013-12-26 14:55:39.552 | Y         | N    | 1000000          | 002a049f00000021 | M      | Modify access rules | NULL  | 5           | 33
+
+
+所有信息存储在ReviewDB.h2.db 中 ReviewDB.h2.trace是干别的用的。
+
+
+delete from CHANGES where DEST_PROJECT_NAME='APK/appStore';
+可以删除所有change记录 ，具体体现在 all->open   all->merged  由 | MERGEABLE | OPEN | 这2个字段的Y N 决定.
+
+
+gerrit> select * from CHANGE_MESSAGES;
+ AUTHOR_ID | MESSAGE                                                           | PATCHSET_CHANGE_ID | PATCHSET_PATCH_SET_ID | WRITTEN_ON              | CHANGE_ID | UUID
+ ----------+-------------------------------------------------------------------+--------------------+-----------------------+-------------------------+-----------+------------------
+ 1000000   | Patch Set 1: Code-Review+2                                        | 1                  | 1                     | 2013-12-13 16:15:32.143 | 1         | daeb3561_81ff7a01
+ 1000000   | Patch Set 1: Code-Review+2                                        | 33                 | 1                     | 2013-12-13 16:15:47.739 | 33        | daeb3561_61047615
+ 1000100   | Abandoned                                                         | 65                 | 1                     | 2013-12-25 18:18:04.02  | 65        | da87b5cf_61ffb602
+ 1000100   | Restored                                                          | 65                 | 1                     | 2013-12-25 18:18:11.332 | 65        | da87b5cf_81043a16
+ 1000100   | Abandoned                                                         | 65                 | 1                     | 2013-12-25 18:18:23.618 | 65        | da87b5cf_2109ae2c
+ 1000100   | Abandoned                                                         | 66                 | 1                     | 2013-12-25 18:18:30.214 | 66        | da87b5cf_410e3236
+ 1000099   | Patch Set 1: Code-Review+1                                        | 67                 | 1                     | 2013-12-25 18:21:21.361 | 67        | da87b5cf_e112e657
+ 1000000   | Patch Set 1: Code-Review+1                                        | 67                 | 1                     | 2013-12-25 18:24:36.711 | 67        | da87b5cf_01102a4d
+ 1000000   | Patch Set 1: Code-Review+2                                        | 67                 | 1                     | 2013-12-25 18:46:50.306 | 67        | da87b5cf_a11cde6b
+ 1000099   | Patch Set 1: Code-Review+2                                        | 67                 | 1                     | 2013-12-25 18:51:16.363 | 67        | da87b5cf_c119e27a
+ 1000000   | Abandoned                                                         | 67                 | 1                     | 2013-12-26 14:03:36.213 | 67        | da87b5cf_6126d6bc
+ 1000000   | Restored                                                          | 67                 | 1                     | 2013-12-26 14:41:04.194 | 67        | da87b5cf_812bda81
+ 1000000   | Restored                                                          | 66                 | 1                     | 2013-12-26 14:41:57.975 | 66        | da87b5cf_2120ce9a
+ 66        | da87b5cf_8152fa11
+
+
+-----------
+20131223   192.168.1.4上的gerrit突然无法启动，init（相当于重新安装）提示：
+fatal: DbInjector failed
+fatal: Unable to determine SqlDialect
+fatal:   caused by org.h2.jdbc.JdbcSQLException: General error: "java.lang.NullPointerException" [50000-147]
+fatal:   caused by java.lang.NullPointerException
+
+因为gerrit没有起来，ssh -p 29418 192.168.7.32 gerrit gsql 不能用（29418端口不可用）
+用java -jar bin/gerrit.war gsql （本地登录，下面是远程登录）
+出现一样的提示：
+fatal: DbInjector failed
+fatal: Unable to determine SqlDialect
+fatal:   caused by org.h2.jdbc.JdbcSQLException: General error: "java.lang.NullPointerException" [50000-147]
+fatal:   caused by java.lang.NullPointerException
+
+
+ 2013-12-24 09:16:03.488 | 李啸   | lixiao@cyclecentury.com  |  1000000
+ 2013-12-24 09:33:25.481 | 杨乾恒 | yangqh@cyclecentury.com  |  1000001
+
+
+
+
+
+
+
+ReviewDB.h2.db  目录外
+ReviewDB.h2.db  /db 目录
+ReviewDB.trace.db
+
+
+
+
+Register an SSH public key:
+Gerrit Code Review uses public-key cryptography and SSH to authenticate you 
+during git's push and pull commands to hosted projects. Registering your public 
+key allows Gerrit to identify you whenever you connect through SSH.
+
+粘贴之前运算好的 public ssh key  在.ssh目录下
+id_rsa.pub（这是公钥） 
+
+ssh -p 29418 gaojie@192.168.1.52
+
+  ****    Welcome to Gerrit Code Review    ****
+
+  Hi gaojie, you have successfully connected over SSH.
+
+  Unfortunately, interactive shells are disabled.
+  To clone a hosted Git repository, use:
+
+  git clone ssh://gaojie@ubuntu:29418/REPOSITORY_NAME.git
+
+--------------
+创建一个新工程
+Creating a new repository over SSH is perhaps the easiest way to configure a new project:
+ssh -p 29418 review.example.com gerrit create-project --name new/project
+
+----
+gerrit安装完默认在git目录下有一个 All-Projects.git 这是干啥的呢？
+
+我在Admin->Projects里面看到了	
+All-Projects  Rights inherited by all other projects //其他所有项目继承这个权限
+test
+两个项目
+
+这个test.git 就可以访问了！那么如果不经过gerrit，git仓库服务端怎么建立呢？
+
+
+在gerrit中创建一个项目：
+$ ssh -p 29418 demo@localhost gerrit create-project --name example.git
+当然也可以在服务器端，git init --bare 创建仓库
+
+ ! [remote rejected] master -> master (can not create new references)
+error: failed to push some refs to 'ssh://gaojie@192.168.1.52:29418/test.git'
+
+无法push！
+
+在setting -> Watched Projects 加入test 项目
+
+怎么设置才能直接提交呢？ 不经过review
+
+----------------
+git config remote.origin.push refs/heads/*:refs/for/*
+git push origin
+
+
+个让你做代码审查的Review按钮，但却没有提交按钮
+这是因为变更在提交前默认要评审+2，每个人只能+1，也就是说只有一个人做代码审查是无法提交代码的
+我们可以修改Gerrit的规则，允许一个人投票+2，也可以准许+1提交
+
+新装完的系统，8080端口被tomcat占用。而gerrit默认也是8080，有冲突
+1 删除tomcat
+2 改gerrit为8081
+
+
+重新安装gerrit需要备份 git etc db 3个目录
+回复后，我自己的用户出现问题：访问方式只剩下匿名http，没有ssh方式显示了
+
+
+
+root@192.168.7.31 密码 ccdt@123456
+启动ladp
+
+---------------------------------
+新安装的ubuntu server 默认没有root 需要password root  但是只能用安装系统时候创建的
+用户 soduo 。后创建的用户不行 见如下提示
+gerrit@ubuntu:/home$ sudo passwd root
+[sudo] password for gerrit: 
+Sorry, try again.
+[sudo] password for gerrit: 
+gerrit is not in the sudoers file.  This incident will be reported.
+
+
+
+28 'Gitweb' is a Git web interface. It is written in Perl.and can be used as a CGI script
+   其中一个功能是提供RSS输入，用于跟踪项目的开发进展
+
+97 要在gerrit中有权使用gitweb，需要对/refs/* 开read权限，  /refs/head/*开read还不行。
+   (20131218)gerrit2.7 还需要对/refs/meta/config开通读权限
+按理说，我对refs/* 都开了读权限了，应该没有必要再单独开通refs/meta/config开通啊？
+
+你是用apache来启的gitweb？直接用gerrit内置gitweb没这个问题啊
+Gitweb实际上是用perl写的CGI脚本，一般都是在Apache中使用。在Gerrit中，它也可以直接被
+调用转换成HTML显示。
+
+我此前有写过一篇关于搭建gitweb服务的文章（http://blog.csdn.net/benkaoya/article/details/8094295），
+在这篇文章中介绍的是http正向代理，需要设置Apache的配置文件httpd.conf和gitweb配置文件gitweb.conf。
+
+而要在Gerrit中使用gitweb来浏览版本库，并不需要设置上面提到的两个配置文件。可以参考gerrit
+帮助手册中Gerrit Code Review- Gitweb Integration章节。我简要总结下操作步骤：
+
+
+普通用户要看到gitweb 需要开通权限：
+Access Control
+Access controls for internally managed gitweb page views are enforced using the standard project READ +1 permission.
+
+READ +1 是什么意思？
+
+Read +1			Read
+Read +2			Read & Push (refs/for/refs/…)
+Read +3			Read & Push (refs/for/refs/…) & Push Merge Commit
+
+
+-20131107--Apache 配置---------------------
+1 虚拟主机 （反向代理） 
+VirtualHost
+gerrit2.8 使用http 认证方式调试2天没有成功，不爽。
+
+Gerrit如果要用http认证，就必须使用反向代理
+注意：
+安装gerrit过程中有 y/N  Y/n  大写的表示默认
+不行，不搞http 反向代理了。
+
+-------------------------------------------
+htpasswd - Manage user files for basic authentication
+htpasswd  is  used  to  create  and  update the flat-files used to store usernames 
+and password for basic authentication of HTTP users.
+
+
+my gerrit runs on the inbuild jetty countainer
+
+Jetty 是一个开源的servlet容器
+
+安装完后，Gerrit服务会自己启动，你可以看到Gerrit服务打开了两个端口，其中29418是默认
+的Gerrit SSH端口，而8080是默认的Gerrit Web端口。如果这两个默认的端口被占用了，就要换个了。
+netstat -ltpn | grep -i gerrit  （注意 net）
+
+
+http://192.168.7.31/lam
+密码：admin@ccdt2013
+
+ubuntu下添加用户是adduser 而不是 useradd
+有何区别?
+
+------------
+20131126
+192.168.7.32 配置gerrit使用mysql 账户 gerrit2:89780362
+
+Authentication method          [OPENID/?]: ldap
+LDAP server                    [ldap://localhost]: 192.168.7.31
+Use SSL                        [y/N]? 
+LDAP username                  : 
+Account BaseDN                 [DC=168,DC=7,DC=31]: 
+Group BaseDN                   [DC=168,DC=7,DC=31]: 
+
+
+-------------------------------------------------------
+2013-11-27
+刘新宇 配置ldap+lam（很短时间就弄好，应该比较简单）
+
+Suffix People > cyldap > com
+
+No Unix groups found in LDAP! Please create one first
+This is easy. Just create a group before creating users.
+
+
+Bouncy Castle Crypto
+
+---------
+20131127 ldap最小配置成功
+[auth]
+        type = LDAP
+[ldap]
+        server = ldap://192.168.7.31
+        accountBase = ou=People,dc=cyldap,dc=com
+        groupBase = ou=People,dc=cyldap,dc=com
+
+
+====
+数据库使用mysql 没有成功
+
+-20131106---gerrit2-整理----------
+1 gerrit2.8 使用 [auth] type = http 时，访问http://ip:8080 提示错误：
+
+Check the HTTP server's authentication settings.
+The HTTP server did not provide the username in the Authorization header（**） when it 
+forwarded the request to Gerrit Code Review.
+
+If the HTTP server is Apache HTTPd, check the proxy configuration includes an 
+authorization directive with the proper location, ensuring it ends with '/':
+
+提示http请求未带授权头，你也许会奇怪这里的http服务器是哪里来的。这个其实就是打包在
+gerrit.war文件里的jetty服务器
+
+为什么要proxy
+
+2 Database server type           [h2]: mysql
+
+Gerrit Code Review is not shipped with MySQL Connector/J 5.1.21
+**  This library is required for your configuration. **
+Download and install it now [Y/n]? 
+Downloading 
+http://repo2.maven.org/maven2/mysql/mysql-connector-java/5.1.21/mysql-connector-java-5.1.21.jar ...
+
+Checksum mysql-connector-java-5.1.21.jar OK
+Server hostname                [localhost]: 
+Server port                    [(mysql default)]: 
+Database name                  [reviewdb]: 
+Database username              [test1]: 
+test1's password               :  (这里我写的 123456)
+              confirm password : 
+
+*** User Authentication
+*** 
+
+Behind reverse proxy           [y/N]?   （可以选no吗）
+
+
+gerrit服务器
+192.168.7.32 root  89780362
+             test1 89780362
+安装在test1 用户下
+
+---------
+关注一下mediawiki的gerrit review  他好像把google的gerrit做了修改，界面效果不一样了。-------------
+仓库名字不在db里面。gerrit上新建的仓库可以选择权限继承自哪个项目。但是建立好的项目却
+无法修改继承自属性
+
+-----------------------------------
+关于gerrit2.4.2配置问题【重要】
+1 all-projects  Administrators  Anonymous Users对refs/* 都有读权限，这显然不行，
+需要编辑，关闭 Anonymous Users的读权限。
+删掉之后，非管理员登录后，什么项目都看不到了
+
+我的帐号也显示Anonymous Coward <gaojie@cyclecentury.com>  匿名的懦夫，有意思，那么怎么才能显示真名呢？
+I know how to solve the problem, in Settings | Contact Information, set the full name.
+但是我用LDAP  setting里面根本不让设置。
+
+[ldap]
+        server = ldap://localhost
+        groupBase = ou=group,dc=vision-com,dc=com
+        accountBase = ou=People,dc=vision-com,dc=com
+        accountFullName = cn  //配置了这句，就显示我的中文名字啦，^_^  Coward消失，晕死
+
+ldap中的帐号信息分为 personal  UNix   飞鸽也这么分，什么意思呢？
+
+
+我发现ldap创建新用户时候，要先设置密码在保存用户信息，才能创建成功。
+
+分组信息如果保存在本地，那么一旦升级，H2数据库如果不能升级，这些数据就无法导出，
+但是现在怎么无法关联ldap的用户组呢？
+
+gerrit登录时候显示 Session cookie not available.   看来能否保存是可以设置的，强制不
+保存可以增强安全性
+
+原来默认的竟然是所有人都有所有仓库的读权限！这显然是不可取的。
+
+-------------------------------------------------------
+新安装gerrit2 比较注册一个用户（添加public key信息）和没有注册用户的区别。区别文件就是:ReviewDB.h2.db
+我这个文件里面能找到 我的public key 信息，明文保存。
+
+-------------------------------------------------------
+跟踪了一下 gerrit上创建一个工程，提交一个修改，审核， submiti 各个过程， gerrit目录的变化。
+ReviewDb.h2.db都又变化。提交后仓库的pack目录有内容，refs/changes目录有内容。后者只是一个sha号码，
+真正的代码应该在前者。
+看来各个用户的public key信息， review时候的一些注释信息等，比如我查到了
+Looks good to me, but someone else must approve字符串。
+
+-----------------
+LDAP 方式登录gerrit2  也是第一个登录者是管理员权限。
+组信息不在gerrit里面而是在ldap里。
+
+
+------------
+gerrit2 2.4.2 
+组名字改成了“空”那个组仍然存在。gerrit2.4.2 没有在webui层提供删除组的接口，只能通过
+直接操作H2 数据库了。目前，创建的组是无法删除的，只能修改名字。
+
+另外，一个组的owners 还是一个组，比如自己这个组或者别的某个组。
+
+LDAP Account Manager (LAM)是一个Web前台，用于管理存储在LDAP目录中的资源如
+
+可见 known_hosts 记录的确实是服务器的公钥,在服务器的  /etc/ssh/ssh_host_rsa_key.pub中！ 并没有Hash
+然后 ssh -p 29418 gaojie@192.168.1.52 gerrit create-project --empty-commit --name test-proj 创建工程的时候
+使用gerrit2 用户下面的public key  拷贝到known_hosts中 。
+
+这个时候我如果重新安装了gerrit，就会在gerrit目录重新生成rsa key  再执行
+ssh -p 29418 gaojie@192.168.1.52 gerrit create-project --empty-commit --name test-proj
+提示：
+It is also possible that a host key has just been changed. （raskey改变了）
+The fingerprint for the RSA key sent by the remote host is
+d5:ed:6e:b7:b0:b1:91:96:f7:ca:40:b9:3d:42:e4:ce.
+
+  remove with: ssh-keygen -f "/home/gaojie/.ssh/known_hosts" -R [192.168.1.52]:29418
+RSA host key for [192.168.1.52]:29418 has changed and you have requested strict checking.
+
+运行上面命令删除上次gerrit2 安装生成的rsa key 即可
+
+但是创建项目还是错误：
+Agent admitted failure to sign using the key. （需要添加id_rsa到ssh-agent ： ssh-add id_rsa 。 ssh-agent负责 passphrase ）
+Permission denied (publickey).
+执行 ssh-add id_rsa  就可以创建项目了。
+
+All-Projects 里面默认所有人对所有项目可读
+里面3个权限 Allow  Deny Block 后2个有什么区别？
+
+
+
+--------------------------------
+仓库注释信息存放在 xx.git/description 文件里
+
+
+
+-------------------------------------
+gerrit控制的进一步思考
+namespaces的概念。
+refs/tags/*
+refs/meta/config
+refs/heads/*
+refs/for/refs/*  （2.7装完，在all-project里有这个 只知道有/refs/for/*,为啥又refs?）
+
+
+仓库组权限信息在哪里存储呢？
+有仓库，没有组了，但是仓库的权限里面还显示那些组，只是点击提示出错。应该不在数据库里，
+因为重装gerrit，仍然有这些信息
+
+
+---
+默认的label Code-Review
+-2 +2 Administrators
+-2 +2 Project Owners
+-1 +1 Registered Users
+
+====================================
+Gerrit Code Review - Change-Ids
+
+20131225 使用新部署的2.7 李啸提交review 提示 
+ERROR: missing Change-Id in commit message footer
+需要：在项目 general选项卡中“Require Change-Id in commit message:”选择
+true/false/inherit(因为all-project此选项是true，所以这里也是true)
+改成false就可以提交了，但是我要理解change-id的作用
+
+
+
+gerrit 里面的 full Name 应该从哪里设置呢？一直是空的
+
+管理员无法提交review?,向refs/for/分支提交，直接就进入主仓库了，然后又提示没有对象可以
+提交到for分支（因为已经提交到主仓库了） 这倒也合理，都是管理员了，谁还能review我的。
+可是，管理员也需要review啊! bug
+
+
+-------------
+关于Full Name
+2.4 登录的时候貌似需要输入全名，在setting里面也可以修改
+2.7 没有这个选项，到处提示 匿名的诺夫。setting处无法修改
+在2.7 的文档里面看到：因为没有安装Bouncy Castle Crypto API（安装过程中没有下载成功）
+并且用法也不是很清晰，能否通过直接修改数据库呢?
+
+update ACCOUNTS set FULL_NAME='xxx' where ACCOUNT_ID='1000099';
+
+gerrit> select * from ACCOUNTS;
+
+字段：
+CONTACT_FILED_ON
+FULL_NAME
+COMMENT_VISIBILITY_STRATEGY
+COPY_SELF_ON_EMAIL
+DATE_FORMAT
+DOWNLOAD_COMMAND
+DOWNLOAD_URL
+MAXIMUM_PAGE_SIZE
+RELATIVE_DATE_IN_CHANGE_TABLE
+REVERSE_PATCH_SET_ORDER
+SHOW_SITE_HEADER
+SHOW_USERNAME_IN_REVIEW_CATEGORY
+TIME_FORMAT
+USE_FLASH_CLIPBOARD
+INACTIVE
+PREFERRED_EMAIL
+REGISTERED_ON
+ACCOUNT_ID
+
+例如：
+NULL
+NULL
+NULL
+N
+NULL
+CHECKOUT
+SSH
+25
+N
+N
+Y
+N
+NULL
+Y
+N
+gaojie@cyclecentury.com
+2013-12-09 12:11:19.359
+1000000
+
+
+修改数据库固然可以，正确做法是
+[ldap]
+accountFullName = 或者 (设置为空，就可以在web上修改了)
+accountFullName = cn （原来的1.4就是这么设置的）
+
+98 20130513 死活配置不上，提示：
+Permission denied (publickey).
+fatal: The remote end hung up unexpectedly
+泥马，折腾4小时没搞定，见鬼，这个问题配置无数，头一次不成功。怀疑跟系统安装时，用户取
+为user：user有关。 
+执行 ssh-add 搞定。
+ssh://gaojie@192.168.1.4....   前面的用户名如果省略默认为主机名字，如果不同就需要
+特别指定。
+
+
+99 gerrit名字加不上的时候，可以用id号加
+
+100 安装了最新版本gerrit2.7 一个仓库最基本权限 read push push merge commit
+
+提交review的时候
+git push origin master:refs/for/master (注意 冒号前不能有空格 否则会出错)
+
+
+权限管理思想，优雅的设置
+
+apk  apk-admin 2个组
+
+
+修改继承自属性
+gerrit set-project-parent - Change the project permissions are inherited from.
+实验成功：
+ssh -p 29418 192.168.7.32  gerrit set-project-parent --parent appStore commons
+
+ssh -p 29418 192.168.7.32  gerrit 可以显示支持的命令。
+
+上面操作在zhmj电脑上不行，提示public key没有权限。开始怀疑她用的是git bash工具，但
+其他操作ok，后来加了用户名就可以了，即：
+ssh -p 29418 zhangmj@192.168.7.32  gerrit  同是管理员权限，可能我第一个登入，我的权限
+更“纯粹一些”
+
+删除仓库
+
+------------
+all->open 里面，管理员可以看到所有改动，其他人看不见，只能看到所属组的改动。
+
+关于 review界面中 “Need Code-Review” 
+这里面罗列的人对review过程无任何影响，即列表里的某人没有review，我也可以直接merge
+状态变为merge后，列表就不能点x 删除了
+管理员 可以添加删除任何人，普通用户可以添加任何人但只能删除自己，apk-admin组（owner项目）也可以
+添加删除所有人（项目组成员，系统会自动首字母提示，其他成员需要打全称，add后提示错误但是
+确实添加上了）
+这里 “Add Reviewer” 有什么用呢？必须这些人都review才可以通过？
+
+组成员有权限删除其他组员？！！！ 这是什么思想？！！
+---------------
+给了侯生勇 +2 -2 的权限 但是review的时候只有
+Publish Comments  但是没有 “Publish and Submit” 选项，对比发现还要给
+apk-admin组  submmit权限
+This category permits users to push the Submit Patch Set n button on the web UI.
+
+如果我点了 +1 但是选择了“Publish and Submit” 会提示：needs Code-Review
+并且此次操作的效果是  显示+1（把权限内做的事做了）
+
+
+
+----------
+单独的一次提交“Dependencied”是空的
+如果连续提交了多次，都没有review，此项就会出现内容：
+Depends On: 依赖于谁
+Needed By:  被谁需要（被后面一次提交需要）
+
+
+============
+没搞清楚的2点
+changes/78/78/1
+Patch Set 1 （怎么出现Patch Set 2呢？用到 Change-ID？）
+
+
+
+-----------------
+
+2.4 版本  需要给refs/for 分配push /push merge权限才可以提交review （孟瑞）
+
+
+
+----------------
+删除项目
+只适用于2.1.3
+Project
+1. access gerrit sql database
+   cmd: ssh -p 29418 150.236.40.165 gerrit gsql
+2. gerrit> delete from projects where name=<project name>;
+3. gerrit> delete from ref_rights where project_name=<project name>;
+4. go to folder /gerrit/review_site/git, remove <project name>.git
+
+Step 1:
+ecdshawk@mtvserver2:/project/ecds/gerrit/review_site/db>ssh -p 29418 150.236.40.165 gerrit gsql
+
+Step 2:
+gerrit> delete from projects where name='rmproject';
+
+Step 3:
+gerrit> delete from ref_rights where project_name='rmproject';
+
+Step 4：
+删除项目目录
+
+直接删除项目目录，我在之前的老服务器上是用过的，但是那样好像不彻底，所以先不要删除，想明白再动。
+
+
+有一个插件 delete-project
+
+-------------------------
+https://gerrit-review.googlesource.com/#/c/50031/ 看看这个 google自己用的gerrit review 2.8
+界面怎么那么好看啊！
+
+
+
+ReviewDB.trace.db 文件记录着所有对数据库的操作命令。
+
+
+-------
+20140429 建立vitamio中的ffmpeg 仓库的时候，用已有仓库的.git上传到服务器的gerrit 的git目录的方法
+遇到一个问题：本地的一个仓库有一个提交，由于当时没有远程仓库，所以远程的相应 HEAD  origin/HEAD  等标签不一直
+此时，只需要在服务器端手工调节这些值到最新即可。
+
+
+20140623
+更改android仓库路径名，需要：
+1 修改所有继承仓库的路径（因为被继承的仓库路径也变了）
+2 修改manifest仓库里面的相对路径（提交时要手动修改config内的路径）
+3 修改repo内路径重新init sync即可（其他仓库的路径会自动更新）
+
+--
+20140716 
+本地建好的仓库，把.git传到gerrit上，可以正常下载，但是gitweb无法看到。提示：
+500 - Unknown type of object 
+Unnamed repository; edit this file 'description' to name the repositor
+
+
+通过repo下载仓库，repo sync 不会自动合并本地和远程master分支呢怎么并且执行完，分支就被切换到了 a20/master 即远程master分支，而不会自动合并
+也就是说sync 不能做merge操作。本地各仓库的修改也不能自动提交。应该是版本问题。全部用新版本（repo  和 repo仓库）试试，并且有时repo sync执行后不退出。
+
+[gerrit]
+        basePath = git
+        canonicalWebUrl = http://192.168.1.4:8088  //2.4.2 中这行很重要 必须这样写才行，怪！
+[ldap]
+        server = ldap://localhost
+        groupBase = ou=group,dc=vision-com,dc=com
+        accountBase = ou=People,dc=vision-com,dc=com
+        accountFullName = cn
+
+ldap 和 LDAP Account Manager
+
+
+
+[gerrit]
+	basePath = git
+	canonicalWebUrl = http://192.168.7.32:8081/
+[database]
+	type = h2
+	database = db/ReviewDB
+[auth]
+	type = LDAP
+[ldap]
+	server = ldap://192.168.7.31
+	accountBase = ou=People,dc=cyldap,dc=com
+	groupBase = ou=People,dc=cyldap,dc=com
+	accountFullName = cn
+[sendemail]
+	smtpServer = localhost
+[container]
+	user = root
+	javaHome = /usr/lib/jvm/java-6-openjdk-amd64/jre
+[sshd]
+	listenAddress = *:29418
+[httpd]
+	listenUrl = http://*:8081/
+[cache]
+	directory = cache
+[gitweb]
+	cgi = /usr/share/gitweb/gitweb.cgi
+
+
+
+优秀软件发布平台：
+http://bitnami.com/stacks/version-control
+http://sourceforge.net/projects/vlc/files/
+http://dl.oschina.net/soft/android
+
+
+
+ git push  origin master 
+Counting objects: 4, done.
+Delta compression using up to 4 threads.
+Compressing objects: 100% (2/2), done.
+Writing objects: 100% (3/3), 312 bytes, done.
+Total 3 (delta 0), reused 0 (delta 0)
+remote: Processing changes: refs: 1, done    
+To ssh://192.168.1.52:29418/test-proj.git
+ ! [remote rejected] master -> master (can not update the reference as a fast forward)
+error: failed to push some refs to 'ssh://192.168.1.52:29418/test-proj.git'
+
+
+无法直接提交
+我可以通过设置gerrit的 Access 使得某些人可以直接提交，当然只有管理员账户有权这样做。
+
+比如我把Administrator组设置为可以对refs/heads/* 可以push。就可以直接提交了
+
+
+能够review需要很多设置，这些设置要inherit frome all-projects
+
+HEAD:refs/for/master 或者写成 master:refs/for/master  ：前后不能有空格
+
+到gerrit上就变成了 refs/changes/01/1/1 格式 并没有 refs/for/master
+
+如何才能设置成1个人就可以审核通过? 对Label Code-Review  改为一次2分即可。
+但是review完成后，并没有真正把代码提交到master分支，或者说还没有merge
+要点击 Publish and Submit 才可以，但是我只看到了Publish Comments 没有前者啊
+需要单独给某人添加 Verified权限。  Verify 和 Code Review可以是一个人也可以是不同的人
+依据项目规模大小确定。可是还是不行，还需要添加 Submit 权限。这回就有了Publish and Submit
+
+需要Code-Review 和 Verified 2个状态都打勾才可以。
+
+
+

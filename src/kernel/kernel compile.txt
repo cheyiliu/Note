@@ -1,0 +1,62 @@
+1 来自codesourcery网站的邮件列表
+>> It generates Thumb-2 code if you specify -march=armv7-a and -mthumb.
+>> It never generates ARM mode code if you specify -mthumb.
+> Does that mean it generates only ARM if I do not specify -mthumb?
+Yes.
+意思是说指定-thumb 和armv-a后只生成thumb-2指令。不指定则只生成arm指令
+
+
+> Without that option, why do I still see when I run readelf on the generated executable
+> TAG_THUMB_ISA_use: Thumb-2 ?
+You are probably linking in at least one Thumb-2 object file, perhaps
+something from one of the run-time libraries.
+运行readelf -A 可以看到详细信息，仍然有TAG_THUMB_ISA_use:Thumb-2是因为调用的库里面有thumb-2指令
+这个我已经证明过了，编译android的时候，如果在最上层指定 LOCAL_ARM_MODE = arm 就没有thumb-2了
+
+2  arm-none-linux-gnueabi-gcc --help 
+Options starting with -g, -f, -m, -O, -W, or --param are automatically
+ passed on to the various sub-processes invoked by arm-none-linux-gnueabi-gcc.  In order to pass
+ other options on to these processes the -W<letter> options must be used.
+
+ -Wa,<options>  Pass comma-separated <options> on to the assembler
+ -Wp,<options>  Pass comma-separated <options> on to the preprocessor
+ -Wl,<options>  Pass comma-separated <options> on to the linker
+
+-mthumb -march -meabi -mcpu -mthumb-interwork
+这些参数都是传递给as的
+man as 得到：
+       Target ARM options:
+          [-mcpu=processor[+extension...]]
+          [-march=architecture[+extension...]]
+          [-mfpu=floating-point-format]
+          [-mfloat-abi=abi]
+          [-meabi=ver]
+          [-mthumb]
+          [-EB|-EL]
+          [-mapcs-32|-mapcs-26|-mapcs-float|
+           -mapcs-reentrant]
+          [-mthumb-interwork] [-k]
+
+
+
+1 编译器的种类
+现在已经有3个编译器了 nxp的  android的 和 codesourcery的
+2 结构
+codesourcery的
+arm-none-linux-gnueabi
+bin
+lib
+share
+
+
+而nxp的目录结构就有些奇怪了 左一层右一层的
+
+另外，每个arm-none-linux-gnueabi-xx 都对应一个xx 是一样的程序 只是文件名不同
+
+
+http://omappedia.org/wiki/OMAP_Android_Main 注意这个目录
+
+Android is a software stack for mobile devices that includes an operating system, middleware and key applications. 
+
+
+

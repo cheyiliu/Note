@@ -1,0 +1,35 @@
+单点（Single），适合小规模应用
+复制（Replication），适合中小规模应用
+集群（Cluster），适合大规模应用
+
+
+mysql-client-core-5.1 / mysql-cluster-client-5.1
+
+创建的数据库都在/var/lib/mysql下
+扩展名 frm 例如： page.frm
+
+mysql -u root 回车 进入  说明root没有设置密码
+
+show databases; 注意要有分号
+显示所有数据库
+
+use mysql;
+//进入名字叫mysql的数据库
+
+show tables;
+//显示数据库所有表
+
+desc 表名；
+查看表结构
+
+select *（列名称） from user（表名称）;
+
+
+mysql -u <wikiuser> -p  //应该给wiki创建一个独立数据库用户
+then enter your password, then,
+ USE <wikidb>
+
+
+root密码忘记是可以修复了
+在/etc/xx 加skip_grants_xx
+进入监控模式

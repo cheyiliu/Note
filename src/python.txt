@@ -1,0 +1,47 @@
+python pip 工具
+
+
+为啥android执行python文件头部写
+#!/usr/bin/env python
+
+我把M3的 build/tools/releasetools/ota_from_target_files写成：
+#!/usr/bin/env /home/gaojie/Downloads/Python-2.7.2/python
+就去执行2.7.2了
+
+但是提示：
+Traceback (most recent call last):
+  File "./build/tools/releasetools/ota_from_target_files", line 953, in <module>
+    main(sys.argv[1:])
+  File "./build/tools/releasetools/ota_from_target_files", line 905, in main
+    OPTIONS.info_dict = common.LoadInfoDict(input_zip)
+  File "/home/gaojie/Work/Android/M3/build/tools/releasetools/common.py", line 88, in LoadInfoDict
+    for line in zip.read("META/misc_info.txt").split("\n"):
+  File "/home/gaojie/Downloads/Python-2.7.2/Lib/zipfile.py", line 867, in read
+    return self.open(name, "r", pwd).read()
+  File "/home/gaojie/Downloads/Python-2.7.2/Lib/zipfile.py", line 936, in open
+    return  ZipExtFile(zef_file, mode, zinfo, zd)
+  File "/home/gaojie/Downloads/Python-2.7.2/Lib/zipfile.py", line 485, in __init__
+    self._decompressor = zlib.decompressobj(-15)
+AttributeError: 'NoneType' object has no attribute 'decompressobj'
+
+因为没有install 吗？
+
+执行完install 执行python 就显示2.7.2 了  2.7.3 被覆盖了？
+
+Here’s more about the difference between Python 2 and 3.
+官网2和3是同时维护发布的。
+
+
+Make test failed issues for phyton 3.2 on centos5.5
+AttributeError: 'NoneType' object has no attribute 'decompressobj'
+1 test failed:
+    test_zipfile
+
+这回好，a20 也出现同样的错误了
+
+10.0.4上2.6.5版本，能编译m3
+
+
+UnboundLocalError in Python - Stack Overflow
+
+

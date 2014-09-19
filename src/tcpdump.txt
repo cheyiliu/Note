@@ -1,0 +1,57 @@
+1 tcpdump 依赖 libcrypto.so 和libpcap.so
+
+OpenSSL provides two primary libraries: libssl and libcrypto.
+The libcrypto library provides the fundamental cryptographic routines 
+
+1 ubuntu11.10 的tcpdump
+tcpdump version 4.1.1
+libpcap version 1.1.1
+
+编译tcpdump 4.4.0 不能通过
+
+http://www.tcpdump.org/
+This is the official web site of tcpdump, a powerful command-line packet analyzer
+and libpcap, a portable C/C++ library for network traffic capture.
+
+先编译libpacp 再 编译tcpdump
+
+wireshark 识别.pacp文件
+
+执行tcpdump -i eth1 -w  xx.pacp 然后用wireshark分析文件会得到更多信息
+为啥直接tcpdump -i eht1 没多少打印
+
+1. 先给手机刷root权限，执行命令：
+adb root 
+adb remount
+ok后：把tcpdump放到c盘根目录下：C:\
+
+2. 执行命令：
+adb push c:/tcpdump /data/local/tcpdump
+（这个命令是把tcpdump拷到手机中去 ）
+
+3. adb shell chmod 6755 /data/local/tcpdump
+是给tcp分配权限
+
+4. adb shell
+/data/local/tcpdump -p -vv -s 0 -w /sdcard/capture.pcap 启动了抓包工具
+
+6. capture.pcap拷贝到电脑用wireshark打开即可
+
+
+但是在已经root的联想A850手机上，执行adb root:
+adbd cannot run as root in production builds
+
+部分手机root后，使用adb root会出现这个提示。原因是root不彻底。
+adb shell之后进入到$界面，su一下才进入到#。
+这个之后可以使用root功能了。
+注意到，这个时候exit的话，先是退回到$，之后才是退出shell。
+
+如此，adb pull 系统文件夹里面的东西就不方便了。比如，dev下面的东西。
+
+可用tcpdump 命令从板子上下载了正在播放视频的网页分析。
+
+sudo tcpdump -i eth1 检测特有网口
+
+tcpdump -i em2 port 10000 -s 1360 -w  dump.ts
+可以把捕获的RTP的流里面的TS提取出来，得到纯粹的ts文件
+

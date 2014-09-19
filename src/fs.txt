@@ -1,0 +1,27 @@
+pc_next_block 这个函数 只调用 pc_l_next_block
+pc_l_next_block函数 给出当前簇 得到簇链中的下一个簇号。
+
+STATUS pc_next_block(DROBJ *pobj){
+    ret_stat = pc_l_next_block(&next, pobj->pdrive, pobj->blkinfo.my_block);
+        pobj->blkinfo.my_block = next；
+}
+传入my_block再改变my_block
+sb，都是命，不一定谁有钱
+原来的 pc_findin 函数，每次调用 pc_read_blk
+一次读一个扇区。
+
+pc_findin只在pc_get_inode里面调用
+pc_get_inode主要也就是调用了一个pc_findin
+pc_get_inode调用的地方可就多了。
+
+pc_findin是在一个目录里面找目录和文件
+
+而关于路径的操作函数是 pc_fndnode
+这个函数调用的函数有：
+NU_Make_Dir
+NU_Open
+NU_Rename
+NU_Delete
+NU_Remove_Dir
+NU_Get_First
+NU_Set_Current_Dir

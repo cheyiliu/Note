@@ -1,0 +1,3 @@
+linux 换行是0a  windows 是0d 0a
+windows上写的文件在linux中打开乱码，需要另存为，Line Ending选择Unix/Linux即可，编码可以选成UTF-8 也可以不选。
+

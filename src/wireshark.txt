@@ -1,0 +1,129 @@
+全新14.04系统安装
+ sudo apt-get install wireshark
+[sudo] password for gaojie: 
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+The following extra packages will be installed:
+  libc-ares2 libsmi2ldbl libwireshark-data libwireshark3 libwiretap3 libwsutil3 wireshark-common
+Suggested packages:
+  snmp-mibs-downloader wireshark-doc
+The following NEW packages will be installed:
+  libc-ares2 libsmi2ldbl libwireshark-data libwireshark3 libwiretap3 libwsutil3 wireshark wireshark-common
+0 upgraded, 8 newly installed, 0 to remove and 347 not upgraded.
+Need to get 12.2 MB of archives.
+After this operation, 71.8 MB of additional disk space will be used.
+
+ 
+
+1 配置安装
+		1) apt-get install wireshark 仅安装一个2,324 kB wireshark包  wireshark-common
+			安装低版本1.2.7-1 提示wireshark-common还是1.6.7，在软件中心或apt-get remove卸载之
+			wireshark depends on libc-ares2 (>= 1.7.0); however:
+			Package libc-ares2 is not installed.
+			wireshark depends on libsmi2ldbl; however:
+			Package libsmi2ldbl is not installed.
+			wireshark depends on wireshark-common (= 1.2.7-1); however:
+			Package wireshark-common is not installed.
+
+			成功退回到1.2.7版本，实时抓视频包不死了，但是无法查看包详情，一点就死机，整个桌面不动了，去要f4切换强制kill 
+
+		2) ubuntu12.04+wireshark1.6.7，看视频抓包卡死，cpu占用100%。xp+wireshark1.11,或ubuntu11.10+wireshark1.6.2_1没有问题。
+			网上讨论但没找到解决办法。有人说按抓1.2.x解决。
+			能否在12.04上安装wireshark1.12.0呢？
+			看http://packages.ubuntu.com/search?suite=all&searchon=names&keywords=wireshark
+
+			再执行apt-get install wireshark：
+			sudo apt-get install wireshark
+			Reading package lists... Done
+			Building dependency tree       
+			Reading state information... Done
+			You might want to run 'apt-get -f install' to correct these:
+			The following packages have unmet dependencies:
+			wireshark : Depends: libwireshark1 (>= 1.6.0-1) but it is not going to be installed
+			Depends: libwiretap1 (>= 1.6.0-1) but it is not going to be installed
+			Depends: libwsutil1 (>= 1.6.0-1) but it is not going to be installed
+			Depends: wireshark-common (= 1.6.7-1) but it is not going to be installed
+			E: Unmet dependencies. Try 'apt-get -f install' with no packages (or specify a solution).
+			难道新安装的系统首次就有 wireshark-common ？？？ libwireshark1 ？？？
+
+			u11.10+wireshark1.6.2 可以抓usb数据
+
+		3) 非sudo执行
+			sudo groupadd wireshark
+			sudo usermod -a -G wireshark YOUR_USER_NAME
+			sudo chgrp wireshark /usr/bin/dumpcap
+			sudo chmod 777 /usr/bin/dumpcap (750不行)
+			sudo setcap cap_net_raw,cap_net_admin=eip /usr/bin/dumpcap
+
+			sudo getcap /usr/bin/dumpcap
+
+		4) 对应关系
+
+
+
+2 使用
+
+	你的电脑接网线, 然后通过wifi共享电脑的网络, iPhone连接电脑共享出来的无线网, 就可以在电脑上抓包了
+	分析百度网盘下载
+
+	交互：
+	百度网盘，打开状态下，修改了密码。下载终止，提示密码错误。
+
+	http.request.method == “POST” 
+	2 Reassembled TCP Segments (1012 bytes): #29902(921), #29903(91)
+	如果只想过滤http包可以用如下过滤条件：
+	1 http&&!udp， 为什么要这样？http基于tcp，已经过滤掉了udp了？其实则不然，没有人规定http
+	一定要基于tcp，ssdp就是在udp上传输http。而http&&!udp 后半部分恰恰是要把ssdp过滤掉
+	2 对于使用http传输的一个大文件，中间有很多的PDU，只有到发送完成的时候，会组织一个完整的
+	HTTP包，叫做 Reassembled TCP 。其实最后一个包本身只是文件的最后数据，这里经过了重组。
+
+	tcp还是udp包头都没有字段表明负载是http，wirshark是智能分析的。比如检测到http/1.1字段。
+	对于c/s通讯，建立socket的时候会指定协议，以后就用这个协议解析tcp负载，没有必要在每个tcp
+	包头加协议字段的。
+
+
+	2 要搜索包里面的内容，选择 Packet bytes
+
+	3 执行sudo wireshark 提示：
+	Running as user "root" and group "root".
+	This could be dangerous.
+
+	If you're running Wireshark this way in order to perform live capture, 
+	you may want to be aware that there is a better way documented at
+	/usr/share/doc/wireshark-common/README.Debian
+	 
+	查看这个文件：
+
+
+端口过滤  tcp.port== xxxx or udp.port== xxxx
+
+
+4 抓取小米盒子epg 的json数据，在wireshark中看，并且Copy - Bytes -Printable text only 这样汉字信息取不到，应该先拷贝出：
+	http://media.cntv.duokanbox.com/tvservice/getmediadetail2?mediaid=976146&pageno=0&pagesize=0&orderby=0&fee=1&deviceid=1353a94f1f7d634a62de36fd29a42729&apiver=1.8&ver=4.2.2.946&codever=13&ptf=205&ts=-1481390516&nonce=796510208&opaque=509ac7914d6e20336be684b5aa8b22b25f42b537
+	然后在浏览器中执行，这样就得到了那个json文件。这个方法好！！！
+
+
+
+	sudo groupadd wireshark
+	sudo adduser  gaojie wireshark
+
+	1台pc装apache浏览器播放视频无法抓包。但可以在虚拟机中抓。即ubuntu+apache，然后虚拟机winxp+firefox
+	可以抓，选择lo即可
+
+	在xp安装完1.11.3 后出现 Qt版和Gtk+版，样式不同。
+	ubuntu12.04 软件中心提供gtk+版本。
+
+	如果是gzip的，wireshark会解压缩。
+
+	sudo dpkg-reconfigure wireshark-common
+	press the right arrow and enter for yes
+	sudo chmod +x /usr/bin/dumpcap
+	you should now be able to run it without root
+
+
+
+
+ 
+
+

@@ -1,0 +1,66 @@
+logwrapper
+
+使用printf的问题
+a20 验证 printf可以直接使用，可以直接打印在adb shell的控制台上，也可以输出在串口控制台上。为什么？应该不输出啊。
+但是在adb shell里执行，不会在串口处输出。   
+
+1 a20 home默认回自己的launcher，install新launcher不弹出选择菜单(不标准),进入shell，root，remount，删除原launcher，
+  重启，可以引导到data/app里新安装的。
+
+
+super uid
+super gid
+
+关于文件属性里面的 s 标志
+
+sock=socket(PF_PACKET, SOCK_RAW, htons(ETH_P_IP))
+
+上面这种socket  必须root权限才能成功， 这一点内核是如何检查的呢？
+
+自从内核2.2开始Linux引进了capabilities的概念，
+
+在建立PF_PACKET族的socket时会调用packet_create,
+
+在packet_create中会检查用户是否有CAP_NET_RAW的capability：
+
+if (!capable(CAP_NET_RAW))
+    return -EPERM;
+root拥有所有的capability,
+
+非root也可能有CAP_NET_RAW的capability。
+
+
+进程的权能
+ Linux用“权能（capability）”表示一进程所具有的权力。一种权能仅仅是一个标志，它表明是否允许进程执行一个特
+定的操作或一组特定的操作。这个模型不同于传统的“超级用户对普通用户”模型，在后一种模型中，一个进程要么能做
+任何事情，要么什么也不能做，这取决于它的有效UID。 【effective UID】
+
+
+
+ audio focus。关于ICS音量设置
+
+
+发现am是toolbox shell的一个脚本，在busybox的shell中不能执行。
+
+# Script to start "am" on the device, which has a very rudimentary
+# shell.
+#
+base=/system
+export CLASSPATH=$base/framework/am.jar
+exec app_process $base/bin com.android.commands.am.Am "$@"
+
+同样形式的还有
+bmgr bu ime input monkey pm svc
+
+基本上是 启动一个app_process进程（就是zygote）然后创建一个dalvike 虚拟机执行参数指定的jar包。
+这可以在命令行中启动一个apk 
+
+
+对接特殊按键的方法()
+framework/base/core/java/android/view/KeyEvent.java
+framework/base/core/res/res/values/attrs.xml
+framework/base/include/ui/KeycodeLabels.h
+
+在这三个文件加我们需要的键值映射就行了。
+
+

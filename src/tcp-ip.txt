@@ -1,0 +1,72 @@
+侧重协议分析，常识以及实战在network.txt
+分析手段
+抓手机，盒子网络包方法：
+1 在手机，盒子上运行tcpdump，保存文件用wireshark分析。
+2 通过10M Hub（这种设备稀缺）
+3 电脑配置双网卡。就像公司网关，外网进入，经过权限管理软件从另外一个网口出。
+
+手机抓包：大网进hub，分1路到pc，另一路到ap，连手机。pc抓到的手机与服务器通讯包，源ip是ap的wan口ip而不是手机的ip
+
+逻辑链路层
+
+wireshark看mac帧：
+目的mac+源mac+类型
+类型：
+0806 ARP
+0800 IP
+
+------------
+关于“物理地址逐跳而变，逻辑地址保持不变”
+开始我认为，应该是目标逻辑地址保持不变。后来毅晖说，数据包回来的时候，就是源逻辑地址
+保持不变。
+20140110 xuss：在真正互联网上，ip地址唯一不变，没有nat，这是正解。
+
+NAT穿越
+使用upnp IGD 自动做端口映射，而不用去设置路由器。p2p软件会这样去做。可以关闭igd
+功能。
+关于协议里面表示包的长度的字段很有讲究，分为短长度和长长度。第一bit为0，表示短包，能够
+标识0-127字节，为1标识长长度，例如标识0-32768字节。
+
+---
+xuss
+20140114
+ip头20字节，udp头8字节。ip包最大65535，udp包最大65535-28字节。
+
+在mac层，1个包的大小有限制，（可能由路由器，交换机限制），65536的包会拆分成多个。
+如果发送大包，其中1个拆分小包出错，整个大包会重传。如果发送小包，在mac层包大小之内，则不会。
+
+ sockfd = socket(AF_INET, SOCK_DGRAM, 0);//创建UDP socket
+ //On success, these calls return the number of characters sent.  
+ //On error, -1 is returned, and errno is set appropriately.
+ sendto(sockfd, sendBuf, len, 0, srvAddr, addlen);
+
+len的最大值为2^16-20(IP头)-8(UDP头) = 65507字节，大于这个数，sendto返回-1
+error的值为90
+ #define EMSGSIZE        90      /* Message too long */  
+
+
+从PC上选择一个文件，然后上传到板子上 可以参考GoodReader
+
+用dvb-c工程机推送udp ts 流到192.168.1.87工作机，wireshark竟然识别了UDP中的TS包，为何？
+pppoe拨号，路由器不断电的情况下，wan口ip会变化。
+m3盒子用电话线adsl拨号获得ip，在工位可ping通 106.120.10.49，可以adb connect
+在家用路由器获取ip，同在联通宽带里面应该可以访问，用3G访问不了，说明外网出口可能不是ap的wan口ip
+
+
+RFC3984  - RTP Payload Format for H.264 Video
+
+Real-time Transport Protocol (RTP) 
+RTSP（Real Time Streaming Protocol），实时流传输协议，是TCP/IP协议体系中的一个应用层协议，由哥伦比亚大学、
+网景和RealNetworks公司提交的IETF RFC标准。该协议定义了一对多应用程序如何有效地通过IP网络传送多媒体数据。RTSP在体系结构上位于RTP和RTCP之上，
+
+RTSP（Real Time Streaming Protocol）
+
+The transmission of streaming data itself is not a task of the RTSP protocol. Most RTSP servers use the
+ Real-time Transport Protocol (RTP) for media stream delivery, however some vendors implement proprietary 
+transport protocols. The RTSP server from RealNetworks, for example, also features RealNetworks' proprietary 
+RDT stream transport.
+
+The Real-Time Transport Control Protocol (RTCP) is a sister protocol of the Real-time Transport Protocol (RTP).
+
+
+

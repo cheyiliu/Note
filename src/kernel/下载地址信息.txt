@@ -1,0 +1,6 @@
+http://www.linux-arm.org/ 这个是linux arm的始祖网站
+这个网站也维护了一个 ARM android 项目 
+NXP的许多修改是针对 Cortex A-9 核心修改的 并不是他那个平台有什么特殊
+http://www.arm.com/community/software-enablement/linux.php
+看linux标签 和 android 标签
+

@@ -1,0 +1,88 @@
+java Client side:
+define the API,
+	framework/base/core/java/android/net/INetworkManagementEventObserver.aidl
+	   /**
+	     * Interface physical-layer link state has changed.  For Ethernet,
+	     * this method is invoked when the cable is plugged in or unplugged.
+	     *
+	     * @param iface The interface.
+	     * @param up  True if the physical link-layer connection signal is valid.
+	     */
+	    void interfaceLinkStateChanged(String iface, boolean up);
+
+implement the API,
+	private static class InterfaceObserver extends INetworkManagementEventObserver.Stub {XXX}
+
+new it,
+	mInterfaceObserver = new InterfaceObserver(this);
+
+find the service and register to it,
+	// register for notifications from NetworkManagement Service
+	IBinder b = ServiceManager.getService(Context.NETWORKMANAGEMENT_SERVICE);
+	mNMService = INetworkManagementService.Stub.asInterface(b);
+	mNMService.registerObserver(mInterfaceObserver);
+
+
+Server side:
+define callback api,
+	./base/services/java/com/android/server/INativeDaemonConnectorCallbacks.java
+
+implement api,
+	class NetdCallbackReceiver implements INativeDaemonConnectorCallbacks{}//inner class in NetworkManagementService
+
+the impl is used by,
+        mConnector = new NativeDaemonConnector(
+                new NetdCallbackReceiver(), "netd", 10, NETD_TAG, 160);
+        mThread = new Thread(mConnector, NETD_TAG);
+
+the NativeDaemonConnector(java local socket),
+	./base/services/java/com/android/server/NativeDaemonConnector.java
+	in function listenToSocket(), will new socket and do callback, code like below,
+	
+	LocalSocket socket = null;
+
+        try {
+            socket = new LocalSocket();
+            LocalSocketAddress address = new LocalSocketAddress(mSocket,
+                    LocalSocketAddress.Namespace.RESERVED);
+
+            socket.connect(address);
+
+            InputStream inputStream = socket.getInputStream();
+            synchronized (mDaemonLock) {
+                mOutputStream = socket.getOutputStream();
+            }
+
+            mCallbacks.onDaemonConnected();
+
+            mCallbackHandler.sendMessage(mCallbackHandler.obtainMessage(
+                                        event.getCode(), event.getRawEvent()));
+
+
+native Socket side,
+netd/main.cpp will setup the NetlinkManager, CommandListener
+	nm = NetlinkManager::Instance()
+	cl = new CommandListener();
+	nm->setBroadcaster((SocketListener *) cl);
+	nm->start()
+
+the commandListener will setup socket "netd" to communicate with java side local socket
+	CommandListener::CommandListener() :
+                 FrameworkListener("netd", true)
+
+the NetlinkManager.cpp will setup socket with linux kernel (NETLINK_KOBJECT_UEVENT, NETLINK_ROUTE, NETLINK_NFLOG [see start for info]) and use the NetlinkHandler.cpp as callback
+	setupSocket
+	start
+	stop
+	setBroadcaster
+	getBroadcaster
+	
+/android/system/NetlinkHandler.cpp
+	onEvent will call 
+		notifyInterfaceRemoved [in this call back mNm->getBroadcaster()->sendBroadcast(ResponseCode::InterfaceChange,msg, false); the getBroadcaster() is CommandListener(netd)]
+		notifyInterfaceChanged
+		notifyInterfaceAdded
+
+
+TODO
+linux kernel side

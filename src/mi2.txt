@@ -1,0 +1,21 @@
+1 从out/host目录拷贝出adb 到/usr/bin。小米盒子在账户与安全里面打开adb调试，可以连接adb但是执行不了su
+一个真正产品的盒子就是这个样子的。仔细调查后再root吧。
+2 他的log系统比较特别，每行前面打印日期时间。
+
+SignalClusterView 
+整体打印信息很少。该精简的都精简了。
+
+
+会把json信息打印出来（这到不用wireshark抓包了），但不是所有的jason都打印。
+
+UserUtil  负责用户管理的
+
+3 抓到mdns的包，组播地址 224.0.0.251 milink
+
+StatusBar.NetworkController
+refreshSignalCluster mWifiConnected:true, mShowEthIcon:false
+
+左上角的“超清”角标是后叠加到图片上的。靠"resolution"字段，4为超清，2为普通
+
+WeatherReportUpdater
+

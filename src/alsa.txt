@@ -1,0 +1,22 @@
+1 /device 加了 visioncom/newbox 目录
+2 external 有alsa-lib alsa-utils  hardware/alsa_sound  3个仓库
+  LOCAL_SRC_FILES := \
+	AudioHardwareALSA.cpp \
+	AudioStreamOutALSA.cpp \
+	AudioStreamInALSA.cpp \
+	ALSAStreamOps.cpp \
+	ALSAMixer.cpp \
+	ALSAControl.cpp
+
+  LOCAL_MODULE := libaudio
+  LOCAL_STATIC_LIBRARIES += libaudiointerface
+./target/product/newbox/obj/STATIC_LIBRARIES/libaudiointerface_intermediates/libaudiointerface.a
+
+AudioHardwareGeneric.o
+AudioHardwareStub.o
+AudioHardwareInterface.o
+A2dpAudioInterface.o
+由 ./frameworks/base/libs/audioflinger/AudioHardwareGeneric.cpp 生成
+
+理解AudioFlinger是什么
+

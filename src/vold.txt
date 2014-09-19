@@ -1,0 +1,68 @@
+vold.fstab
+
+vold 是root权限运行，通过socket与其他的进程通讯的
+
+int Volume::mountVol() 重要函数
+外部可以动态挂载的都是 block 设备，
+vold 已经是支持磁盘多分区的了。
+only create android_secure on primary storage
+注意，反复提到 primary storage
+
+---------------------------------------
+内部flash模拟sdcard，需要模拟触发vold。实现比较麻烦，暂时不考虑。
+
+--------------
+vold.fstab 
+dev_mount sdcard /mnt/sdcard auto /block/sda /block/sda/sda1
+
+
+应用程序移动到SD卡，需要device mapper 设备驱动，也就是apk移动后，mount 会看到 dm-0 这样的mount点
+PC机上：
+/dev/mapper/control 设备节点
+./frameworks/base/tools/obbtool/mkobb.sh:    loop_dev=/dev/mapper/${unique_dm_name}
+./external/ntfs3g/libntfs-3g/volume.c:"/dev/mapper/, (e.g. /dev/mapper/nvidia_eahaabcc1) to mount NTFS.\n"
+
+android上：
+dev/device-mapper  10,58
+./vold/cryptfs.c:  if ((fd = open("/dev/device-mapper", O_RDWR)
+./vold/Devmapper.cpp:    if ((fd = open("/dev/device-mapper", O_RDWR)
+
+
+4 vold 关注 system/etc/vold.fstab文件
+
+5 system/vold 编译成一个可执行文件，解析 
+
+
+/dev/block/vold 这个节点？！
+
+
+-----------------------------------------
+/sys/devices/virtual      ## PC kernel也有这个目录
+
+
+/*****/
+sys 文件系统  和 proc文件系统  sysfs和procfs  procfs是Linux内核信息的抽象文件接口
+
+$man proc：
+proc - process【这里要翻译为 进程】 information pseudo-file system
+he  proc  file  system  is a pseudo-file system which is used as an interface to 
+kernel data structures
+那些单个的文件，比如cmdline meminfo放这里，有些牵强，但是又能放哪里呢？事情就是这样。任何艺术都是这个样子。
+
+
+
+/mnt/secure/asec 这个目录是?
+
+
+重新考虑 uevent
+
+
+需要把android的mount原理彻底搞明白清楚
+
+2 android_secure
+这个文件夹里面的内容是app2sd产生的文件夹
+
+3 voldo
+
+
+

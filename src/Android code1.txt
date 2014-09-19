@@ -1,0 +1,279 @@
+前言
+   Android代码分析
+
+1 Log系统 system/core/liblog
+  此系统既生成 .a 也生成 .so。最终生成target使用的liblog.so包括logd_write.c、logprint.c、event_tag_map.c三文件，不含fake_log_device.c
+  log打印格式在logprint.c中android_log_formatLogLine函数里 D/libEGL(xxx) 括号里面的代表 pid 
+  Log系统自上而下：
+  #define LOGD(...) ((void)LOG(LOG_DEBUG, LOG_TAG, __VA_ARGS__))
+  #define LOG(priority, tag, ...)  LOG_PRI(ANDROID_##priority, tag, __VA_ARGS__)
+  #define LOG_PRI(priority, tag, ...)  android_printLog(priority, tag, __VA_ARGS__)
+
+  ./Android.mk:LOCAL_CFLAGS += -DLOG_TAG=\"libEGL\"  此字符串 编译到 libEGL.so里
+
+2 OpenGL分析
+  下面是git.omapzoom.org上的commit message
+  1. set the SGX driver permissions (pvrsrvkm)
+  2. run the pvrsrvinit binary which brings the driver to a fully initialized state.
+  # SGX driver
+  chmod 0666 /dev/pvrsrvkm
+  # Initialize the SGX driver
+  service pvrsrvinit /system/bin/pvrsrvinit
+  
+  需要的3个文件 pvrsrvkm.ko(2.8M) pvrnxpdc.ko(236k) pvrsrvinit(12.4k) 【.ko也是elf文件】
+  libsrv_um.so libsrv_init.so  libpvr2d.so
+   
+  nxp给我的SGX驱动里面还有libpvrPVR2D_BLITWSEGL.so libpvrPVR2D_FLIPWSEGL.so 韩国版本没有使用
+
+  这些文件跟 libGLESv2.so  libGLESv1_CM.so有什么关系呢？
+
+PowerVR's SGX series
+
+libsrv_um.so 这个库是干什么用的
+pvrsrvinit程序
+
+major和minor是版本号。最后一个变量egl_t egl。这个变量非常重要。在load_driver中可以看到它的身影（通过loader：：open间接调用的）。
+
+struct egl_t {
+    #include "EGL/egl_entries.in"
+};
+
+egl_t中也是一组函数指针，其中包含了OpenGL ES中底层的实现。所以如果要实现硬件加速的话，这里面的函数都要实现。
+
+pvrsrvinit  omap3也有
+
+void glClear(GLbitfield mask);
+/* ClearBufferMask */
+#define GL_DEPTH_BUFFER_BIT               0x00000100
+#define GL_STENCIL_BUFFER_BIT             0x00000400
+#define GL_COLOR_BUFFER_BIT               0x00004000
+
+android里面调用的都是 GL_COLOR_BUFFER_BIT
+
+glCopyTexSubImage2D
+
+
+SkGL.cpp  好像是skia 与 opengl的接口
+gl_context.h 定义 ogles_context_t 在ligagl 里面有用到
+c->rasterizer.procs.blendFunc(c, sfactor, dfactor);
+
+hardware 里面的 msm7k  里面的copybit.cpp 才是最终生成 copybit.msm7k.so的 源文件 
+所以，在libagl 编译了copybit.cpp文件的时候，也是没有找到 copybit.xx.so模块
+
+
+void DisplayHardware::init(uint32_t dpy)
+此函数里面调用 eglCreateContext 在libagl 和 libs/egl 都有这个函数 怎么确定使用那个函数呢？
+是libs/egl里面的 eglCreateContext 调用 libagl里面的 eglCreateContext
+是一个调用关系！！！ 
+EGLContext context = cnx->egl.eglCreateContext();
+那么这里怎么决定 调用 libagl的还是Powerver 的呢？
+
+在 displayhardware.cpp中 有一个打印：
+LOGI("EGLSurface: %d-%d-%d-%d, config=%p", r, g, b, a, config);
+EGLSurface: 5-6-5-0, config=0x1000000   //从这里也可以看出是565格式 那么这个时候，视频投过来是一个问题！ 
+
+libagl/egl.cpp  的一些配置
+config_0_attribute_list
+config_1_attribute_list
+
+egl.cpp 中似乎在兼容 软硬 件 opengl
+libs/elg中的egl.cpp 封装后调用软硬件 opengl 的 egl函数
+
+EGL_BUFFER_SIZE  
+EGL_DEPTH_SIZE
+有何区别呢？
+
+%p 是什么含义
+
+4 属性系统 system/core/libcutils/ properties.c 中定义了 多个property_get 函数 情况不同 arm使用的是 HAVE_LIBC_SYSTEM_PROPERTIES 
+
+5 gralloc系统里面的framebuffer.cpp是干什么用的？
+  hardware/libhardware/modules/gralloc下面的文件跟
+  hardware/msm7k/libgralloc下面的文件，有几个同名，并且后者是前者的改进和增加
+增加了硬件实现部分 但是这个还不是copybit啊！
+copybit 专门有一个 copybit 模块！ libcopybit
+
+
+eglSwapBuffers - post EGL surface color buffer to a native window
+重要发现：
+
+static_cast<> 类型转换 
+①用于类层次结构中基类（父类）和派生类（子类）之间指针或引用的转换。 
+进行上行转换（把派生类的指针或引用转换成基类表示）是安全的；
+进行下行转换（把基类指针或引用转换成派生类表示）时，由于没有动态类型检查，所以是不安全的。
+
+typedef void *EGLSurface; 这种看似很牛逼 怎么就是一个void*呢？
+
+
+在entry.in 中 扩展的egl接口函数
+/* ANDROID extensions */
+EGL_ENTRY(EGLBoolean, eglSetSwapRectangleANDROID, EGLDisplay, EGLSurface, EGLint, EGLint, EGLint, EGLint)
+EGL_ENTRY(EGLClientBuffer, eglGetRenderBufferANDROID, EGLDisplay, EGLSurface)
+
+#ifdef EGL_ANDROID_swap_rectangle ????!!!
+这个是在eglext.h中定义的,也许有助于提高效率
+
+gralloc_alloc_framebuffer_locked这个函数仔细看看
+
+
+-----------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+题外：framebuffer的驱动的流程
+typedef enum
+{
+    CNXTFB_HD_OSD = 0,
+    CNXTFB_SD_OSD,
+    CNXTFB_HD_GPP,  //GPP ？？？
+    CNXTFB_SD_GPP,
+} CNXTFB_PLANE;
+
+从cnxtfb_init 开始
+
+最新发现：我自己的fb驱动，显示不清晰。韩国人的就是清晰的，看来他们改了framebuffer驱动啊。
+
+dev下面的 fb 设备
+fb  29,0   这个是什么呢？ 
+fb0 29,0
+fb1 29,1
+如果insmode的时候 
+vpmfbDrv.ko cnxtfb_hdwidth=1280 cnxtfb_hdheight=720 cnxtfb_hdonly=1
+则就只有 
+fb  29,0
+fb0 29,0
+
+/dev/graphics/下面还有fb0  fb1 
+
+这些节点好像不是通过 mknod 创建出来的
+
+这里只有/dev/fb 是用mknod创建出来的  其他4个节点都不是用mknode创建的
+
+
+android 怎么决定打开的是fb0 还是 fb1 呢？
+
+fb里面对标清 高清的处理是分开的，这个跟原来的NEC不同
+
+fb里面默认的颜色格式是  PIXEL_FORMAT_32ARGB
+
+
+【不知道CNXT_POOL_ID_DEFAULT_UNCACHED 内存哪里来的 singlehd_512.ini里面没有】
+
+vpmfb.c中有6次分配内存调用，5此是从这个pool中分配
+一次从framebuffer中分配 -分为标清 framebuffer池和高清framebuffer池
+
+驱动里面的 MAX_PLANES 4 是否指 2个osd 2个video  好像不是
+
+/* a pointer to an array of page bitmap pointers */
+
+
+需要找到一个快速编译fb.ko的方法·
+现在的方法是：在build/linux/sub-systems/celf/drivers/vpmfb/makefile  里面
+
+perl $(_TMROOT)/sde/scripts/build_exe.pl sd/celf/drivers/comps/vpmfbDrv
+
+我在build/linux/sub-systems/celf/drivers/vpmfb目录下执行make 在
+output/objs/sonoma-singlehd_license_free-gnu-4.4.0-linux-retail/comps/vpmfbDrv/tmp/armgnu_linux_el_cortex-a9_kmodule/kmodule/vpmfbDrv.ko  记住这个目录
+output/imgs/sonoma-singlehd_license_free-gnu-4.4.0-linux-retail/retail/lib/modules/2.6.28.10-ge7e3eab-dirty/extra/vpmfbDrv.ko
+output/imgs/sonoma-singlehd_license_free-gnu-4.4.0-linux-retail/retail/lib/modules/2.6.28.10/extra/vpmfbDrv.ko  这个里面的是不用改 magic version的 
+magic version 都带有dirty字符  可以用Hex编译工具修改 正常运行
+最终生成的都加了dirty字符
+关键在于 内核配置的时候，关键在General setup Automatically append version information to the version string  要关闭
+kernel配置里面关闭也没有用 那就Hex修改吧
+
+fb分配内存1280*720*4*2 = 7372800 这个在init的时候就已经分配完成了
+难道是先把内存分配完成，然后再 通过android 设置565格式
+分配到的地址是 ea80-0000 
+
+分析一下 cnxt_kal_mem_malloc 的实现
+通过ioremap_uncache() 实现的
+
+nxp的framebuffer 驱动写得很垃圾啊
+
+image_caps 线索 
+
+IMAGE_MAX_PLANES 到底是什么含义
+
+cnxtfb_setup_pipeline 的时候 
+
+cnxt_kal_mem_malloc( , (cfb->num_pages * sizeof(CNXT_IMAGE_PAGE_PLANE)), (void **)&( image_caps.pPage ) );
+
+可以对framebuffer驱动进行简化，不需要调色板模式的 目标就是32位色！
+
+cnxtfb_imageblit  用来响应 FBIO_IMAGE_BLT 命令
+
+在tmvssddgraphics目录下貌似有些 图形函数，应该是对内置2D 加速硬件的的驱动封装
+
+	uint32_t xres;                  /* visible resolution */
+	uint32_t yres;
+	uint32_t xres_virtual;          /* virtual resolution */
+	uint32_t yres_virtual;
+
+/* Determine the no. of pages that can be supported. */
+    for(uIndex = 1; 
+        (uIndex*aligned_page_size) <= (2*(cfb->max_width)*(cfb->max_height)*(stride_multi/0x1000));
+        uIndex++)
+    {
+       cfb->num_pages = uIndex;
+    }
+这里的逻辑是：如果定义成max_width*max_height 就是2个page 如果比这个尺寸小，还可能3-4个page  显然这里的page数就是2个
+
+
+
+static int cnxtfb_hdmaxwidth     = 1280;
+static int cnxtfb_hdmaxheight    = 720;
+
+static int cnxtfb_hdwidth = 1280;
+static int cnxtfb_hdheight = 720;
+
+image_caps.pPage[uIndex].puPlanes[]  ：  pPage[0] pPage[1] 分别代表的是 2个 page 
+那么puPlanes 有IMAGE_MAX_PLANES 个元素 之用了0  在framebuffer驱动中就是之用 元素0 
+
+最大尺寸 光在程序里面改还不行  insmod 的时候 是可以指定参数的  棒子指定成了 1280*720 所以我不论怎么改成1920 还是1280
+
+framebuffer 要0x1000 (4k) 对齐
+
+fb_set_var fbmem.c中 设置var info的
+
+固定参数中的
+__u32 line_length; /* length of a line in bytes */  1920 16位 就是1920x2 = 3840 
+
+-----------------------------------------------------------------------------
+关于framebuffer的深入探讨
+fb_fix_screeninfo{
+smem_start; /* Start of frame buffer mem(physical address) */ 物理地址
+}
+
+fb_info{
+fb_fix_screeninfo;
+fb_var_screeninfo;
+char * screen_base; /* Virtual address */ 这个跟上面的那个地址又有什么区别？只是一个物理地址
+一个虚拟地址，分别干什么用呢？
+}
+
+在标准linux kernel 里面  framebuffer 的buffer 也叫做 VRAM 可以在fb_info的注释中看到
+screen_base; /*virtual address*/
+screen_size; /*amount of ioremapped VRAM or 0 */
+
+
+难道 韩国人的没有把framebuffer mmap到用户空间？？
+答案：韩国人的是从pvr的一个库中映射上去的【章建勇发现】
+
+----------------------------------------------------------
+20120221
+关于java层的service
+
+class Context
+class ContextWrapper extends Context
+class Service extends ContextWrapper
+class WallpaperService extends Service
+class ImageWallpaper extends WallpaperService
+
+注意，java层的service也附着一个 Application 
+
+
+-----
+
+
+
+张焕超  读取序列号 android.so.Build.SERIAL 不用getproperty。android.so是包名，Build是类名。
+
+

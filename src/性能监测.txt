@@ -1,0 +1,5 @@
+Android上oprofile使用
+
+Oprofile是用于Linux的若干种评测和性能监控工具中的一种，它可以工作在不同的体系结构上
+
+

@@ -1,0 +1,149 @@
+Vitamio 是一款 Android 与 iOS 平台上的全能多媒体开发框架，全面支持硬件解码与 GPU 渲染。
+Vitamio 凭借其简洁易用的 API 接口赢得了全球众多开发者的青睐。到目前，全球已经有超过 
+1800 种应用在使用 Vitamio，覆盖用户超过 2亿。
+Vitamio的中文名称为“维他蜜”。
+Vitamio 来源于英文单词Vitamin（维他命），希望Vitamio对于安卓多媒体开发者的重要性，就
+像Vitmain之于人体一样不可缺少。
+
+Vitamio基于VPlayer开发，所以VPlayer能播放的Vitamio也能。
+
+如何开启硬解码? 
+实例化MediaPlayer时启用第二个参数。
+public MediaPlayer(android.content.Context ctx, boolean preferHWDecoder)
+
+VitamioBundle  Vitamio for Android
+Vitamio-iOS    Vitamio for iOS
+
+yixia / FFmpeg-Android
+The FFmpeg code used in VPlayer for Android
+
+libarm.so 是1个7-zip压缩包，改变扩展名为.zip后,直接右键解压.
+
+
+60 <=> armv6
+61 <=> vfp
+70 <=> armv7
+71 <=> neon
+
+编译ffmpeg-android
+指定ndk的绝对路径（不能相对）
+./FFmpeg-Android.sh: line 110: ccache: command not found
+sudo apt-get install ccache  （这个软件貌似很小）
+
+20140430 或者在sh脚本中去除 ccache 
+
+VitamioListActivity 依赖 InitActivity 库
+
+-----------------
+https://bbs.vitamio.org/topics/424?locale=zh-CN
+
+之前Vitamio3.0版本官网有教程，但是github上的FFmpeg-Android项目没有随着vitamio的更新
+而更新，希望官方能及时发布最新的ffmpeg编译脚本
+
+---
+4.0.1版本ffmpeg-android 要用 Android NDK, Revision 8d 编译，没找到，developer.android.com
+不提供之前版本下载
+
+用R8编译
+libavutil/buffer.c:252
+
+BufferPoolEntry *cur = *(void * volatile *)&pool->pool
+怪异的赋值操作
+
+error: dereferencing type-punned pointer will break strict-aliasing rules
+
+发现pc版本编译也有这个错误，只不过warning对待了
+
+去掉FFmpeg-Android.sh中 -Werror=strict-aliasing
+
+-------------
+20131029 成功编译了vitamio-ffmpeg 并能够使用
+改好了Duration,此时还不能seek，移动进度条显示：
+Using cached seek position
+
+av_log 靠log.c中 av_log_set_callback()函数 对接android log
+vod 正常seek 打印:
+Received seek complete  这个打印在  libvplayer.so 中
+
+
+------java--部分----------
+xhdpi/scrubber_control_normal_holo.png  是正常显示用的进度图片
+
+styles.xml 包含scrubber_control_selector_holo.xml(进度条)
+mediacontroller.xml 调用 MediaController_SeekBar（styles.xml中）
+MediaController.java 中 makeControllerView() 调用 mediacontroller
+
+videoview.java中 mMediaController 为空 就不显示控制条
+
+mProgress.setMax(1000);
+setProgress();设置0-max （如果超过max，则取max，这是最基本的处理！）
+
+MediaController.java:  
+private static final int sDefaultTimeout = 3000
+
+双击左侧打断点
+Run-> skip所有断点  断点处有斜线，无效断点
+
+Debug窗口显示函数调用栈：
+VideoView.onTouchEvent -> toggleMediaControlsVisiblity() ->
+mMediaController.show() -> show()
+
+VideoView.onTouchEvent -> toggleMediaControlsVisiblity() ->
+mMediaController.hide() -> hide()
+
+拖动进度条：
+SeekBar 类 onProgressChanged
+OnSeekBarChangeListener 理解listener到底是啥，就是回调函数
+
+
+//基本逻辑
+void toggleMediaControlsVisiblity() {
+	if (mMediaController.isShowing()) {
+		mMediaController.hide();
+	} else {
+		mMediaController.show();
+	}
+}
+
+try{
+
+}catch{
+
+}
+
+sendMessageDelayed
+
+
+ffmpeg 如何获取当前播放位置
+
+"Received seek complete" 打印在 libvplayer.so  无源
+
+android-ffmpeg的
+av_log() %d 超过2个才能打印，否则都显示0  奇怪
+
+Looper.loop -> dispatchMessage -> handleMessage 
+
+-----------
+在华为1款 双核1G 手机上卡顿，在小米，nexus(4核1.3G Tegra 3)
+ffmpeg解码部分怎么用4核呢？
+
+----------
+vitamio发布包包含2个目录： vitamio   vitamio-sample
+
+
+打开vitamio-sample工程，工程名称处有个大大的红叹号。这一般是依赖问题，因为这个库依赖另一个
+vitamio库。需要把那个库也打开。 右击看属性，告知哪个依赖没有找到。
+在Projects标签中显示 InitActivity missing   这个恰好是另一个应用工程
+
+vitamio 目录是个android库项目
+直接运行提示：Android library projects cannot be launched.
+
+
+20140430  环境切换到徐松处，出现找不到fd.c的问题！！
+1 fd.c是patch补丁打上去的！！！ 
+
+2 压缩成7z文件的方法
+
+
+
+

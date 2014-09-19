@@ -1,0 +1,522 @@
+xbmc的wiki首页设计不错，用的也是标准的mediawiki，那左边的导航是怎么出来的呢？
+
+PDF 功能由 PDF Handler 提供 （在特殊也  versione 里面看到）
+ PdfHandler extension for MediaWiki software
+在服务器上可以用wget下载
+http://upload.wikimedia.org/ext-dist/PdfHandler-MW1.18-r92186.tar.gz
+
+require_once("$IP/extensions/PdfHandler/PdfHandler.php");
+
+Ubuntu Note: You must have already installed the following 3 packages:
+imagemagick ghostscript xpdf-utils
+
+$wgPdfProcessor = 'gs';
+$wgPdfPostProcessor = $wgImageMagickConvertCommand;
+$wgPdfInfo = 'pdfinfo';
+
+Set $wgLogo to the URL path to your own logo image  怎么搞定？
+
+在 Preferences 页面里面有很多设置
+
+可用 Printable Version 产生可打印的版本,缺点：左右页面都靠边开始的没有任何空隙。
+使用 Download as PDF 可以产生格式非常棒的pdf 文档，这正是我想要的啊！
+
+好像还挺复杂的 不过mediawiki上都有说明了
+说是要 require_once("extensions/PdfExport/PdfExport.php");  
+但是查看mediawiki的version 没有看到有PdfExport这个扩展啊
+
+用PdfExport可以生成pdf，但不支持中文，并且跟mediawiki也不一样，人家那个 extension里
+面没有PdfExport 照样行。mediawiki 中是由 Collection 组建完成的。
+require_once("$IP/extensions/Collection/Collection.php"); Print/export 出来了 也
+有 Download as PDF 但点它没有页面。需安装:Extension:PDF Writer
+
+easy_install mwlib && rehash [easy_install 是个命令] 【ubuntu10.04.3 server执行失败】
+
+RPM
+RPM based Distros that have yum - just do : yum search mwlib , then do : yum install mwlib
+fyi: mwlib has some depedencies which makes it more hard to compile from scratch.
+
+----
+1 关于项目版本发布说明
+可以demo的版本，定义为V0.x 而不是V1.x
+
+wgLogo 定义左上角图标，图标尺寸：135x135
+上面的提示文字我说怎么搜索不到呢，原来在图片里面。
+
+可以先用默认开放式账户系统试运行一段时间，模仿WikiPedia的模式
+
+如何彻底删除1篇文章。可以撤销，数据库都有记录。所以数据库的维护是个问题。
+
+如何删除一个用户。
+
+php removeUnusedAccounts.php 
+Remove unused accounts
+
+Checking for unused user accounts...
+Gaojie
+...found 1.
+
+Run the script again with --delete to remove them from the database.
+这是删除没用的账户。何为没用，就是没有贡献的。
+
+用Gaojie账户登录，做过一次修改，再运行：
+Checking for unused user accounts...
+...found 0.
+
+wiki有各种插件，他的插件系统是怎么做到的？原理？
+
+
+Your changes will be displayed to readers once an authorized user accepts them.
+
+authorized user 如何成为？
+
+
+
+关键技术：模板
+Creating Template:Note  左侧一个记事本标志，外围有方框的样式
+
+学会模板技术！
+怎么能方便的把MediaWiki的模板直接整套拿过来
+
+"<code>Template:</code>"  Template: 会出现方框
+
+同样是空格开头，我的和mediawiki显示的效果却不一样，难道是文档模板作怪？
+
+“namespace:”
+
+
+Template:Help   中 Template:就是名字空间
+
+A page whose name is not prefixed by a namespace lies in the mainspace. 
+
+mediawiki 预设18个名字空间，
+Foo:Test 在main空间，因为没有Foo空间
+
+MediaWiki ships with 18 built-in namespaces:
+
+
+把Note模板搞定就暂停
+
+
+Note模板：
+
+Template:Note
+
+需要安装扩展包：ParserFunctions
+This extension is bundled with MediaWiki 1.18 and above （系统自带），只需：
+
+Add to the bottom of LocalSettings.php:
+require_once "$IP/extensions/ParserFunctions/ParserFunctions.php";
+If you want to use the integrated string function functionality, add just after that line
+$wgPFEnableStringFunctions = true;
+Installation can now be verified through Special:Version of your wiki.
+
+
+require_once "$IP/extensions/ParserFunctions/ParserFunctions.php";
+$wgPFEnableStringFunctions = true;
+
+加上后，#if #switch 识别了，但小图标还是没有，解析出
+<div class="note note-info">gaojie</div>  但是没有图标和方框。
+跟<noinclude>
+{{documentation}}
+[[Category:Templates|{{PAGENAME}}]]
+</noinclude>
+这个有关?!  先不管，没思路。
+
+
+
+
+class选择器  id选择器
+
+div 替代原来的table
+td tr  用ui li
+
+{{#if: {{{1|<noinclude>demo</noinclude>}}} | <div class="note note-{{#switch:{{{2|}}}
+ |gotcha=error
+ |=info
+ |#default={{{2|}}}
+}}">{{{1}}}</div> | [[File:Bulbgraph.png|18px|Note|link=]]&nbsp;'''Note''': }}
+
+note模板的图片不在div里面，而是在css里描述。下载带有note模板的网页，并不会看到那个小图标
+保存整个网页，发现几个php文件，里面有base64码，拷贝，百度再现base64解码，发现是个png图片。
+开始以为 <div class"note note-info">  是浏览器识别的标签，那个图是浏览器的素材。
+现在想想也不应该那样。
+
+<noinclude>
+{{documentation}}
+[[Category:Templates|{{PAGENAME}}]]
+</noinclude>
+
+
+
+To find them, users can:
+Click Special Pages > All Pages
+In the Namespace list, choose Template and click Go.
+
+
+To give usage information, include an example like this one on the template page:
+<noinclude>
+== Usage ==
+Welcome users:
+{{Thankyou|reason=your reason|signature=your signature}}
+</noinclude>
+
+
+{{note|
+* xxx.
+* sss.
+}}
+
+
+
+wikimedia
+
+-------------------------
+Help:Extension:ParserFunctions   扩展应用，重点
+
+
+
+
+wikipedia配置：
+
+Product	Version
+MediaWiki	1.23wmf7 (cccc562)
+PHP	5.3.10-1ubuntu3.8+wmf2 (apache2handler)
+SQL	5.5.34-MariaDB-1~precise-log
+LuaSandbox	1.8-1
+Lua	5.1.4
+
+
+
+-------------
+升级wiki，不动数据库的方法：
+
+使用ladp管理wiki账户，而不是自己注册帐号
+
+
+special page -> version  看软件版本以及插件版本
+----
+高级编辑插件
+
+WikiEditor(>1.18已包含)
+require_once( "$IP/extensions/WikiEditor/WikiEditor.php" );
+
+加了，里有显示了，但是没效果
+添加到这个文件的最后即可，不用重启wiki，直接刷新页面在special pages 里面看到了
+ Installed extensions
+但是，编辑的时候没有出现advanced标签，
+
+加上 To enable use of WikiEditor by default but still allow users to disable it
+ in preferences, use something like...
+
+# Enables use of WikiEditor by default but still allow users to disable it in preferences
+$wgDefaultUserOptions['usebetatoolbar'] = 1;
+$wgDefaultUserOptions['usebetatoolbar-cgd'] = 1;
+ 
+# Displays the Preview and Changes tabs
+$wgDefaultUserOptions['wikieditor-preview'] = 1;
+ 
+# Displays the Publish and Cancel buttons on the top right side
+$wgDefaultUserOptions['wikieditor-publish'] = 1;
+
+
+把ldap配置wiki做好，就开始正式使用
+
+--------------------------------------------------
+关于下载页面的制作：（高工）
+special page -> download mediawiki extension
+
+所有扩展控件都在extensions目录，版本自带了如下扩展：
+
+Cite         Interwiki           Poem            SyntaxHighlight_GeSHi
+ConfirmEdit  LocalisationUpdate  README          TitleBlacklist
+Gadgets      Nuke                Renameuser      Vector
+ImageMap     ParserFunctions     SimpleAntiSpam  WikiEditor
+InputBox     PdfHandler          SpamBlacklist
+
+
+安装：
+extension：ldap
+执行： 这是啥意思啊
+openssl  s_client -showcerts -connect google.com.hk:443
+
+
+
+
+可以链接到一个分类上
+*[http://192.168.1.4/mediawiki/index.php?title=%E5%88%86%E7%B1%BB:MultiMedia '''多媒体相关''']
+
+::*svn://192.168.0.252/CCDT2010/V07/V/HD/Release  什么语法，吴云涛在1.4上写的
+
+
+//制表符应用-吴云涛
+<pre>   
+
+    ├── ddtest                    ---- ddtest源码
+    │   ├── av                    ---- 各模块测试用例
+    │   ├── ...
+    │   └── wifi
+</pre> 
+
+
+
+维基的图片不在百科上，而是在维基共享资源上，你要上传到维基共享资源，再引用到百科\
+
+
+想重新安装，删除mysql数据库不能直接删除目录，要使用drop命令删除。
+如果已经删除了目录，也可以再用drop彻底删除数据库。
+
+
+维基百科 有手机模式，mediawiki默认没有这种模式。
+
+搜索的时候默认只搜索到完全匹配的标题名字，下面弹出的 containing xxx 可以所有标题，文字
+中的所有匹配。貌似也只搜索标题，不搜索内容。
+在首选项里面可以设置 搜索匹配度 默认20%
+
+
+============
+关于 Allpage
+在主页上输入 [[Category:All(随便取名)]]  无论放在页面何处，都会在页面最下方显示：
+category:All pages
+
+这个连接，包含了所有包含这句话的页面
+
+点击了这个All后，也会出现一个编辑页，这个页里面包含了加入过[[Category:All(随便取名)]]
+的页面。当然还可以附加另外一下信息。需要随便写点东西，然后“Save Pages”。如果什么都不写
+下次进入还是直接到编辑页面。
+
+wiki还可以管理文件
+http://192.168.1.4/mediawiki/index.php?title=%E6%96%87%E4%BB%B6:MPEG2%E7%A0%81%E6%B5%81%E7%BB%93%E6%9E%84%E5%88%86%E6%9E%90.ppt
+“上传改文件的新版本”
+
+User:Gaojie 这个字段需要写什么呢？
+
+如何显示贡献者的中文名字
+
+显示站外图片，
+“$wgAllowExternalImages = true;”
+否则会显示链接，而不是图片。
+
+上传文件，
+在左侧tools -> Upload file 默认没有
+解决办法：
+Make sure uploads are enabled in PHP
+
+ubuntu  /etc/php5/cli/php.ini 默认就是下面的设置
+file_uploads = On
+upload_max_filesize = 2M
+
+然后：
+$wgEnableUploads = true; # Enable uploads
+默认只能上传图片，想上传pdf需要：
+
+网站名字：$wgSitename = "研发中心";
+
+上传的文件存储在 wiki/images 目录中
+
+Configuring file types
+$wgFileExtensions = array('png','gif','jpg','jpeg','doc','xls','mpp','pdf','ppt',
+'tiff','bmp','docx', 'xlsx', 'pptx','ps','odt','ods','odp','odg');
+增加文件类型
+
+提交文件：
+Could not create directory "mwstore://local-backend/local-public/3/31".
+将images目录改成777权限即可。
+上传了一张图片后，images目录下生成了 3/  archive/  lockdir/ 3个目录
+在3/31/下有这个png图（3/31啥意思呢？）
+
+---------
+图片太大，想显示小一点：
+[[File:filename.extension|options|caption]]
+
+[[File:手机遥控器按键.png|frame|手机遥控器圆形按键]]
+options  为frame和thumb时候，caption才有效
+frame的意思跟网页里面的iframe相似，可以悬浮在页面上。实验一下就明白了。
+
+当图片太大时候，caption的字体大小就会失调，这时候需要调整图片大小
+{width}px 
+x{height}px
+例如
+[[File:手机遥控器按键.png|thumb|50px|手机遥控器圆形按键]]
+
+px对于thumb有效，对于frame无效，为何？
+
+
+
+xbmc wiki 页，这是什么语法，在我的 wiki中不认。
+{|
+|
+<source lang="javascript">
+{
+  "type": "object",
+  }
+}
+</source>
+|}
+
+
+<syntaxhighlight lang="javascript">
+可以用语法高亮显示json源码。
+
+
+[[free file format|free]]  后面是显示内容，前面是链接地址。
+
+
+一个页面可以删除，可以重命名（move） 但是删除后还能能显示出来，还能undelete 怎么彻底删除呢？
+如何彻底删除词条呢？
+
+
+<abbr title="Quarter Common Intermediate Format">QCIF</abbr>  显示缩写。
+
+上传svg图片提示错误：
+Error creating thumbnail: /bin/bash: convert: command not found
+
+
+如何引用到文章的某一节？？ 泥马,我真聪明 [[小米盒子细节#输入法|输入法]] 就链接到“输入法”那个小节了。
+
+用wiki管理软件发布的话，把apk包当作image上传上去，这样都在image目录。这不好，应该是放在ftp中再加链接
+
+
+2  20140526  移植xbmc的导航页到自己的wiki
+xbmc 导航页 用到了 
+<section begin="intro" />Guides, tips, and topics.<section end="intro" />
+移植到我的wiki上 不灵。
+
+
+3 修改左上角 logo 图片：
+/skins/common/images/wiki.png  修改替换之，分辨率 135 x 135
+
+
+4 20140527 选项卡功能
+安装Extension:Tabs （默认不带，需要在mediawiki网站下载）
+还行，比较好用
+
+5 如何在页面上直接弹出注释。
+
+6 有没有一个功能，把编辑的过程全部删除，只保留最后一次快照。使得整个wiki变得清爽。应该没有，只能手动做了。
+
+
+
+wikipedia
+User talk:124.207.182.194
+From Wikipedia, the free encyclopedia
+December 2013[edit]
+
+ Hello, I'm Materialscientist. I wanted to let you know that I undid one or more 
+of your recent contributions to Ogg because it did not appear constructive. If 
+you would like to experiment, please use the sandbox. If you think I made a mistake, 
+or if you have any questions, you can leave me a message on my talk page. 
+Materialscientist (talk) 09:25, 17 December 2013 (UTC)
+If this is a shared IP address, and you did not make the edits, consider creating 
+an account for yourself so you can avoid further irrelevant notices.
+
+wiki制定的就是一种百科写作标准，努力确保所有条目写作风格和内容样式保持一致性。如果降
+低了格式标准，那么带来的将会是灾难性的垃圾文字。百度百科就如是。
+
+
+维基百科信息编辑的简易性，使得人人都可以参与编辑，这一方面对于信息内容的愈辩愈明有好处
+
+讨论web页面能否输入无效频点，比如间隔不是8的频点。这样
+的问题很“简单”，但是缺乏系统的整理，不成体系，没有记录，没有依据。
+
+模板
+yes no模板  来自 xbmc wiki  yes 绿色  no 红色
+如何把这个模板拿出来呢？ 从左侧导航中可以看到 “模板” 然后进入  找到格式化模板，就可以找到
+yes模板了 拷贝这个模板的源码，单击显示不出来的模板  粘贴即可。
+
+<noinclude>{| class="wikitable"
+|-
+|</noinclude>style="background: #90ff90; color: black; vertical-align: middle; text-align:center;" class="table-yes"{{!}}Yes<noinclude>
+|}
+[[Category:Formatting templates]]</noinclude>
+
+用起来不灵啊！奇怪！
+
+那自己写一个模板  yes  绿色字体  no 红色字体
+
+xbmc wiki 使用了 SyntaxHighlight (Version 1.0.8.11)using GeSHi - Generic Syntax Highlighter
+我的1.22.x版本的wiki直接就有。
+
+xbmc上的貌似也是从wikipedia上搞下来的。
+
+
+模板里面使用的 div  class（css）如何描述？
+
+-------
+Manual:Collapsible elements
+
+参照：
+http://www.mediawiki.org/wiki/Manual:Collapsible_elements#NavFrame
+按照里面的拷贝没有成功，最后在wikipedia里面拷贝了如下文件：
+
+MediaWiki:Common.js
+MediaWiki:Common.css
+Template:Hidden
+
+成功
+
+---------
+20140219 从WikiPedia拷贝Reflist
+提示：Unknown extension tag "references"
+从mediawiki上拷贝的也有这个问题，应该是#tag:references不能解析。
+需要打开 Cite 插件！ 安装了就好了。
+
+
+
+1 http://wiki.xbmc.org/index.php?title=JSON-RPC_API/v6 这个wiki页有很多高级用法
+这个wiki页的version
+http://wiki.xbmc.org/index.php?title=Special:Version
+
+这里标题显示了1  1.1  1.1.1  也是用 ==  === ==== 表示的，怎么做到的呢
+2 文档子项应该用2级标题 == ==
+
+
+定义自己的cms接口，完全参照xbmc，以及xbmc的wiki页。好哇
+
+<gallery  heights=200px   mode=??>
+File:Example.jpg|Caption1
+File:Example.jpg|Caption2
+</gallery>
+
+我知道 [[File:]]   那么 [[Image:]]  啥意思啊
+
+
+== Terms ==
+;xxx:xxx
+;xxx:xxx
+;xxx:xxx
+
+
+<div style="margin: 0.5em; padding: 0.5em; float:right; " >
+[[Image:Galleries-terms.png|432px]]<br> //测试发现这里写File 写Image都行，没啥区别
+Graphic illustration of terms used on this page.
+</div>
+
+貌似上面那种写法效果更好些。但是描述部分显示效果不好
+
+[[File:手机遥控器按键.png|300px|thumb|手机遥控器圆形按键]]
+
+
+
+MessagesEn.php:'postedit-confirmation'   => 'Your edit was saved.',
+
+mediawiki.action.view.postEdit.js里面：
+
+安装前后，只是多了一个 LocalSettings.php,其他没有任何变化。
+
+
+要用继承的概念/思想 去整理
+比如信号灯，就应改整理到基础包里面，所有产品继承之。
+要整理FAQ
+
+
+---
+系统营救：
+服务器调整，引发：Cannot contact the database server
+原因是原来数据库没有密码，后来加了密码，只需在LocalSettings.php中添加：
+$wgDBpassword = "实际密码";
+
+
+
+
+

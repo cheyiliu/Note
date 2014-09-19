@@ -1,0 +1,172 @@
+1 arch/arm目录
+只和一个mach-apollo目录 同时修改makefile 和 Kconfig
+
+2 drivers目录
+dcsnet 没用 （到底有用没  凡是正没有编译 在system type ->DCS Network driver support 也没有选）
+
+char目录不合
+只合 net 
+和serial串口 串口里面只合 ip3106.c  serial_core.c 不知道在改什么东西 不合
+
+3 include目录
+asm-arm/hardware目录 定义了ip3106.h ip9028.h等 合
+
+好！可以 makeconfig 了
+选择 mach-apollo  选择 Cortex-A9 MP1 Processor  
+此时下面没有识别出armv7 需要修改
+
+system type 项：
+1  Defined at arch/arm/mm/Kconfig:429 
+   Depends on: ARCH_INTEGRATOR || MACH_REALVIEW_EB || ARCH_OMAP3 || MACH_REALVIEW_PBA8 || MACH_REALVIEW_PBX || MACH_APOLLO （这里）
+
+2  Defined at arch/arm/mm/Kconfig:758 
+   Symbol: CACHE_L2X0 [=y] 
+   Depends on: REALVIEW_EB_ARM11MP || MACH_REALVIEW_PB11MP || MACH_REALVIEW_PB1176 || REALVIEW_EB_A9MP || MACH_REALVIEW_PBX || MACH_APOLLO （这里）
+
+
+开始make
+
+---------------------mach-apollo--------------需要改动很大 参照realview
+
+1 arch/arm/mach-apollo/include/mach/smp.h:38: error: incompatible type for argument 1 of 'gic_raise_softirq'
+arch/arm/include/asm/hardware/gic.h  (nxp没有改)
+gic_raise_softirq 这个函数的 由一个结构体变成了结构体指针
+改成指针形式的，那么调用的地方也要相应改动
+只在mach-apollo/platsmp.c 中
+	//smp_cross_call(cpumask_of_cpu(cpu)); 改成-
+	smp_cross_call(cpumask_of(cpu)); //gaojie
+
+2  3个函数没有
+arch/arm/mach-apollo/include/mach/io.h: In function 'dma_cache_inv':
+arch/arm/mach-apollo/include/mach/io.h:38: error: implicit declaration of function 'smp_dma_inv_range'
+arch/arm/mach-apollo/include/mach/io.h: In function 'dma_cache_wback':
+arch/arm/mach-apollo/include/mach/io.h:45: error: implicit declaration of function 'smp_dma_clean_range'
+arch/arm/mach-apollo/include/mach/io.h: In function 'dma_cache_wback_inv':
+arch/arm/mach-apollo/include/mach/io.h:52: error: implicit declaration of function 'smp_dma_flush_range'
+
+smp_dma_inv_range函数没有定义！
+没有合 arch/arm/include/asm/cacheflush.h  
+
+3 
+In file included from include/linux/dma-mapping.h:103,
+                 from arch/arm/kernel/asm-offsets.c:15:
+arch/arm/include/asm/dma-mapping.h:20: error: implicit declaration of function '__pfn_to_bus'
+arch/arm/include/asm/dma-mapping.h:25: error: implicit declaration of function '__bus_to_pfn'
+
+意思是说asm-offsets.c的line15  #include <linux/dma-mapping.h> 而 include/linux/dam-mapping.h的line103
+#include <asm/dma-mapping.h>  asm/dma-mapping.h里面的20 25 没有定义xxx
+nxp中根本就没有定义这两个函数
+
+首先 CONFIG_HAS_DMA = y 然后
+include/linux/dam-mapping.h 就包含 asm/dma-mapping.h
+
+在mach-apollo/include/mach/memory.h中定义了__virt_to_bus()
+
+一般情况下 __pfn_to_bus 就是  __virt_to_bus
+pfn（Page Frame Number） 页帧号
+
+
+CONFIG_FLATMEM = y  这个都是这样的！！
+
+
+__virt_to_phys   虚拟到物理
+__virt_to_bus    虚拟到总线
+
+apollo的 #define PHYS_OFFSET UL(0x00000000) 怎么是0呢？
+
+
+CONFIG_PAGE_OFFSET  更改2g/2g  3g/1g 后.config文件中的东西
+CONFIG_VMSPLIT_3G 这个宏其实没有用
+用到的地方只有一处：
+./include/asm/memory.h:#define PAGE_OFFSET UL(CONFIG_PAGE_OFFSET)
+
+
+那么PHYS_OFFSET  物理偏移又是什么呢？
+apollo定义的PHYS_OFFSET 为0
+
+apollo在memory.h 中定义了
+#define __virt_to_bus(x)		((x) - PAGE_OFFSET)
+#define __bus_to_virt(x)		((x) + PAGE_OFFSET)
+
+
+而apollo没有定义 __virt_to_phys  __phys_to_virt
+使用的是 include/asm/memory.h 的通用定义：
+#define __virt_to_phys(x)	((x) - PAGE_OFFSET + PHYS_OFFSET)
+#define __phys_to_virt(x)	((x) - PHYS_OFFSET + PAGE_OFFSET)
+
+而apollo的 PHYS_OFFSET 为0 就剩下 +- PAGE_OFFSET 了
+
+物理偏移的含义应该是，cpu没有把ddr映射到物理0地址上去  比如sumsang 映射到c00000000了
+
+
+看p96的 地址映射图 0-2G 都是内存 最大支持1GBytes  1G-2G映射同0G-1G alias
+A0000000 - Bffffffff是PCI 所以如果搞成 3G/1G的内核 就不能访问pci总线了
+
+
+/*
+ * PFNs are used to describe any physical page; this means
+ * PFN 0 == physical address 0.
+ *
+ * This is the PFN of the first RAM page in the kernel
+ * direct-mapped view.  We assume this is the first page
+ * of RAM in the mem_map as well.
+ */
+
+start_kernel 函数
+
+printk(linux_banner); 打印看到的第一行打印
+
+arch/arm/kernel/setup.c
+setup_arch函数
+
+
+mem_map是用 mem_map = NODE_DATA(0)->node_mem_map 这句话初始化的
+	/*
+	 * With no DISCONTIG, the global mem_map is just set as node 0's
+	 */
+
+
+2  totalram_pages 就是在 mem_init函数中
+totalram_pages += free_all_bootmem_node(pgdat); 这里赋值的
+
+	/* this will put all unused low memory onto the freelists */
+	for_each_online_node(node) {   //这个循环只执行一次
+		pg_data_t *pgdat = NODE_DATA(node);
+
+		free_unused_memmap_node(node, &meminfo);
+
+		if (pgdat->node_spanned_pages != 0)
+			totalram_pages += free_all_bootmem_node(pgdat);
+	}
+
+
+Non-Uniform Memory Access or Non-Uniform Memory Architecture  (NUMA) is a computer memory design used in multiprocessors, 
+
+MAX_NUMNODES  都是1  NUMA 在多处理器上才有用
+非一致性内存访问
+
+
+Memory: 128Mb 128Mb = 256Mb total
+Memory: 130552kb ....
+是在init.c 中 mem_init打印出来的
+
+	printk(KERN_INFO "Memory:");
+	num_physpages = 0;
+	for (i = 0; i < meminfo.nr_banks; i++) {
+		num_physpages += bank_pfn_size(&meminfo.bank[i]);
+		printk(" %ldMB", bank_phys_size(&meminfo.bank[i]) >> 20);
+	}
+	printk(" = %luMB total\n", num_physpages >> (20 - PAGE_SHIFT));
+打印2次 128M  说明  nr_banks 为2 
+那么 meminfo 是怎么初始化的呢？
+
+
+bootmem_init函数中
+通过memcpy(&meminfo, mi, sizeof(meminfo)); 给meminfo初始化的 也就是说 信息已经事先存在了mi中
+paging_init 调用 bootmem_init
+
+arch/arm/kernel/setup.c中又初始化meminfo
+
+default_command_line 是config文件中配置的
+
+

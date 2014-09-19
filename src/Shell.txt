@@ -1,0 +1,193 @@
+1 
+gaojie@gaojie:~/NXP/apollo-sdk$ ps -f
+UID        PID  PPID  C STIME TTY          TIME CMD
+gaojie   12041  2519  0 23:02 pts/5    00:00:00 bash
+gaojie   12097 12041  0 23:06 pts/5    00:00:00 ps -f
+gaojie@gaojie:~/NXP/apollo-sdk$ 
+
+2519  是 gnome-terminal
+
+
+2 关于echo命令
+#echo '$_TMTGTBUILDROOT'
+$_TMTGTBUILDROOT
+
+#echo "$_TMTGTBUILDROOT" 和 #echo $_TMTGTBUILDROOT
+显示 _TMTGTBUILDROOT 的值
+
+3 source 和 . 执行.sh文件，是在当前shell中，直接执行sh文件则是创建的一个新的shell(父进程为当前shell)，并且会复制 “父shell的所有环境变量”（即子shell可以用父shell之环境变量，反之不可）
+
+
+4 关于 export
+test='value'
+export test 
+等价于
+export test="value"
+
+那么定义了变量 test 不 export 又如何呢？ 在 set 的时候可以看见
+export后，变为系统环境变量，可以被复制到子shell中，相当于全局变量。不加export，是本地环境变量，只在当前shell中起作用。
+
+撤销一个环境变量： unset VAR_NAME 
+
+5 在terminal中执行#bash 回车 再执行#bash 回车 再执行#bash 回车 则出现
+gaojie    2957     1  1 01:08 ?        00:00:00 /usr/bin/gnome-terminal
+
+gaojie    2959  2957  0 01:08 pts/0    00:00:00 /bin/bash
+gaojie    2981  2959  0 01:08 pts/0    00:00:00 bash
+gaojie    3002  2981  1 01:08 pts/0    00:00:00 bash
+gaojie    3022  3002  1 01:08 pts/0    00:00:00 bash
+
+执行3次 exit 后 ternimal 会退出! [有意思]
+
+在Shell工作机制中，存在一个子shell的概念
+
+6 他的内幕是这样的：当使用export来导出一个变量时，当前shell就会将此变量放到“导出变量列表”中，一旦在某个时刻需要建立子shell时，就会将这个导出变量列表拷贝一份给子shell，这样子shell也就有所应当的看到了这些被导出的变量了。注意是 “拷贝一份”,那么在子 shell 修改了这个export出的变量，并不影响父shell的同名变量。
+# 没有导出的变量是局部变量，子shell是看不到的。
+# 导出变量列表被复制给子shell，子shell可以修改和存取它，但是这种修改父shell看不到。
+# 导出变量列表的上述特性对于直接产生的子shell生效，对于由子shell产生的后继子shell也是如此。
+# export可以在变量赋值之后用，也可以在变量赋值之前用。
+
+7 那么在 makefile 里面再执行 source xx.sh 又如何？! nxp 就这样做了
+
+gaojie    3373     1  0 01:33 ?        00:00:03 /usr/bin/gnome-terminal
+gaojie    3629  3373  0 02:08 pts/2    00:00:00 /bin/bash
+gaojie    3714  3629  0 02:09 pts/2    00:00:00 make change_toolchain [在shell中执行了make]
+gaojie    3723  3714  0 02:09 pts/2    00:00:00 /bin/bash -c . android_env.sh ;export SYST 
+[makefile中执行 . android_env.sh;export SYST，注意这里创建了一个 shell]
+同时注意后面的 -c 参数  man bash 得到
+-c string If  the -c option is present, then commands are read from string.  If there are arguments after the string, 
+they are assigned to the positional parameters, starting with $0.
+
+gaojie    3724  3723  0 02:09 pts/2    00:00:00 sleep 1000 [ android_env.sh里面调用了 sleep 1000 ]
+
+如果makefile 里面执行sleep 100，那么他的父进程是 make，而不是创建一个shell再由shell创建 sleep
+而在makefile中执行.sh文件时候，不论有没有加 source 的都要创建一个 bash ，但是行为有区别。
+
+8 Makefile中只能在target中调用Shell脚本【但是makefile中不在 target中执行export 也有效】
+在makefile中可以执行shell脚本，此脚本可以直接写在makefile中，也可以写到一个文件中，再调用这个文件。
+
+Shell脚本在target里才有效，其它地方都被忽略掉了。make把每一行Shell脚本当作一个独立的单元，它们在单独的进程中运行
+
+“；” 表示在一个进程中运行！
+
+makefile 中执行 .sh文件，会创建一个 bash 再运行里面的
+
+9 终于明白了在makefile中运行shell文件的细节问题
+有一个shell 脚本文件 test.sh，执行它有2中方法：
+#./test.sh
+#. test.sh [ 为什么不需要 . ./test.sh 呵呵 ]
+
+#test.sh 是不能执行的，会提示找不到命令
+
+比如test.sh 里面有：
+sleep 30
+
+makefile 里面有：
+all:
+	./test.sh;sleep 50
+
+执行 makefile 后，则当前shell 创建 make 进程，make一看是一个脚本文件，则创建一个bash进程（因为sh文件里面可能有脚本内建的命令比如if等，必须创建一个bash进程执行，而不能像cp sleep等单独创建一个进程就可以执行 ），由这个bash 进程运行test.sh文件，由于没有 source ，所以这个bash要再创建一个bash执行test.sh ，运行里面的sleep 30，如下:
+
+gaojie    8682  8540  0 15:03 pts/0    00:00:00 make change_toolchain
+gaojie    8691  8682  0 15:03 pts/0    00:00:00 /bin/bash -c ./test.sh; sleep 50
+gaojie    8692  8691  0 15:03 pts/0    00:00:00 /bin/bash -c ./test.sh; sleep 50
+gaojie    8693  8692  0 15:03 pts/0    00:00:00 sleep 30
+
+sleep 30 执行完成，才执行sleep 50
+gaojie    8682  8540  0 15:03 pts/0    00:00:00 make change_toolchain
+gaojie    8691  8682  0 15:03 pts/0    00:00:00 /bin/bash -c ./test.sh; sleep 50
+gaojie    8722  8691  0 15:12 pts/0    00:00:00 sleep 50
+可以看出，sleep 50 的父进程不是make 而是 第一个bash（这个时候为了执行test.sh 而创建的bash已经退出，因为sleep 30 执行完毕）
+
+
+如果 makefile 写成
+all:
+	./test.sh
+	sleep 50
+那么 sleep 50 执行时候的父进程就是make了
+
+如果写成
+
+all:
+	. test.sh；sleep 50
+只由make生成一个 bash 在这个bash里面执行 test.sh 和 sleep 50
+
+写成
+all:
+	./test.sh sleep 50  则 sleep 50 根本就不执行
+
+总结：
+makefile写成
+all:
+	./test.sh;sleep 50
+就会创建2个 bash（ 不必深究，具体问题具体分析 ）
+
+
+makefile里面
+all:
+	sleep 30 ; sleep 50
+
+gaojie    9500  9241  0 15:40 pts/0    00:00:00 make change_toolchain
+gaojie    9509  9500  0 15:40 pts/0    00:00:00 /bin/bash -c sleep 30; sleep 50
+[没有执行 sh 文件怎么也创建 bash 进程，上面以为必须有sh文件才创建bash的 ]
+
+makefile中只要有 分号“；” 隔开的2条命令【包括sh文件】比如 sleep 20； echo “hello”
+那么执行这条命令的时候就 会创建一个新的 bash 
+
+
+9 (20110729) 一个好玩的测试
+  在一个shell里面设置了 export _TMECHO=1 全局环境变量，在此shell里面执行 make，makefile里面再source一个sh（创建一个shell），那么这个shell里面仍然会检测到这个全局变量。
+  当然，修改这个全局变量不会影响到最初的shell。可见，环境变量可以一级一级继承，即使中间的make 根本就不是shell创建shell。
+
+
+Shell中的数组及遍历:
+数组的申明:array=(element1 element2 element3 .... elementN) 
+数据的读取: echo ${array[0]}  echo ${array[index]} 
+数组的遍历用到一个取全部：
+for data in ${array[@]}  
+do  
+    echo ${data}  
+done  
+
+${array[@]} 是取全部，意思是：
+#test=(1 2 3 4 5 6 7 8 9)
+#echo echo ${test[2]}
+3
+#echo ${test[@]}
+1 2 3 4 5 6 7 8 9
+
+#${test}
+1 : command not found
+
+
+Bash-Conditional-Expressions.html
+有关于 if 条件的描述
+
+2
+#这不行， if条件中不识别通配符（那个目录下要真有个*.*文件才生效（文件确实可以命名为*.*））
+if [ -f "$APKLIBPATH/*.*" ]; then  
+   echo "hello"
+   cp $APKLIBPATH/*.*  $OUTAPKLIBPATH/ ; 
+fi;
+
+
+---
+1 拷贝android目录下的所有png到某个目录
+find . -name "*.png" | xargs cp ./png 
+这样不行，因为cp需要2个参数，这样默认 ./png是第一个参数不能默认成第二个参数
+可以这样 
+find . -name "*.png" | xargs cp -t ./png  （-t指定这是目的地址）
+提示：cp: target `./3.png' is not a directory
+变通一下，可以这样：
+find . -name "*.png" | xargs tar czf test.tgz  然后再解压缩，因为tar命令第一个参数
+就是*.tgz 呵呵。
+但是不对，这样会带目录结构 
+
+2 cp命令默认是覆盖同名文件的，除非加上 -n (--no-clobber) 选项
+
+
+-s file
+True if file exists and has a size greater than zero. 
+
+
+

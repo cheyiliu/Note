@@ -1,0 +1,2 @@
+强指针
+定义frameworks/base/include/utils/StrongPointer.h

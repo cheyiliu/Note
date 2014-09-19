@@ -1,0 +1,15 @@
+1 中断传输的流程跟bulk传输一模一样
+2 控制传输的流程最复杂 分为3个阶段 setup 数据 和握手 里面还有0长度数据包的概念
+3 setup的数据阶段的流程跟bulk传输一模一样
+4 data0  data1数据包绝对不可以单独出现， 都必须包含在setup pid  in/out pid中
+并且没有in/out中只能包含一个data0/data1包   因为数据包不带地址 所以数据包必须包含在带有地址的包里面，才知道这个数据包是发到什么位置的。
+5 由于数据包的长度不定（token包和握手包的长度都是固定的）所以数据包应该是靠EOP来判断包结束的
+
+6 设置地址的命令 地址就包含在请求里，所以没有数据阶段
+7 1.1协议，8.4.1 token packets  :For IN transactions,these fields uniquely identify which endpoint should transmit a Data packet.
+
+8 前几天我记得说，握手包只能是设备发给主机。这个是不对的。准确的说 8.4.4:
+
+9 控制传输最为特殊，他规定了数据格式。而其他3种传输方式都没有规定传输格式。这相当于在数据连路层增加了一层协议，in the other words，他跟bulk only 协议是同一个级别的。
+
+10 u盘使用的协议有bulk only  还有CBI 但是不常用

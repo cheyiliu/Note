@@ -1,0 +1,632 @@
+1 百度首页含有大量js脚本。并且都去掉了回车换行，需要在线搜索js反混淆，粘贴这段代码，
+格式化成可读的状态
+
+函数作为函数的参数
+javascript中的函数是“复合数据类型”，又称为“引用类型”。
+
+function max_num(num_arr)  
+{  
+    //保存结果，初始化为数组的第一个元素  
+    var  max=num_arr[0];  
+    var i=0; //循环变量初始化  
+   //遍历数组，找出最大值放在max中  
+    for(i;i<num_arr.length;i++)  
+    {  
+        if(max<num_arr[i])  
+        max=num_arr[i];  
+    }  
+    return max;  
+}  
+
+function result(function_name)  
+{  
+    var number_arr=new Array();  
+    //将参数中除去第一个参数的其余参数赋值给数组number_arr  
+    var i =1;  
+    for(i;i<arguments.length;i++)  
+    {  
+        number_arr[i-1] = arguments[i];  
+    }  
+    return function_name(number_arr);  
+} 
+
+var a=result(max_num);
+
+
+
+所以，jquery的 getJSON函数定义为：
+jQuery.getJSON(url,data,success(data,status,xhr))，函数里面可以调用success函数。
+并且这个函数可以现定义。
+
+使用getJSON的例子如下：
+$.getJSON("view_detail.json",function(rsp) {  });
+function 是关键词，代表定义一个无名函数并且传递给了函数参数
+
+
+<html>
+ <head> </head>
+ <body>
+
+ </body>
+</html>
+
+没有这些也照样可以显示，比如：
+<ul>
+<li>test1</li>
+<li>test2</li>
+</ul>
+或者
+<ol>
+<li>test1</li>
+<li>test2</li>
+</ol>
+
+也可以：
+<ol>
+<li>
+	<ol>
+		<li>test1</li>
+		<li>test2</li>
+		<li>test3</li>
+	</ol>
+</li>
+<li>
+	<ol>
+		<li>test1</li>
+		<li>test2</li>
+		<li>test3</li>
+	</ol>
+</li>
+</ol>
+================================
+<ol>
+<li>
+	<div>test</div> //这里不加<div>也一样，他是对一块数据进行整体控制的
+	<ol>
+		<li>test1</li>
+		<li>test2</li>
+		<li>test3</li>
+	</ol>
+</li>
+<li>
+	<div>test</div>
+	<ol>
+		<li>test1</li>
+		<li>test2</li>
+		<li>test3</li>
+	</ol>
+</li>
+</ol>
+运行效果：
+1.test
+	1.test1
+	2.test2
+	3.test3
+2.test
+	1.test1
+	2.test2
+	3.test3
+
+-----------------
+<ul>
+<li>
+	test-gao
+	<ul>
+		<li>
+			test1
+			<ul>
+				<li>test3</li>
+				<li>test4</li>
+			</ul>
+		</li>
+		<li>test2</li>
+		<li>test3</li>
+	</ul>
+</li>
+<li>
+	test-jie
+	<ul>
+		<li>test1</li>
+		<li>test2</li>
+		<li>test3</li>
+	</ul>
+</li>
+</ul>
+------------------
+看到效果：不同级别的无序列表用实心点，空心点交替展示。
+
+<ul id="nav" style="width: 216px; ">
+id表示啥？
+-----------------
+id属性：
+id 属性规定 HTML 元素的唯一的 id。
+id 在 HTML 文档中必须是唯一的。
+id 属性可用作链接锚（link anchor），通过 JavaScript（HTML DOM）或
+通过 CSS 为带有指定 id 的元素改变或添加样式。
+
+语法
+<element id="value">
+
+例如：
+-----------
+<html>
+<head>
+<script type="text/javascript">
+function change_header()
+{
+//innerHTML 属性设置或返回表格行的开始和结束标签之间的 HTML。
+document.getElementById("myHeader").innerHTML="Nice day!";
+}
+</script>
+</head>
+
+<body>
+
+<h1 id="myHeader">Hello World!</h1>
+<button onclick="change_header()">Change text</button>
+
+</body>
+</html>
+-----------
+也可以这样：
+<html>
+<head>
+<script type="text/javascript">
+function change()
+{
+document.getElementById("myHeader").innerHTML="<li>Nice day!</li>";
+}
+</script>
+</head>
+
+<body>
+
+<ol id="myHeader">
+	<li>test1</li>
+	<li>test2</li>
+	<li>test3</li>
+</ol>
+<button onclick="change()">Change text</button>
+
+</body>
+</html>
+--------------
+我发现html（或者说是chrom的兼容性）的容错性非常强例如
+<li>test1</li>
+<li>test2</li>
+也可以写成
+	<li>test1
+	<li>test2
+	<li>test3</li>
+	<li>test4
+即没有</li>也行解释。
+
+
+
+
+
+<li>是list 缩写
+
+定义和用法
+<li> 标签定义列表项目。（就是1个列表项）
+<li> 标签可用在有序列表 (<ol>) 和无序列表 (<ul>) 中。
+
+有序列表，表项显示 1. 2. 3. 相当于wiki的 #
+无序列表，表项显示 .  .  .  相当与wiki的 *
+
+请使用 CSS 来定义列表和列表项目的类型。
+
+文档中的一个部分会显示为绿色：
+<div style="color:#00FF00">
+  <h3>This is a header</h3>
+  <p>This is a paragraph.</p>
+</div>
+
+
+注释：<div> 是一个块级元素，也就是说，浏览器通常会在 div 元素前后放置一个换行符。
+提示：请使用 <div> 元素来组合块级元素，这样就可以使用样式对它们进行格式化。
+
+
+指向 w3school 的超链接：
+<a href="http://www.w3school.com.cn">W3School</a>
+<a> 标签定义超链接，用于从一张页面链接到另一张页面。
+<a> 元素最重要的属性是 href 属性，它指示链接的目标。
+
+
+然后添加收缩伸展事件
+
+-------------------------
+ADO Description 属性
+
+
+<span> 标签被用来组合文档中的行内元素。
+提示：请使用 <span> 来组合行内元素，以便通过样式来格式化它们。
+注释：span 没有固定的格式表现。当对它应用样式时，它才会产生视觉上的变化。
+
+
+
+以下代码标记了一个段落：
+<p>This is some text in a very short paragraph</p>
+<p> 标签定义段落。
+p 元素会自动在其前后创建一些空白。浏览器会自动添加这些空间，您也可以在样式表中规定。
+
+
+事实上，您也许已经注意到了，W3School 站点上有一些文本的样式与其他文本是不同的。比如
+“提示”使用了粗体的橘红色。尽管实现这种效果的方法非常多，但是我们的做法是：使用“提示”
+使用 span 元素，然后对这个 span 元素的父元素，即 p 元素应用 class，这样就可以对这个
+类的子元素 span 应用相应的样式了。
+
+<p class="tip"><span>提示：</span>... ... ...</p>
+p.tip span {
+	font-weight:bold;
+	color:#ff9955;
+	}
+
+
+
+<style> 标签用于为 HTML 文档定义样式信息。
+在 style 中，您可以规定在浏览器中如何呈现 HTML 文档。
+type 属性是必需的，定义 style 元素的内容。唯一可能的值是 "text/css"。
+style 元素位于 head 部分中。
+
+<script type=text/javascript>
+
+
+
+*{margin:0;padding:0;border:0;}  //*代表所有元素
+#nav{xxx}  //#是什么含义
+
+
+class 和 id 属性
+"id"对应"#"  ,"class"对应"." .id是唯一标志的，在同一页面中不能有相同的值
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------
+css属性
+
+list-style-type
+none 无标记
+disc 标记为实心圆
+circle 空心圆
+lower-latin	小写拉丁字母(a, b, c, d, e, 等。)
+
+list-style 属性
+----------------------
+
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<style type="text/css">
+*{margin:0;padding:0;} //加上这句，下面就没有实心圆点，空心圆点的2级效果了
+//关键是padding:0; 起的作用，理解为：内边距为0了，自然就没有缩进了。
+</style>
+   <ul > 
+    <li>我的网站
+     <ul > 
+      <li>高杰</li>
+      <li>侯生勇 </li>
+      <li>徐松 </li>
+     </ul> 
+    </li> 
+  </ul>
+
+
+padding 在一个声明中设置所有内边距属性。
+margin  在一个声明中设置所有外边距属性
+例子 1
+padding:10px 5px 15px 20px;
+上内边距是 10px
+右内边距是 5px
+下内边距是 15px
+左内边距是 20px
+例子 2
+padding:10px 5px 15px;
+上内边距是 10px
+右内边距和左内边距是 5px
+下内边距是 15px
+例子 3
+padding:10px 5px;
+上内边距和下内边距是 10px
+右内边距和左内边距是 5px
+例子 4
+padding:10px;
+所有 4 个内边距都是 10px
+--------------------------------------
+display 属性
+display 属性规定元素应该生成的框的类型，值：
+none	此元素不会被显示。
+
+---------
+关于css的名字空间：
+.nav ul li{;}
+表示定义了使用nav这个class的元素下面的ul下面的li的属性
+
+.nav a {}
+表示使用nav的元素下面的“各级别”的<a>
+
+.nav li 指的是nav类下的各级li
+
+width 属性设置元素的宽度
+例子中<li>..</li> 能否分行显示关键看 width这个参数
+
+
+不换行原理：
+	ul 和 li 默认都是 display:block; 的标签，
+
+li默认属性是换行，因为加了 float:left; 导致不换行了。
+
+
+float 属性定义元素在哪个方向浮动
+left	元素向左浮动。
+right	元素向右浮动。
+none	默认值。元素不浮动，并会显示在其在文本中出现的位置。
+
+clear 属性规定元素的哪一侧不允许其他浮动元素。
+
+
+------------
+表单提交：
+<form action="/example/html/form_action.asp" method="get">
+  <p>First name: <input type="text" name="fname" /></p>
+  <p>Last name: <input type="text" name="lname" /></p>
+  <input type="submit" value="确定" /> /*显示按钮，type很重要 value为按钮显示的文字*/
+</form>
+
+Submit 对象代表 HTML 表单中的一个提交按钮 (submit button)。
+在 HTML 表单中 <input type="submit"> 标签每出现一次，一个 Submit 对象就会被创建。
+
+表单提交，返回1个html页面。
+
+<div class="wrap clearfix" id="body-content">
+这表示 class为2个值
+
+.content-footer .col-4 {
+  margin-right:0;
+}
+这样定义，表示 class content-footer 里面的class  col-4 ？？（跟OO语言一样呗）
+
+http://schema.org/
+
+itemtype
+itemscope  <div>中有这个  干啥的？
+
+同一个文件，1个#id 描述2次，且不同，如何理解。
+
+
+
+看chrome浏览器的metrics 调试窗口
+
+style 属性
+<h1 style="color:blue; text-align:center">This is a header</h1>
+<p style="color:red">This is a paragraph.</p>
+value为：一个或多个由分号分隔的 CSS 属性和值。
+
+<div class="jspContainer" style="width: 220px; height: 245px; "> //这可以定义初始值？
+
+
+overflow 属性规定当内容溢出元素框时发生的事情。
+
+position 属性规定元素的定位类型。
+这个属性定义建立元素布局所用的定位机制。任何元素都可以定位，不过绝对或固定元素会生成
+一个块级框，而不论该元素本身是什么类型。相对定位元素会相对于它在正常流中的默认位置偏移。
+
+
+//google 上下箭头
+background: transparent url(../images/styles/disclosure_down.png) no-repeat scroll 50% 50%;
+background: transparent url(../images/styles/disclosure_up.png) no-repeat scroll 50% 50%;
+
+
+:after
+定义在一个元素的内容之后插入content属性定义的内容与样式
+
+>
+这些是CSS3特有的选择器，E > F 表示选择E元素的所有子F元素，与E F的区别在于，E F选择所
+有后代元素，>只选择一代。
+
+
+1 整体采用 灰+蓝 风格
+2 百度->在线html格式化工具. chrome浏览器查看格式化数据,但不能格式化保存.
+3 css用/**/注释代码 。样式表就相当于用word设置格式。
+
+----------------
+<menu> 标签定义菜单列表。当希望列出表单控件时使用该标签。
+在 HTML 4.01 中，不赞成使用 menu 元素。
+在 HTML 5 中，重新定义了 menu 元素，且使用用于排列表单控件。
+
+--------------------------
+
+table / tr / td /th
+简单的表格由 table 元素以及一个或多个 tr、th 或 td 元素组成。
+一个表格，然后tr行 td列
+
+
+-----------
+google 页中 上下箭头 是通过:after显示出来的，那么怎么处理单击事件呢？怎么选择呢？
+貌似是靠 offset偏移计算出来的。
+
+    <script>
+      $(document).ready(function() {
+        scrollIntoView("devdoc-nav");
+        });
+    </script>
+
+http://code.google.com/p/android-source-browsing/source/browse/tools/droiddoc/templates-sdk/assets/?repo=platform--build&r=582db97b23982f8e9cac7926ac3f5806b6a9cc71#assets%2Fimages%2Fstyles
+这这个地址能找到 上下箭头那个图标。
+如何保存?直接另存为 保存的是网页。 有个下载 zip的链接， 但是下载下来 内容很多啊。 不过能找到那个png图片
+
+用js格式化工具格式了一个 android_3p-bundle.js 出现了一个错误，用原生的js就可以
+=========
+关于 向下 按钮 的 click事件的响应，因为很多页面都有这个导航，所以我猜测应该不在页面里，而是在一个特定js文件里面。
+
+开始不行是因为 
+<script type="text/javascript">
+  var toRoot = "/";
+  var metaTags = [];
+  var devsite = false;
+</script>
+没有这个，导致docs.js 找不到toRoot 貌似后面的js都不执行了。
+
+android_3p-bundle.js 是jquery
+
+-------------------------------
+  //Loads the +1 button
+  po.src = 'https://apis.google.com/js/plusone.js';
+
+
+
+developer.android.com 上的
+android_3p-bundle.js 是各种第三方库的集合，其中包括 jquery-1.7.2.min.js
+而我也可以从w3cschool中的jquery示例页中下载  v1.6.1 使用
+
+android_3p-bundle.js 还用到了 jquery.jscrollpane.min.js  v2.0  
+http://jscrollpane.kelvinluck.com/
+"jScrollPane is a cross-browser jQuery plugin by Kelvin Luck"
+我可以不用 scrollpane
+
+default.css里面也包含了  jscrollpane的css部分。
+
+
+--------------------------------------------------
+!-- 在真实google网页中没有显示出"to top"啊 -->
+developer.android.com里面，想下拉整个网页，导航条那里会出现向上箭头，这个就是to top
+
+
+---------------------------------------------------
+2014-02-17
+border-radius  极路由状态页面采用
+
+ 
+例子：
+<menu>
+<li><input type="checkbox" />Red</li>
+<li><input type="checkbox" />blue</li>
+</menu>
+
+
+<section> 标签
+gateway项目使用此标签导致ie8 不能正常显示
+
+
+---
+极路由
+
+关于WIFI保存设置的 url：/turbo/api/wifi/set_base
+   post信息包格式：ssid=malong&encryption=mixed-psk&key=12345677&key_show=12345677&key_cache=12345677&old_ssid=kjkj&device=radio0.network1&old_password=12345677
+
+注：接口已经对接上，获取JSON信息并显示已完成（省去部分验证机制），正在调
+研JSON取值范围，及JSON回传保存问题。
+
+wifi 响应问题：已传回响应json:{"code":0,"msg":""},可以保存信息，但无提示成功
+
+/cgi-bin/turbo/;stok=6107b645ca6c73c57d2ee84c1b0670da/api/wifi/view_detail?device=radio0.network1
+上面是WIF设置的JSON路径，格式如下：
+{ 
+ "wifi_key": "12345678", 
+ "ssid": "kjkj", 
+ "encryption": "mixed-psk", 
+ "device": "radio0.network1", 
+ "msg": "", 
+ "code": 0, 
+ "channel": 0, 
+ "status": 1, 
+ "mode": "Master", 
+ "quality": 0, 
+ "signal": 0 
+}
+
+/cgi-bin/turbo/;stok=6107b645ca6c73c57d2ee84c1b0670da/api/wifi/view_detail?device=radio0.network1
+上面是WIF设置的JSON路径，格式如下：
+{ 
+ "wifi_key": "12345678", 
+ "ssid": "kjkj", 
+ "encryption": "mixed-psk", 
+ "device": "radio0.network1", 
+ "msg": "", 
+ "code": 0, 
+ "channel": 0, 
+ "status": 1, 
+ "mode": "Master", 
+ "quality": 0, 
+ "signal": 0 
+}
+
+
+初始化wan口信息获取JSON信息url：/turbo/api/network/get_wan_info
+JSON格式为：
+{ "static_ip": "192.168.11.80",
+  "mtu": "1500",
+  "mtu_defult": 1500,
+  "is_internet_link": 0,
+  "msg": "",
+  "status": 1,
+  "static_mask": "255.255.0.0",
+  "override_dns2": "202.106.0.20",
+  "static_gw": "192.168.88.1",
+  "mac": "20:CF:30:E0:E9:CF",
+  "is_eth_link": 0,
+  "override_dns": "202.106.0.20",
+  "code": 0,
+  "peerdns": "0",
+  "wan_status": { "dev_up": true, "iface_pending": false, "msg": "", "dev_link": false, "iface_up": true },
+  "uptime": 3954,
+  "pppoe_name": "11122",
+  "static_dns": "202.106.0.20",
+  "ipv4": [ { "mask": "255.255.0.0", "ip": "192.168.11.80" } ],
+  "gate_way": "192.168.88.1",
+  "dns_ip": [ "202.106.0.20" ],
+  "type": "static",
+  "macaddr": "20:cf:30:e0:e9:cf",
+  "pppoe_passwd": "1122",
+  "ipv6": {  }
+}
+
+保存设置的get包url：
+/turbo/api/network/set_wan_connect?network_type=ip&type=static&pppoe_name=
+&pppoe_passwd=&ip_type=static&static_ip=192.168.6.151&static_mask=255.255.0.0&static_gw=192.168.88.1&static_dns=202.106.0.20
+&static_dns2=1.1.1.1&ssid=&channel=&bssid=&encryption=&key=&key_show=&override_dns=
+&override_dns2=&uptime=0
+响应json为：{ "msg": "", "code": 0 }
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+局域网IP地址
+Json 获取地址url：/turbo/api/network/get_lan_info
+Json 格式：
+{ "mac": "D4:EE:07:04:05:8C",
+  "ipv6": [ { "mask": "FFFF:FFFF:FFFF:FFFF:0:0:0:0", "type": "Link", "ip": "FE80:0:0:0:D6EE:7FF:FE04:58C" } ],
+  "code": 0,
+  "msg": "",
+  "uptime": 2533,
+  "status": 1,
+  "dns_ip": {  },
+  "ipv4": [ { "mask": "255.255.255.0", "ip": "192.169.199.1" } ],
+  "is_lan_link": { "lan_4": 0, "lan_3": 0, "lan_2": 1, "lan_1": 0 }
+}
+
+保存设置响应：
+url：/turbo/api/network/set_lan_ip?ip=192.169.199.1&old_ip=192.170.199.1&old_mask=&device= 
+响应的json为：{ "msg": "", "code": 0 }
+
+
+关于昨天无法显示artDialog问题，今天早上已解决，原因是由于firefox在保存是
+自动更给js文件名，导致有重名文件但内容不同的情况，因而导致js引用错误。现
+已用chrome重新保存了web模板，见附件；
+注：通过调整，利用以前的模板已经可以模拟基本的wifi设置（读取+保存+包括成
+功提示），现正在同意改为chrome模板。
+
+

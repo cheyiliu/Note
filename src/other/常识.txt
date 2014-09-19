@@ -1,0 +1,19 @@
+E14灯泡 螺旋口直径14mm
+E24灯泡 螺旋口直径27mm
+
+Trans-flash Card（TF）,2004年更名为Micro SD Card，由SanDisk（闪迪）公司发明,尺寸15mm x 11mm
+SanDisk 128GB卡，打破最高64G卡的限制
+
+SD卡与MicroSD引脚定义不同：
+SD卡9引脚 排序9 1 2 3 4 5 6 7 8
+MicroSD 8引脚 排序 1 2 3 4 5 6 7 8
+
+tf卡 SD模式  1 data2  2 data3 3 cmd 4 vdd 5 clk  6 vss   7 data0 8 data1  
+tf卡 SPI模式 1 保留   2 cs    3 di  4 vdd 5 sclk  6 vss  7 do     8 保留   
+TS卡座第9脚检查插入拔出
+
+肖特基二极管以其发明人肖特基博士命名
+
+Maxim 美信
+
+ds2411 序列号芯片

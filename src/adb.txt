@@ -1,0 +1,20 @@
+安装错误汇总：
+
+1 INSTALL_FAILED_SHARED_USER_INCOMPATIBLE  编译参数问题。
+
+
+2 校验值错误的那个。比如一个环境下编译出gallery3D 安装，在另外一个环境下又编译出一个再安装就会提示。
+  解决办法：手动在平板上卸载，再安装。修改代码再次安装时就ok了，因为已经是同一个编译环境（好绕，我懂的）
+
+3 在公司电信通下测试，盒子pppoe拨号得到ip，在工位用公司大网，独立10M光纤网，以及银河111.1.56.50远在杭州的服务器（ssh登录）
+  都能远程连接adb（好结果）
+
+分离形式无法安装，如 ApiDemos.odex ApiDemos.apk
+adb install -r ApiDemos.apk  提示 Failure [INSTALL_FAILED_DEXOPT] (-r 如已安装则覆盖否则提示：INSTALL_FAILED_ALREADY_EXISTS)
+adb push ApiDemo.apk ApiDemo.odex 不能运行 logcat显示 mismatch dep signature for
+
+adb -s devicename shell  多设备连接时，选择
+
+
+
+dumpsys meminfo com.xx.test  查看内存使用情况 

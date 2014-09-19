@@ -1,0 +1,17 @@
+1 pps sps
+
+如何解析SDP中包含的H.264的SPS和PPS串
+SDP中的H.264的SPS和PPS串，包含了初始化H.264解码器所需要的信息参数，包括编码所用的profile，level，图像的宽和高，deblock滤波器等。
+由于SDP中的SPS和PPS都是BASE64编码形式的，不容易理解，附件有一个工具软件可以对SDP中的SPS和PPS进行解析。
+
+67 42 e0 0a 89 95 42 c1 2c 80 （67为sps头）
+68 ce 05 8b 72 （68为pps头）
+
+
+FFmpeg
+libavcodec/h264.h
+Sequence parameter set 序列参数集
+SPS Struct Reference
+
+Picture parameter set  图像参数集
+PPS

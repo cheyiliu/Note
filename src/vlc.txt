@@ -1,0 +1,237 @@
+libdvbpsi
+
+epg入口在dvbpsi_eit_attach
+
+eit的表id 
+0x4e-4f
+0x50-5f
+0x60-6f
+
+
+--------------------
+配置编译vlc player  研究里面的spectrum 
+configure: error: Package requirements (xcb-xv >= 1.1.90.1) were not met:
+
+No package 'xcb-xv' found
+
+Consider adjusting the PKG_CONFIG_PATH environment variable if you
+installed software in a non-standard prefix.
+
+Alternatively, you may set the environment variables XCB_XV_CFLAGS
+and XCB_XV_LIBS to avoid the need to call pkg-config.
+See the pkg-config man page for more details.
+
+这是什么意思
+
+2014-05-19
+ubuntu 11.10 上编译vlc player  
+./configure  --disable-lua --disable-mad  --disable-a52  --disable-libgcrypt
+手动安装（全部google搜索出来的）：
+libxcb1-dev_1.7-3_amd64.deb
+libxcb-composite0_1.7-3_amd64.deb
+libxcb-composite0-dev_1.7-3_amd64.deb
+libxcb-shape0-dev_1.7-3_amd64.deb
+libxcb-xfixes0_1.7-3_amd64.deb
+libxcb-xfixes0-dev_1.7-3_amd64.deb
+libxcb-xv0-dev_1.7-3_amd64.deb
+
+首次make 没有成功，有错误
+
+ERROR   : ../codec/avcodec/avcommon.h: 57:  implicit declaration of function ‘av_set_cpu_flags_mask’
+#if LIBAVUTIL_VERSION_CHECK(51, 25, 0, 42, 100)
+    av_set_cpu_flags_mask( INT_MAX & ~GetVlcDspMask() );
+#endif
+
+因为LIBAVUTIL_VERSION_CHECK 成立了？
+
+这个定义在 libavutil的开发库里面，在/usr/include/libavutile/cpu.h中有
+
+用最新版本ffmpeg make install 一下就好了
+
+/usr/bin/ld: cannot find -ldvbpsi
+
+编译是成功了 2.1.4 版本，执行make install 覆盖了原来的vlc 1.1.12   但是缺这少那，什么都不能播放
+
+在开发者中有个  zhang tong  （chinese）负责中文支持（唉，中国人也就能干这个了）
+
+执行：
+sudo apt-get remove vlc
+正在卸载 vlc ...
+正在处理用于 vlc-nox 的触发器...
+正在处理用于 gnome-menus 的触发器...
+正在处理用于 desktop-file-utils 的触发器...
+正在处理用于 bamfdaemon 的触发器...
+Rebuilding /usr/share/applications/bamf.index...
+正在处理用于 man-db 的触发器...
+
+启动菜单里面也没有 vlc 选项了！！！
+
+
+然后执行 make install
+启动菜单还是没有vlc选项（之前apt-install 再升级，菜单里的vlc选项会链接到新编译的版本）
+
+[0x7f52d70df1d8] main decoder error: corrupt module: /usr/local/lib/vlc/plugins/codec/libavcodec_plugin.so
+[0x7f52d70df1d8] main decoder error: no suitable decoder module for fourcc `mpga'. VLC probably does not support this sound or video format.
+
+查看libavcodec_plugin.so 需要：
+ 0x0000000000000001 (NEEDED)             Shared library: [libavcodec.so.53]
+ 0x0000000000000001 (NEEDED)             Shared library: [libavutil.so.51]
+
+各种问题
+
+后来发现 ubuntu11.10默认安装的是1.1.12 这个版本，
+
+编译 1.1.12这个版本依然很多问题。为啥软件中心安装1.1.12 就好好的，说明系统不缺少东西啊。
+
+原因是这样的：比如提示没有fribidi 实际系统中有 libfribidi0 库  需要安装的是：libfribidi-dev库
+基本上都是这种情况
+
+有 libxx 但是没有libxx-dev 是不能编译的。！！！
+
+玩转VLC
+
+
+那么  ffmpeg 怎么编译出开发库呢？
+
+
+在ubuntu11.10上编译 vlc需要依赖很多东西！！
+
+
+checking libswscale/swscale.h usability... yes
+checking libswscale/swscale.h presence... yes
+checking for libswscale/swscale.h... yes
+checking ffmpeg/swscale.h usability... no
+checking ffmpeg/swscale.h presence... no
+
+libswscale 与 ffmpeg/swscale 还不一样吗？？
+
+checking ffmpeg/swscale.h usability... no 这个搞不定啊！！
+但是没有ffmpeg-dev 一类的库啊！
+好象是：
+checking libswscale/swscale.h usability... yes
+checking ffmpeg/swscale.h usability... no
+二者有一就行了？
+
+那么vlc 跟 ffmpeg又是什么关系呢？？？ vlc要依赖vlc?
+
+编译完1.1.12 还是解不了
+[0x1474a10] main decoder error: no suitable decoder module for fourcc `alac'. 
+VLC probably does not support this sound or video format.
+
+按理说ffmpeg能解码，他就能啊，他不是基于ffmpeg的吗？
+
+
+
+看看ubuntu系统各个库的版本控制！
+
+
+---------------------------------------------------
+fft频谱分析：
+
+fft_perform 
+
+typedef short int sound_sample;
+
+
+#define FFT_BUFFER_SIZE_LOG 9
+#define FFT_BUFFER_SIZE (1 << FFT_BUFFER_SIZE_LOG)
+so：
+FFT_BUFFER_SIZE  等于512
+
+ * The input array is assumed to have FFT_BUFFER_SIZE elements,
+ * and the output array is assumed to have (FFT_BUFFER_SIZE / 2 + 1) elements.
+why？？？
+为什么输入512个 输出 257？？
+
+
+2个float相乘，得到的结果跟我用计算器算的怎么不同呢？
+
+p_dest[i] = p_output[i] *  ( 2 ^ 16 ) / ( ( FFT_BUFFER_SIZE / 2 * 32768 ) ^ 2 );
+i=256之后 都是0 
+
+ ( 2 ^ 16 ) / ( ( FFT_BUFFER_SIZE / 2 * 32768 ) ^ 2 ) 运算出来是：0.000002145766757
+
+p_output[i] *  ( 2 ^ 16 ) / ( ( FFT_BUFFER_SIZE / 2 * 32768 ) ^ 2 ); 这是什么意思？？？
+20140521  02:13 没回去家，在公司
+原始算法，也有溢出的情况，因为p_dest为int16  模的平方 乘以0.000002145766757 有时候会溢出。
+
+
+
+
+分频器和频谱 都使用fft
+
+
+ * vuMeter_Run: vu meter effect  是2个表盘的那个效果
+
+
+加上 
+p_buffs++;
+选择第二个通道，发现没有什么变化。
+我需要再理解一下 stereo 立体声  其实在vlc中选择left 后者right 通道，还是能听到音乐和人生，并不是
+说左通道音乐，右通道人声。
+
+vlc 1.1.12  vlc_block.h 中定义：
+
+struct block_t
+{
+    block_t     *p_next;
+    uint32_t    i_flags;
+    mtime_t     i_pts;
+    mtime_t     i_dts;
+    mtime_t     i_length;
+    unsigned    i_nb_samples; /* Used for audio */  这个是什么含义？
+    int         i_rate;
+    size_t      i_buffer;
+    uint8_t     *p_buffer;
+    /* Rudimentary support for overloading block (de)allocation. */
+    block_free_t pf_release;
+};
+
+
+
+vlc client
+vls server
+
+
+---------
+p_buffer->i_nb_samples , p_effect->i_nb_chans
+播放一首mp3 分别1152 ， 2
+（网：mp3 一个帧，一般是1152次采样）
+MP3 file is divided into a small blocks - frames. Each frame has constant time length 0.026 sec
+
+0.026 是通过1s 44100次采样，1152次一帧，算出来的 （涨姿势了！！）
+
+一个mp3 帧 1152字节，在里面取出前512个 做FFT？？？ 这样好吗？ 出来的值也是512个，但是只取了前256个
+（因为高频部分不重要。）
+
+
+
+    p_buffs = p_s16_buff;
+
+    p_buffs++;  //加上这句 切换到另外一个通道，但是效果类似，因为单声道包含了立体声的音乐和人声。
+
+    for ( i = 0 ; i < FFT_BUFFER_SIZE ; i++)
+    {
+        p_output[i]  = 0;
+        p_buffer1[i] = *p_buffs;
+
+        p_buffs += p_effect->i_nb_chans; //这里貌似在取其中一个通道数据
+        if( p_buffs >= &p_s16_buff[p_buffer->i_nb_samples * p_effect->i_nb_chans] )
+            p_buffs = p_s16_buff;
+
+    }
+
+
+取相同的fft之前的数据，用octave做fft，得到的数据基本一致（个位数有些不同，是计算精度的问题） ，但是2个方式算出来的
+复数，是共扼关系，不知道什么原因，比如这里的fft算出是  118560.4453125000 ,-244654.5625000000
+octave就算出是 1.1856e+05 + 2.4465e+05i  
+
+
+-----
+11.10 上 make install 了vlc 2.1.4 后导致播放不正常，很多格式无法播放。后来想恢复到原来的版本 apt-get install vlc没有成功
+用包管理器无法正常删除vlc2.1.4 (因为不是用包管理器安装的就管理不了？) 
+后来在源码目录用 make uninstall 成功卸载，卸载完后，各处菜单中确实没有相应选项了。
+
+
+
+vlc跳转是否花屏与视频源也有关。疯狂的原始人.mkv跳转就不花屏

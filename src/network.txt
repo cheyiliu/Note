@@ -1,0 +1,28 @@
+查阅自己的网络出口地址，百度查 what is my ip address 
+刘新宇，思路，   以后遇到问题手机想到网上查查，这是解决问题的第一思路。
+
+搜索过程，这个信息提交到github 会搜索到刘新宇吗
+那么，如果不用这种方法，如何用linux命令获取路由器的地址呢？
+
+花生壳：
+20140731 腾达W307R 路由器配置虚拟服务器 端口映射失败，可能是路由器bug
+后来测试用uu的tp-link，以及pc直接拨号都不行。可能是联通宽带的问题。
+公司的电信通用盒子拨号后就可以在外部访问adb。也可能公司网络跟家庭网络价格不同，性质也不同。
+
+我很早以前买的蹭网卡是rtl8187。现在ott盒子都是采用rtl8188/rtl8192。
+
+分析优酷pc点播播放协议：
+就是通过http协议把flv文件推送下去：
+Content-Type:video/x-flv
+Content-Length:1874642
+
+8.8.8.8是Google提供的免费DNS服务器
+
+
+路由器 54-e6-fc-42-45-0b （但是路由器后面打印的最后是0a，这里显示的是0b）
+20120418明白了 0a是LAN口的 0b 是WAN 口的
+
+http://opensource.apple.com/tarballs/mDNSResponder/
+android源码里面有 mdnsresponder 这个库  并且这在system/bin/netd 有引用。
+
+

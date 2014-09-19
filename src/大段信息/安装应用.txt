@@ -1,0 +1,122 @@
+20140806 在11.10上安转vlc失败打印（原来是正常的）
+$ sudo apt-get install vlc
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+将会安装下列额外的软件包：
+  libcddb2 libdvbpsi7 libebml3 libiso9660-7 libmatroska4 libsdl-image1.2 libtar0 libupnp3 libvcdinfo0 libvlc5 libvlccore4 libxcb-keysyms1
+  libxcb-randr0 vlc-data vlc-nox vlc-plugin-notify vlc-plugin-pulse
+建议安装的软件包：
+  mozilla-plugin-vlc videolan-doc
+The following NEW packages will be installed
+  libcddb2 libdvbpsi7 libebml3 libiso9660-7 libmatroska4 libsdl-image1.2 libtar0 libupnp3 libvcdinfo0 libvlc5 libvlccore4 libxcb-keysyms1
+  libxcb-randr0 vlc vlc-data vlc-nox vlc-plugin-notify vlc-plugin-pulse
+升级了 0 个软件包，新安装了 18 个软件包，要卸载 0 个软件包，有 529 个软件包未被升级。
+需要下载 13.4 MB/13.4 MB 的软件包。
+解压缩后会消耗掉 42.4 MB 的额外空间。
+您希望继续执行吗？[Y/n]
+【警告】：下列软件包不能通过验证！
+  libxcb-randr0 libcddb2 libdvbpsi7 libebml3 libiso9660-7 libmatroska4 libsdl-image1.2 libtar0 libvcdinfo0 vlc-data libvlccore4 libvlc5
+  libupnp3 vlc-nox libxcb-keysyms1 vlc vlc-plugin-notify vlc-plugin-pulse
+不经验证就安装这些软件包吗？[y/N] 
+E: 有些软件包不能通过验证
+gaojie@gaojie:~/Work/Android/M3/m3-git/frameworks/base$ 
+gaojie@gaojie:~/Work/Android/M3/m3-git/frameworks/base$ sudo apt-get install vlc
+Reading package lists... Done
+Building dependency tree       
+Reading state information... Done
+将会安装下列额外的软件包：
+  libcddb2 libdvbpsi7 libebml3 libiso9660-7 libmatroska4 libsdl-image1.2 libtar0 libupnp3 libvcdinfo0 libvlc5 libvlccore4 libxcb-keysyms1
+  libxcb-randr0 vlc-data vlc-nox vlc-plugin-notify vlc-plugin-pulse
+建议安装的软件包：
+  mozilla-plugin-vlc videolan-doc
+The following NEW packages will be installed
+  libcddb2 libdvbpsi7 libebml3 libiso9660-7 libmatroska4 libsdl-image1.2 libtar0 libupnp3 libvcdinfo0 libvlc5 libvlccore4 libxcb-keysyms1
+  libxcb-randr0 vlc vlc-data vlc-nox vlc-plugin-notify vlc-plugin-pulse
+升级了 0 个软件包，新安装了 18 个软件包，要卸载 0 个软件包，有 529 个软件包未被升级。
+需要下载 13.4 MB/13.4 MB 的软件包。
+解压缩后会消耗掉 42.4 MB 的额外空间。
+您希望继续执行吗？[Y/n]
+【警告】：下列软件包不能通过验证！
+  libxcb-randr0 libcddb2 libdvbpsi7 libebml3 libiso9660-7 libmatroska4 libsdl-image1.2 libtar0 libvcdinfo0 vlc-data libvlccore4 libvlc5
+  libupnp3 vlc-nox libxcb-keysyms1 vlc vlc-plugin-notify vlc-plugin-pulse
+不经验证就安装这些软件包吗？[y/N] y
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric/main libxcb-randr0 amd64 1.7-3
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric/universe libcddb2 amd64 1.3.2-2fakesync1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric/universe libdvbpsi7 amd64 0.2.0-1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric/universe libebml3 amd64 1.2.1-1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric/universe libiso9660-7 amd64 0.81-4build1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric/universe libmatroska4 amd64 1.2.0-1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric/universe libsdl-image1.2 amd64 1.2.10-2.1
+  404  Not Found
+获取：1 http://cn.archive.ubuntu.com/ubuntu/ oneiric/universe libvcdinfo0 amd64 0.7.23-4ubuntu2 [134 kB]
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric-updates/universe vlc-data all 1.1.12-2~oneiric1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric-updates/universe libvlccore4 amd64 1.1.12-2~oneiric1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric-updates/universe libvlc5 amd64 1.1.12-2~oneiric1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric-updates/universe libupnp3 amd64 1:1.6.6-5.1ubuntu0.11.10.1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric-updates/universe vlc-nox amd64 1.1.12-2~oneiric1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric/universe libxcb-keysyms1 amd64 0.3.8-1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric-updates/universe vlc amd64 1.1.12-2~oneiric1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric-updates/universe vlc-plugin-notify amd64 1.1.12-2~oneiric1
+  404  Not Found
+错误 http://cn.archive.ubuntu.com/ubuntu/ oneiric-updates/universe vlc-plugin-pulse amd64 1.1.12-2~oneiric1
+  404  Not Found
+错误 http://security.ubuntu.com/ubuntu/ oneiric-security/universe libupnp3 amd64 1:1.6.6-5.1ubuntu0.11.10.1
+  404  Not Found [IP: 91.189.92.200 80]
+下载 134 kB，耗时 2s (58.8 kB/s)                      
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/main/libx/libxcb/libxcb-randr0_1.7-3_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/libc/libcddb/libcddb2_1.3.2-2fakesync1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/libd/libdvbpsi/libdvbpsi7_0.2.0-1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/libe/libebml/libebml3_1.2.1-1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/libc/libcdio/libiso9660-7_0.81-4build1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/libm/libmatroska/libmatroska4_1.2.0-1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/s/sdl-image1.2/libsdl-image1.2_1.2.10-2.1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/v/vlc/vlc-data_1.1.12-2~oneiric1_all.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/v/vlc/libvlccore4_1.1.12-2~oneiric1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/v/vlc/libvlc5_1.1.12-2~oneiric1_amd64.deb  404  Not Found
+无法下载 http://security.ubuntu.com/ubuntu/pool/universe/libu/libupnp/libupnp3_1.6.6-5.1ubuntu0.11.10.1_amd64.deb  404  Not Found [IP: 91.189.92.200 80]
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/v/vlc/vlc-nox_1.1.12-2~oneiric1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/x/xcb-util-keysyms/libxcb-keysyms1_0.3.8-1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/v/vlc/vlc_1.1.12-2~oneiric1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/v/vlc/vlc-plugin-notify_1.1.12-2~oneiric1_amd64.deb  404  Not Found
+无法下载 http://cn.archive.ubuntu.com/ubuntu/pool/universe/v/vlc/vlc-plugin-pulse_1.1.12-2~oneiric1_amd64.deb  404  Not Found
+E: 有几个软件包无法下载，您可以运行 apt-get update 或者加上 --fix-missing 的选项再试试？
+
+
+
+------------
+安装wine：
+The following NEW packages will be installed:
+  binfmt-support cabextract fonts-droid fonts-horai-umefont fonts-unfonts-core gnome-exe-thumbnailer icoutils libasn1-8-heimdal:i386 libasound2:i386 libavahi-client3:i386 libavahi-common-data:i386
+  libavahi-common3:i386 libcapi20-3 libcapi20-3:i386 libcups2:i386 libdrm-nouveau2:i386 libencode-locale-perl libexif12:i386 libexpat1:i386 libfile-listing-perl libfont-afm-perl libfontconfig1:i386
+  libfreetype6:i386 libgcrypt11:i386 libgd2-xpm:i386 libgif4:i386 libgl1-mesa-dri-lts-trusty:i386 libgl1-mesa-glx-lts-trusty:i386 libglapi-mesa-lts-trusty:i386 libglu1-mesa:i386 libgnutls26:i386
+  libgpg-error0:i386 libgphoto2-2:i386 libgphoto2-port0:i386 libgssapi-krb5-2:i386 libgssapi3-heimdal:i386 libgstreamer-plugins-base0.10-0:i386 libgstreamer0.10-0:i386 libhcrypto4-heimdal:i386
+  libheimbase1-heimdal:i386 libheimntlm0-heimdal:i386 libhtml-form-perl libhtml-format-perl libhtml-parser-perl libhtml-tagset-perl libhtml-tree-perl libhttp-cookies-perl libhttp-daemon-perl libhttp-date-perl
+  libhttp-message-perl libhttp-negotiate-perl libhx509-5-heimdal:i386 libice6:i386 libieee1284-3:i386 libio-socket-inet6-perl libio-socket-ssl-perl libjpeg-turbo8:i386 libjpeg8:i386 libk5crypto3:i386
+  libkeyutils1:i386 libkrb5-26-heimdal:i386 libkrb5-3:i386 libkrb5support0:i386 liblcms1:i386 libldap-2.4-2:i386 libllvm3.4:i386 libltdl7:i386 liblwp-mediatypes-perl liblwp-protocol-https-perl libmailtools-perl
+  libmpg123-0 libmpg123-0:i386 libnet-http-perl libnet-ssleay-perl libodbc1 libopenal-data libopenal1 libopenal1:i386 liborc-0.4-0:i386 libp11-kit0:i386 libpam-winbind libroken18-heimdal:i386 libsane:i386
+  libsasl2-2:i386 libsasl2-modules:i386 libsm6:i386 libsocket6-perl libsqlite3-0:i386 libstdc++6:i386 libtasn1-3:i386 libtiff4:i386 libtxc-dxtn-s2tc0:i386 liburi-perl libusb-0.1-4:i386 libv4l-0:i386
+  libv4lconvert0:i386 libwind0-heimdal:i386 libwww-perl libwww-robotrules-perl libx11-6:i386 libx11-xcb1:i386 libxau6:i386 libxcb-dri2-0:i386 libxcb-glx0:i386 libxcb1:i386 libxcomposite1:i386 libxcursor1:i386
+  libxdamage1:i386 libxdmcp6:i386 libxext6:i386 libxfixes3:i386 libxi6:i386 libxinerama1:i386 libxml2:i386 libxpm4:i386 libxrandr2:i386 libxrender1:i386 libxslt1.1:i386 libxt6:i386 libxxf86vm1:i386 odbcinst
+  odbcinst1debian2 ttf-droid ttf-mscorefonts-installer ttf-umefont ttf-unfonts-core unixodbc unrar winbind wine wine-gecko1.4 wine-gecko1.4:i386 wine1.4 wine1.4-amd64 wine1.4-common wine1.4-i386:i386 winetricks
+0 upgraded, 137 newly installed, 0 to remove and 10 not upgraded.
+Need to get 177 MB of archives.
+After this operation, 502 MB of additional disk space will be used.
+
+
+libsm6:i386  下载此包：
+/usr/lib/i386-linux-gnu/libsm.so.6
+

@@ -1,0 +1,357 @@
+最近看了看linux的arm-architecture的中断处理程序entry-armv.S，有一些地方不明白，与诸位分享：
+
+初始化
+系统启动时，start_kernel(init/main.c)里的trap_init(arch/arm/kernel/traps.c)调用__trap_init，并将中断向量的基地址vector base（0x00000000或0xFFFF0000）放在r0中传进来。下面看__trap_init的源程序：
+ENTRY(__trap_init)
+stmfd sp!, {r4 - r6, lr}
+
+adr r1, .LCvectors @ set up the vectors
+ldmia r1, {r1, r2, r3, r4, r5, r6, ip, lr}
+stmia r0, {r1, r2, r3, r4, r5, r6, ip, lr}
+
+add r2, r0, #0x200
+adr r0, __stubs_start @ copy stubs to 0x200
+adr r1, __stubs_end
+1: ldr r3, [r0], #4
+str r3, [r2], #4
+cmp r0, r1
+blt 1b
+LOADREGS(fd, sp!, {r4 - r6, pc})
+
+首先将寄存器压栈：
+stmfd sp!, {r4 - r6, lr}
+然后将中断向量（七条跳转语句）搬到r0处（即中断向量的基址）：
+adr r1, .LCvectors @ set up the vectors
+ldmia r1, {r1, r2, r3, r4, r5, r6, ip, lr}
+stmia r0, {r1, r2, r3, r4, r5, r6, ip, lr}
+再将__stubs_start和__stubs_end之间的程序（中断处理程序）搬移至vector base + 0x200的位置：
+add r2, r0, #0x200
+adr r0, __stubs_start @ copy stubs to 0x200
+adr r1, __stubs_end
+1: ldr r3, [r0], #4
+str r3, [r2], #4
+cmp r0, r1
+blt 1b
+最后将寄存器出栈：
+LOADREGS(fd, sp!, {r4 - r6, pc})
+
+
+
+由中断向量可知
+.equ __real_stubs_start, .LCvectors + 0x200
+
+
+中断发生
+1． 中断发生后，ARM系统将会进行如下操作：
+将cpsr保存至spsr_xxx，将下一条指令的地址保存至lr_xxx，进行模式的转换（由发生中断前的模式变为某exception模式），最后程序跳到中断向量vector address处（在0x00000000或0xffff0000）
+.LCvectors: swi SYS_ERROR0
+b __real_stubs_start + (vector_undefinstr - __stubs_start)
+ldr pc, __real_stubs_start + (.LCvswi - __stubs_start)
+b __real_stubs_start + (vector_prefetch - __stubs_start)
+b __real_stubs_start + (vector_data - __stubs_start)
+b __real_stubs_start + (vector_addrexcptn - __stubs_start)
+b __real_stubs_start + (vector_IRQ - __stubs_start)
+b __real_stubs_start + (vector_FIQ - __stubs_start)
+由此处的跳转指令跳转至中断处理程序vector_xxx处执行。
+
+2．中断处理程序vector_data用于处理DataAbort型的exception.，程序如下：
+vector_data: @
+@ save mode specific registers
+@
+ldr r13, .LCsabt @ r13=__temp_abt, addr to store lr_abt,spsr_abt,old r0
+sub lr, lr, #8 @ the return from DataAbort exception should sub 8 from lr
+str lr, [r13] @ save the lr_abt
+mrs lr, spsr @ move spsr_abt to lr
+str lr, [r13, #4] @ save the spsr_abt
+@
+@ now branch to the relevent MODE handling routine
+@
+mov r13, #I_BIT | MODE_SVC
+msr spsr_c, r13 @ switch to SVC_32 mode
+
+and lr, lr, #15 @ get the mode
+ldr lr, [pc, lr, lsl #2] @ lr=[addr of this instr+8(instr flow)+mode*4]=__dabt_usr/__dabt_svc
+movs pc, lr @ Changes mode and branches
+
+.LCtab_dabt: .word __dabt_usr @ 0 (USR_26 / USR_32)
+.word __dabt_invalid @ 1 (FIQ_26 / FIQ_32)
+.word __dabt_invalid @ 2 (IRQ_26 / IRQ_32)
+.word __dabt_svc @ 3 (SVC_26 / SVC_32)
+.word __dabt_invalid @ 4
+.word __dabt_invalid @ 5
+.word __dabt_invalid @ 6
+.word __dabt_invalid @ 7
+.word __dabt_invalid @ 8
+.word __dabt_invalid @ 9
+.word __dabt_invalid @ a
+.word __dabt_invalid @ b
+.word __dabt_invalid @ c
+.word __dabt_invalid @ d
+.word __dabt_invalid @ e
+.word __dabt_invalid @ f
+
+Lcsabt的定义如下，此word中存储了__temp_abt.
+.LCsabt: .word __temp_abt
+__temp_abt用于暂时存放lr_abt，spsr_abt和old_r0
+__temp_abt: .word 0 @ Saved lr_abt
+.word 0 @ Saved spsr_abt
+.word -1 @ old_r0
+
+注意，为了不破坏中断现场的寄存器r0-r12，这里程序只用到了r13（sp_abt）。首先lr（lr_abt）的值减去8用于返回（因为 DataAbort返回的指令为subs pc, lr,#8），接着将lr和spsr（spsr_abt）存放在__temp_abt处，lr即为中断现场的pc，而spsr即为中断现场的cpsr。
+ldr r13, .LCsabt @ r13=__temp_abt, addr to store lr_abt,spsr_abt,old r0
+sub lr, lr, #8 @ the return from DataAbort exception should sub 8 from lr
+str lr, [r13] @ save the lr_abt
+mrs lr, spsr @ move spsr_abt to lr
+str lr, [r13, #4] @ save the spsr_abt
+
+设置spsr（spsr_abt，此处原本保存着中断现场的cpsr），准备进入svc模式
+mov r13, #I_BIT | MODE_SVC
+msr spsr_c, r13 @ switch to SVC_32 mode
+
+最后，根据中断发生前的状态跳转至相应的处理程序，目前只有处理svc模式的__dabt_svc和处理usr模式的__dabt_usr两种。
+and lr, lr, #15 @ get the mode
+ldr lr, [pc, lr, lsl #2]
+movs pc, lr @ Changes mode and branches
+
+
+3。处理程序__dabt_usr用于处理usr模式下的DataAbort异常，程序如下：
+/*
+* User mode handlers
+*/
+.align 5
+__dabt_usr: sub sp, sp, #S_FRAME_SIZE @ Allocate frame size in one go
+stmia sp, {r0 - r12} @ save r0 - r12
+ldr r7, .LCabt
+add r5, sp, #S_PC
+ldmia r7, {r0, r3, r4} @ Get USR pc, cpsr, old_r0
+stmia r5, {r0, r3, r4} @ Save USR pc, cpsr, old_r0
+stmdb r5, {sp, lr}^
+alignment_trap r7, r7, __temp_abt
+zero_fp
+#ifdef MULTI_CPU
+ldr r2, .LCprocfns @ pass r0, r3 to
+mov lr, pc @ processor code
+ldr pc, [r2] @ call processor specific code
+#else
+bl cpu_data_abort
+#endif
+mov r2, #MODE_SVC
+msr cpsr_c, r2 @ Enable interrupts
+mov r2, sp
+adrsvc al, lr, ret_from_exception
+b SYMBOL_NAME(do_DataAbort)
+首先程序将sp下移S_FRAME_SIZE（72）个字节，用于存放中断现场的寄存器：
+sub sp, sp, #S_FRAME_SIZE @ stack pointer downward
+接着保存r0-r12：
+stmia sp, {r0 - r12} @ save r0 - r12
+往下就可以使用r0-r12了，用r7从__temp_abt获得usr模式（中断发生现场）下的pc，cpsr存入r5所指向的内存：
+ldr r7, .Lcabt
+add r5, sp, #S_PC
+ldmia r7, {r0, r3, r4} @ Get USR pc, cpsr
+stmia r5, {r0, r3, r4} @ Save USR pc, cpsr, old_r0
+再存入用户空间的sp和lr：
+stmdb r5, {sp, lr}^
+这样sp指向的堆栈由低到高分别存放了中断现场的r0-r12, sp(r13), lr(r14), pc(r15), old_r0。
+
+alignment_trap r7, r7, __temp_abt
+fp清零：
+zero_fp
+跳转到cpu_data_abort，传入参数是r0（中断现场的pc），传出r0（FAR），r3（FSR），r1（如果出错指令为store 则r1= -1，如果出错指令为load则r1=0）
+bl cpu_data_abort
+开中断：
+mov r2, #MODE_SVC
+msr cpsr_c, r2 @ Enable interrupts
+将sp赋给r2，这样r0，r1，r2，r3作为参数传进do_DataAbort，同时设置lr，这样从do_DataAbort返回时进入 ret_from_exception：
+mov r2, sp
+adrsvc al, lr, ret_from_exception
+b SYMBOL_NAME(do_DataAbort)
+
+
+4．处理程序__dabt_svc用于处理svc模式下的DataAbort异常，程序如下：
+.align 5
+__dabt_svc: sub sp, sp, #S_FRAME_SIZE @ stack pointer downward
+stmia sp, {r0 - r12} @ save r0 - r12
+ldr r2, .LCabt @ r2=__temp_abt, the addr to store lr_abt,spsr_abt,old r0
+add r0, sp, #S_FRAME_SIZE
+ldmia r2, {r2 - r4} @ get pc, cpsr , old r0
+add r5, sp, #S_SP
+mov r1, lr
+stmia r5, {r0 - r4} @ save sp_SVC, lr_SVC, pc, cpsr, old_ro,(so r0-r15 and cpsr and old r0 are saved)
+mrs r9, cpsr @ Enable interrupts if they were
+tst r3, #I_BIT
+biceq r9, r9, #I_BIT @ previously
+mov r0, r2 @ *** remove once everyones in sync
+/*
+* This routine must not corrupt r9
+*/
+#ifdef MULTI_CPU
+ldr r4, .LCprocfns @ pass r0, r3 to
+mov lr, pc @ processor code
+ldr pc, [r4] @ call processor specific code
+#else
+bl cpu_data_abort @ return:r0=address of abort ,r1 != 0 if writing, r3 = FSR
+#endif
+msr cpsr_c, r9
+mov r2, sp
+bl SYMBOL_NAME(do_DataAbort)
+mov r0, #I_BIT | MODE_SVC
+msr cpsr_c, r0
+ldr r0, [sp, #S_PSR]
+msr spsr, r0
+ldmia sp, {r0 - pc}^ @ load r0 - pc, cpsr
+
+首先程序将sp下移S_FRAME_SIZE（72）个字节，用于存放中断现场的寄存器
+sub sp, sp, #S_FRAME_SIZE @ stack pointer downward
+接着保存r0-r12
+stmia sp, {r0 - r12} @ save r0 - r12
+往下就可以使用r0-r12了，程序将sp加上S_FRAME_SIZE送给r0作为sp_svc，将lr送给r1作为lr_svc，在从 __temp_abt处取出abt模式下的lr和spsr（即中断现场的pc和cpsr）。保存在r0-r12之后。（为何将 sp+S_FRAME_SIZE作为sp_svc送给r0，将lr送给r1作为lr_svc？看__dabt_usr可知__dabt_usr处理程序是将中断现场的sp和lr送给r0和r1）
+ldr r2, .LCabt @ r2=__temp_abt, the addr to store lr_abt,spsr_abt,old r0
+add r0, sp, #S_FRAME_SIZE
+ldmia r2, {r2 - r4} @ get pc, cpsr , old r0
+add r5, sp, #S_SP
+mov r1, lr
+stmia r5, {r0 - r4} @ save sp_SVC, lr_SVC, pc, cpsr, old_ro,(so r0-r15 and cpsr and old r0 are saved)
+备份cpsr在r9并根据中断现场的cpsr设置bit I
+mrs r9, cpsr @ Enable interrupts if they were
+tst r3, #I_BIT
+biceq r9, r9, #I_BIT @ previously
+将中断现场的pc复制一份到r0,为了compatible。
+mov r0, r2 @ *** remove once everyones in sync
+跳去执行cpu_data_abort（在proc-arm925.S中）
+bl cpu_data_abort @ return:r0=address of abort ,r1 != 0 if writing, r3 = FSR
+将备份的r9还给cpsr
+msr cpsr_c, r9
+将sp传给r2，和r0（FAR，abort的地址）r1（r1等于0表示出错的是一条load指令，否则为 store）r3（FSR，fault status）一起作为do_DataAbort的参数
+mov r2, sp
+bl SYMBOL_NAME(do_DataAbort)
+
+
+
+
+
+--------------------
+J'accuse!!!!!!! 
+
+
+
+prefetch abort應該是指預取錯誤吧?
+我想不出這大概是在深麼樣的情況下發生的,那位可以簡單舉個例子
+另外,data abort又是深麼情況?是不是相當與386里的page_fault?
+cpu: sa1110 	
+----
+--------笨又不是我的錯
+[Original] [Print] [Top]
+Subject: Re: 關於prefetch abort
+Author: 哈哈笑    Posted: 2002-06-19 16:05    Length: 175 byte(s)
+[Original] [Print] [Top]
+是预取指的错误。指令执行之前，就取出从主存里取出指令。一般是 PC的后加2条，如果是thumb 加 4 ，如果是ARM+8。至于什么转移预测（branch prediction )，我就不想多说了。自己看看资料吧 	
+----
+一只小蜜蜂呀！飞在花丛中呀！嗡呀嗡呀嗡.....
+[Original] [Print] [Top]
+Subject: Re: 關於prefetch abort
+Author: bx_bird    Posted: 2002-06-20 09:43    Length: 89 byte(s)
+[Original] [Print] [Top]
+thank
+我是不大明白為深麼预取指會發生错误呢?在深麼情況下發生錯誤?能不能舉個例子?
+----
+--------笨又不是我的錯
+[Original] [Print] [Top]
+Subject: Re: 關於prefetch abort
+Author: 哈哈笑    Posted: 2002-06-20 14:34    Length: 129 byte(s)
+[Original] [Print] [Top]
+这种错误，一般都是在发生指令转移的时候，
+比如，你自己写一个断点指令（SWI)，你就会引起这样的错误,在比如CPU进入debug模式，
+----
+一只小蜜蜂呀！飞在花丛中呀！嗡呀嗡呀嗡.....
+[Original] [Print] [Top]
+Subject: Re: 關於prefetch abort
+Author: armix    Posted: 2002-06-22 17:23    Length: 312 byte(s)
+[Original] [Print] [Top]
+armlinux prefetch abort 在核心态和用户态都会发生，我调试时只遇到过用户态的abort(内河态code没有缺页过程，除非是故意设陷阱，否则碰不到该情况? fixeme!)，应用程序执行的第一次prefetch aborT发生在装入代码段第二个页时发生（考虑静态连接，动态连接太复杂，不好跟踪）, 那时连入应用的libc部分代码正在忙着初始化呢。
+	
+[Original] [Print] [Top]
+Subject: Re: 關於prefetch abort
+Author: bx_bird    Posted: 2002-06-24 10:59    Length: 1,698 byte(s)
+[Original] [Print] [Top]
+在linux-2.4.2的arm代碼中(sa1100):
+do_PrefetchAbort()的實現是do_page_fault().
+do_DataAbort()的實現,則是按cpu mode調用函數數組;
+fsr_info[] = {
+{ NULL, SIGSEGV, "vector exception" },//0 0000 usr
+{ do_alignment, SIGBUS, "alignment exception" },//1 0001 fiq
+{ NULL, SIGKILL, "terminal exception" },//2 0010 irq
+{ do_alignment, SIGBUS, "alignment exception" },//3 0011 svc
+{ NULL, SIGBUS, "external abort on linefetch" },
+{ do_page_fault, SIGSEGV, "page fault" },//5 0101
+{ NULL, SIGBUS, "external abort on linefetch" },
+{ do_page_fault, SIGSEGV, "page fault" },//7 0111 abt
+{ NULL, SIGBUS, "external abort on non-linefetch" },
+{ NULL, SIGSEGV, "domain fault" },
+{ NULL, SIGBUS, "external abort on non-linefetch" },
+{ NULL, SIGSEGV, "domain fault" },
+{ NULL, SIGBUS, "external abort on translation" },
+{ do_sect_fault, SIGSEGV, "section permission fault" },//13 1101
+{ NULL, SIGBUS, "external abort on translation" },
+{ do_page_fault, SIGSEGV, "page permission fault" } //15 1111 sys
+};
+就是說在usr態發生data abort就調用NULL函數(為深麼?usr mode不應該發生data abort?)而svc態調用do_alignment(),這個do_alignment又是幹身麼的?
+我覺得在usr下應該有可能因為write protect發生data abort阿?
+	
+----
+--------笨又不是我的錯
+[Original] [Print] [Top]
+Subject: Re: 關於prefetch abort
+Author: armix    Posted: 2002-06-24 11:58    Length: 487 byte(s)
+[Original] [Print] [Top]
+就是說在usr態發生data abort就調用NULL函數(為深麼?usr mode不應該發生data abort?)
+Re:不是的，是page_fualt, usr mode要发生data abt, 只是立马进入svc mode.
+
+而svc態調用do_alignment(),這個do_alignment又是幹身麼的?
+Re:我想与内和是否支持align trap有关，应该解决对齐问题（见www.arm.com说明）。
+
+我覺得在usr下應該有可能因為write protect發生data abort阿?
+Re:是的，但我想一般是因为页不在内存中，写保护应该在地址出错的时候才发生的吧。
+
+
+
+The lowest 4-bits of the FSR register indicates the fault generated by the MMU. The FSR register value is displayed as a result of entering an f  command in the debug monitor.
+
+Value
+	
+Explanation
+0
+Vector exception
+1
+
+Alignment fault
+2
+Terminal exception
+3
+Alignment fault
+4
+External abort on linefetch for section translation
+5
+Section translation fault (unmapped virtual address)
+6
+External abort on linefetch for page translation
+7
+Page translation fault (unmapped virtual address)
+8
+External abort on non-linefetch for section translation
+9
+Domain fault on section translation (i.e. accessing invalid domain)
+A
+External abort on non-linefetch for page translation
+B
+Domain fault on page translation (i.e. accessing invalid domain)
+C
+External abort on first level translation
+D
+Permission fault on section (i.e. no permission to access virtual address)
+E
+External abort on second level translation
+F
+Permission fault on page (i.e. no permission to access virtual address)
+
+
+

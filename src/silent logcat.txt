@@ -1,0 +1,4 @@
+1 A20 一直打印：D/dalvikvm( 1913): GC_CONCURRENT freed 2038K, 44% free 4205K/7420K, paused 2ms+2ms, total 28ms
+这不利于调试
+
+

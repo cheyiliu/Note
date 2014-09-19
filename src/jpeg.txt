@@ -1,0 +1,24 @@
+都是1行1行的压缩
+
+
+jpeg-turbo
+
+jsimd_ycc_extxrgb_convert_neon
+colorid() == ext xrgb 
+
+5个参数：
+EXTERN(void) jsimd_ycc_extxrgb_convert_neon
+        JPP((JDIMENSION out_width,
+             JSAMPIMAGE input_buf, JDIMENSION input_row,
+             JSAMPARRAY output_buf, int num_rows));
+
+generate_jsimd_ycc_rgb_convert_neon extxrgb, 32, 1, 2, 3
+
+
+配置:
+./configure CC=arm-linux-androideabi-gcc --host=arm-linux
+
+
+ycc转rgb的函数调用次数等于图片行数，output_width等于每行像素数。
+
+cjpeg -bmp xx.jpg > xx.bmp

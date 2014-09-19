@@ -1,0 +1,4691 @@
+JB图形系统:Surfaceflinger  Skia  OpenGL
+
+1 opengl 
+  libEGL.so libGLESv1_CM.so libGLESv2.so 3个包装库是 opengl 对外接口。软实现 libGLES_android.so (目录:opengl/libagl) 
+  包含 EGL GLESv1_CM GLESv2 3组接口。硬实现：nxp分 libEGL_SGX.so libGLESv1_CM_SGX.so libGLESv2_SGX.so；BCM平台合并在
+  一个文件 libGLES_nexus.so；海思平台：libEGL_VIVANTE.so libGLESv1_CM_VIVANTE.so libGLESv2_VIVANTE.so
+
+  libEGL.so是适配层，根据client请求参数和egl.cfg文件，打开相应动态库(软/硬)，获得相应api指针初始化hook数组。  
+  EGLAPI gl_hooks_t gHooks[2][IMPL_NUM_IMPLEMENTATIONS];
+
+
+  gEGLImpl
+  此数组2个元素，分别定义opengl软硬件实现。软硬实现都初始化。hooks包含V1,V2两版本
+  loader.cpp的open打开libGLES_android.so libGLES_POWERVRxxx.so
+  
+  通过dlopen()打开这些.so，load_driver检测EGL,GLESv1_CM,GLESv2 3个掩码。里面调用init_api()初始化
+  3组函数。有2个函数原型定义函数egl_entries.in 和 entries.in。其中entries.in不分v1和v2，并且同样是这个文件，由于
+  #define GL_ENTRY(_r, _api, ...) #_api, 和 #define GL_ENTRY(_r, _api, ...) _r (*_api)(__VA_ARGS__);
+  两种不同的定义，一个是函数指针，一个是函数名字符串。然后一次用函数名字符串通过 dlsym 去.so文件里面找相应函数。
+  如果找到了，直接赋值到准备好的数组中，如果没有找到，会经过一堆处理，处理用到的getProcAddress函数是之前从egl库中获得的。
+  硬件实现时，v1和v2版本里面的函数名字一样。软件实现时，每个函数名实现一次，但是分别赋值到GLESv1_INDEX GLESv2_INDEX数组中
+  egl_init_drivers_locked的时候有if (cnx->dso == 0) 检测，所以这个函数第二次调用时候无效。
+
+Loader::open里面
+  通过实验发现逻辑为：
+  egl.cpp中软硬库都检测并初始化，system/lib/egl中如果有libGLES_android.so使用软实现，如果有libGLES_CM_v1.so 使用
+  硬实现，都有仍用硬实现。为了不加载软实现，可以删除软实现（经验证可正常工作），也可修改egl.cpp使其不去加载软实现库。
+
+enum {
+    IMPL_HARDWARE = 0,
+    IMPL_SOFTWARE,
+    IMPL_NUM_IMPLEMENTATIONS // =2
+};
+所以相当于：
+EGLAPI gl_hooks_t gHooks[2][2] 依次是
+
+gHooks[GLESv1][软] gHooks[GLESv2][软] gHooks[GLESv1][硬] gHooks[GLESv2][硬]
+
+./libs/EGL/egl.cpp 中  egl_connection_t gEGLImpl[IMPL_NUM_IMPLEMENTATIONS];
+
+EGL是为OpenGL ES平台无关性而设计
+framework/native/opengl/libs/ egl.cpp等，生成libEGL.so，相当于opengl驱动egl(如libEGL_POWERVR.so) 的又封装一层。
+
+ libEGL.so 是上层接口（surfaceflinger链接这个库，可海思改成直接链接 libGLES_android.so）
+
+【libegl.so是一个wraper层，但海思直接在surfaceflinger里面链接libGLES_android.so 不会有问题吗？这样他用的还是硬件3D吗？】
+
+android还对egl做了些扩展 ANDROID extensions
+
+EGL is an interface between OpenGL ES and the underlying native platform window system
+
+OpenGL的取代产品 Mesa 提供和OpenGL一致接口，对新硬件的支持度方面超过OpenGL。www.mesa3d.org。android4.0 有了mesa。
+
+--------------------
+数据都是用gralloc.c分配出来的，并且4k对其 通过map文件可以分析出来打印I/IMGSRV 是libsrv_um.so 里面的字符串在
+http://android.git.kernel.org/?p=kernel/omap.git 找到了sgx在内核层的驱动程序libsrv_um.so 里面有一个文件 pvr_bridge_um.c  这跟kernel
+中的gpu驱动pvr_bridge_k.c遥相呼应，um代表user management
+drivers/gpu/drm下面，原始linux就有，但是没有编译同时在drivers/gpu/下增加 pvr vga 目录 里面的文件：Imagination Technologies Ltd.
+显然这是imagination公司写的  并且在这里找到了pvrsrvkm 的设备
+-----------------------------------------------
+
+看物理地址一列，可以找到0x21000000 和0x21384000 
+但是其他的pvrsrvkm映射，物理地址都是 800000bf000 
+
+pvrsrvkm.ko 这个ko不能strip insmod的时候提示 module has no symbols(stripped?)
+
+sgxinit.c 在 libsrv_init.so中
+
+
+在网上查到关于beagleboard的SGX驱动，需要
++insmod /system/bin/sgx/pvrsrvkm.ko
++insmod /system/bin/sgx/omaplfb.ko  【有源码，相当于我的pvrnxpdc.ko吧？！】
+
++chmod 0666 /dev/pvrsrvkm
++pvrsrvinit
+
+glDrawPixels — write a block of pixels to the frame buffer
+ 多种迹象标明，nxp的opengl驱动跟网上公布出来的omap的一样
+网上下载到的omap的sdk开发包有 services4/system/omap3/sysconfig.c 
+nxp的打印有： services4/system/sgx-apollo/sysconfig.c
+
+并且ti网站上找到的sgx开发包，跟android官网上的omap kernel里面 drivers/gpu/pvr目录中的文件【相同】
+
+并且在omap sdk中 services4/3rdparty/dc_omap3_linux [看看，这里也出现了dc字眼]
+
+注意：vpmfb.c中 写死1280x720 和insmod的时候传入1280x720 还是不一样的，使用pvr驱动，必须是写死1280x720
+
+通过在vpmfb.c中加打印可以断定，nxp的opengl的gralloc.so中交换时候调用的是 PAN_DISPLAY 而不是PUT_VSCREENINFO
+因为如果是后者会调用cnxtfb_set_par里面的打印。实测没有调用。 
+感觉现在的android系统 swap的次数太频繁了，鼠标移动，就大量的swap
+更为奇怪的是，我在vpmfb中把交换都注释掉了，好像显示效果没有什么变化。
+在计算器中倒是有变化，swap注释掉后，光标就不闪烁了，除非不停的移动鼠标。在移动鼠标的过程中，光标消失的时候停止移动就一直消失
+光标显示的时候停止就一直显示。因为移动鼠标的swap速度远远大于光标闪烁的速度，所以能够使得光标闪烁起来【这里很难理解的呵呵】
+
+android 光标闪烁竟然在2个buffer中操作，不停的切换2个buffer!
+
+不交换就相当于画面动的时候丢掉一半帧的效果。但是好像除了光标不闪烁外，其他的也没有什么问题。这块的问题不能钻牛角尖
+现在鼠标要动一下才可以连续案，否则无效。
+
+在vpmfb.c的swap函数里面加mdelay(200) 图形明显变慢(需要加#include <linux/delay.h>)
+
+感觉交换的意义不是很大，或者说，在大屏幕上，google的交换机制并不是很好。
+
+mdelay(1000)的时候，打印TMVSSDISPLAY: tmvss_kal_timer_callbackQueue send failed 27 看来是超时了
+mdelay(500) 的时候，还是可以工作的，但是此时已经打乱了所有的时序。
+
+从omap合nxp来看 gralloc模块是需要改动的。
+
+可以肯定的是，android的官方git网上的omap kernel里面的driver/gpu/pvr里面的东西，跟我在ti网上找到的SGX的SDK中的东西一样。
+
+
+Ti的android SGX SDK 包含 包括gralloc.omap3.so在内的opengl库和 内核驱动的源码！这些东西跟nxp给的能够对应上。
+显然 nxp的gralloc.default.so 跟这里的 gralloc.omap3.so 写法类似，里面都包含了若干PVR2D函数
+这两个gralloc.xx.so中都没有包含/dev/fb字符串
+看来，他根本没有在用户空间打开 /dev/fb设备， 并且在system_server 里面也没有看到/dev/fb被映射上去，看到的是/dev/pvrsrvkm映射的fb大小的内存。不知道怎么实现的。
+但是我在kernel.bin中把 fb 改成fd 系统就起不来了（在fbmem.c中）
+【同时/dev下显示fd0 fd1 可见这些是mdev扫描出来的，也说明是fbmem.c中的】 
+所以pvr中 fb是怎么用的不清楚
+
+
+在使用图片浏览器浏览大图片的时候：
+1 测试渐变色图片，发现是565格式
+2 拖动图片，不用swap【vpmfb.c里面(2*(cfb->max_width)*(cfb->max_height)*(stride_multi/0x1000))】 有明显的闪烁现象，使用swap明显改善。这里看到了swap的好处
+在其他地方不使用swap也看不到闪烁，是因为其他地方运算量少，每次运算时间极短，超出人的视觉暂留
+比如使用swap 50um 不使用 5ms ，人都看不出来，大图片的时候，使用swap还是50um，不使用是20ms 人就看出来了
+注：其他地方不是看不出来，快速滚动列表，就有很明显的闪烁现象，选中条中间好像断开一样。
+
+
+如果告诉系统使用2个buffer，但是注释掉pan_display里面交换的操作，浏览图片的时候也有明显闪烁。
+因为这个时候，系统中使用的虽然是2个buffer，但是显示出来的一直是其中一个buffer。另外一个画好了，没有显示出来，而在系统
+以为正在显示另一个buffer，而修改这个buffer的时候，这个buffer的修改过程就被看见了。
+但是这种现在在桌面拖动的时候竟然不明显！ 其实这样修改，已经相当于所有动的画面都抽掉了1半帧。
+并且，在有光标闪烁的界面，会导致光标不闪， 要不停移动鼠标才能使其闪烁
+在列表中，上下移动，不能立即生效，要过一会才生效，原因是列表右侧有渐渐消失的滚动条，他的消失驱动若干次swap，才促使选中条更新
+android的双缓冲，不是原来nec平台的简单bitblt【我原来的minigui还是单buffer的呢！】
+
+选中条，改成单buffer和双buffer但是不swap，快速滚动都会出现闪烁，断层。
+
+
+2010-11-24
+1 gralloc中 fb_setSwapInterval 设置swap的间隔无用，何时swap由上层决定
+
+
+这段代码可以检测fb是否支持 flip功能，但是这个代码很怪异。
+明白了，这里写的很好，fb支持2 buffe时，这里可以改成使用单buffer
+只需要info.yres_virtual = info.yres * NUM_BUFFERS; 把NUM_BUFFERS定义为1即可
+
+如果NUM_BUFFERS是2 ，这里可以检测fb驱动是否支持2 buffer，如果NUM_BUFFERS定义的就是1，返回ok
+则在下面的if里面 返回不支持flip，如果这里是2，返回ok 就是支持flip，下面的if不成立。如果返回不ok
+会打印2个not support。
+
+但是实际测试有问题，这个方法，不能检测是否支持2buffer，因为vpmfb.c已经改成1buffer了，还是能返回正确
+info.yres_virtual = info.yres * NUM_BUFFERS;
+    if (ioctl(fd, FBIOPUT_VSCREENINFO, &info) == -1) {
+        info.yres_virtual = info.yres;
+        flags &= ~PAGE_FLIP;
+        LOGW("FBIOPUT_VSCREENINFO failed, page flipping not supported");
+    }
+
+    if (info.yres_virtual < info.yres * 2) {
+        // we need at least 2 for page-flipping
+        info.yres_virtual = info.yres;
+        flags &= ~PAGE_FLIP;
+        LOGW("page flipping not supported (yres_virtual=%d, requested=%d)",
+                info.yres_virtual, info.yres*2);
+    }
+
+
+我在vpmfb.c中   //这里改为1
+(uIndex*aligned_page_size) <= (1*(cfb->max_width)
+那么，用nxp opengl 库启动后打印 
+W/GMGSRV  ( 2045): framebuffer.c:361: framebuffer_device_open: No hardware support for flipping
+W/GMGSRV  ( 2045): framebuffer.c:363: framebuffer_device_open: Falling back to front buffer only
+
+这种情况下，桌面滑动仍然比较顺畅，但是在快读移动列表选中条的时候，明显看到中间有断层
+
+当系统硬件不支持flip的时候，android系统到底怎么做的，我还不清楚。
+在不使用opengl，使用flip的情况下，超级慢，但是不闪烁
+
+不使用opengl，在fb驱动里面改成1个
+
+nxp的驱动，修改vpmfb.c就可以控制是否swap，android原生的，vpmfb.c已经修改成1个buffer，
+framebuffer.cpp中也改成1个buffer 但是还是调用swap，奇怪了
+vpmfb.c中改成1buffer，但是可变参数get出来后,虚拟的还是1440个点
+
+关键是 module->numBuffers = info.yres_virtual / info.yres; 不能等于2，否则就一直调用vpmfb 里面的swap
+
+使用gralloc软实现，单buffer的时候，看system_server 的maps ，会看到 很多 /gralloc-buffer (deleted)
+
+fb_post里面的 hnd->base的值是怎么算出来的
+
+=======================================================================
+vpmfb.c 中的 cnxtfb_set_par  好好研究这里的函数
+在这个函数里面，根据android传入的参数，重新设置了两个buffer的地址。
+并且同时默认也是设置成了2个page
+        for(u_index = 1;
+            (u_index*aligned_page_size) <=
+               (2*(cfbinfo->max_width)*(cfbinfo->max_height)* (stride_multi /0x1000));
+            u_index++)
+        {
+           cfbinfo->num_pages = u_index;
+        }
+所以想把vpmfb.c给成1buffer 只改这里就可以了，不用改
+cnxtfb_setup_pipeline里面的同样位置。
+
+-----------------------------------------------------------------------------------------
+        /*
+         * Pixel format getting changed. Close the existing image buffer and
+         * open a new one with changed pixel format. Note that the new image buffer
+         * will have the same memory area as the previous one so that application
+         * need not do a mmap again
+         */
+
+/****** Surface Input Types ******/
+typedef enum
+{
+    PIPE_VP_SURFACE_INPUT_TYPE_NONE = 0,
+    PIPE_VP_SURFACE_INPUT_TYPE_PIPELINE,
+    PIPE_VP_SURFACE_INPUT_TYPE_IMAGE,
+} PIPE_VP_SURFACE_INPUT_TYPE;
+
+
+/* detach pipeline */
+SurfaceInput.Type = PIPE_VP_SURFACE_INPUT_TYPE_NONE;
+cfb->pSurface->set_input( cfb->pSurface, &SurfaceInput );
+这个类型是断开pipeline
+
+--------------------------------------------------------------------
+改成1 buffer 后，看maps文件
+4e5b3000-4e775000 rwxs 21000000 00:11 1259       /dev/graphics/fb0
+4e775000-4e937000 rwxs 00000000 00:08 1469       /gralloc-buffer (deleted)
+4e937000-4eaf9000 rwxs 00000000 00:08 1470       /gralloc-buffer (deleted)
+第一行是fb的物理地址映射， 后两行比较特殊，物理地址为0， 后面还显示deleted (什么意思？)
+
+=========================================
+关注libs/ui目录
+
+1 hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module)
+2 framebuffer_open(module, &fbDev);
+3 gralloc_open(module, &grDev);
+
+看看这3行，
+1 得到module指针，这个结构体的实体在模块内部静态定义。
+2 内部分配Dev结构体实体，然后把module指针赋值给 hw_device_t结构体的 struct hw_module_t* module;字段
+
+
+fb_post中
+if (hnd->flags & private_handle_t::PRIV_FLAGS_FRAMEBUFFER) { 
+其中,hnd->flags的值是怎么附近来的的终于搞懂，
+是在gralloc_alloc_framebuffer_locked这个函数中的
+    private_handle_t* hnd = new private_handle_t(dup(m->framebuffer->fd), size,
+            private_handle_t::PRIV_FLAGS_FRAMEBUFFER);
+
+private_handle_t::PRIV_FLAGS_FRAMEBUFFER等于1，这个值传给了
+
+private_handle_t结构体的 flags 成员。
+
+
+// If we have only one buffer, we never use page-flipping. Instead,
+// we return a regular buffer which will be memcpy'ed to the main
+// screen when post is called.
+        int newUsage = (usage & ~GRALLOC_USAGE_HW_FB) | GRALLOC_USAGE_HW_2D;
+        return gralloc_alloc_buffer(dev, bufferSize, newUsage, pHandle);
+
+
+donut之前，使用EGLDisplaySurface.cpp 打开framebuffer，随后mmap fb
+2.0之后增加了gralloc模块，是显示部分的抽象层，是系统合framebuffer的设备接口。
+被libui库调用。其中，framebuffer.cpp是基于framebuffer的显示实现，gralloc是基于pmem的实现
+
+输入系统由event驱动组成，包括libui库中的eventhub
+eventhub 读取 *.kl文件，操作/dev/input/eventx
+
+surface系统在 libui库之上，libui.so提供与surface的接口，libsurfaceflinger.so提供实现。
+
+本文通过 glGetString() 接口打印 RENDERER, VENDOR, VERSION 等信息来判断 G1 是否支持 OpenGL 硬件加速。
+使用 glGetString 接口查看 GL_RENDERER, GL_VERDOR, GL_VERSION, GL_EXTENSIONS 等信息，尤其是 GL_RENDERER，
+即可判断出是硬件实现还是软件 实现。
+
+
+关于Pixelflinger ##
+pixelflinger 是一个下层的工具类型库，负责像素级别的基本处理。在system/core/libpixelflinger. 生成libpixelflinger.so
+Pixelflinger是Android系统中为OpenGL ES引擎提供的一套软件渲染器（renderer）ggl 应该代表 google gl
+系统启动时通过查看启动日志信息可以获取当前Pixelflinger的软件版本（代码）。Pixelflinger软件版本随着 Android版本的升级而提高，
+
+软件实现库libGLES_android.so调用libpixelflinger.so来进行底层的绘制操作。
+
+目前最新的版本为1.3（基于Android2.2系统）。
+
+I/SurfaceFlinger( 2064): OpenGL informations:
+I/SurfaceFlinger( 2064): vendor    : Android
+I/SurfaceFlinger( 2064): renderer  : Android PixelFlinger 1.3
+I/SurfaceFlinger( 2064): version   : OpenGL ES-CM 1.0
+这些字符串在libagl/state.cpp 中定于 可见这是软实现的时候才用到的
+Pixelflinger作为软件渲染器，为OpenGL ES引擎提供了一系列基础绘图功能
+这些功能包括定义各种颜色格式像素位置、画点画线、绘制矩形及三角形、填充纹理等等
+
+由于OpenGL ES相当于一个状态机，配置OpenGL ES状态的函数也均由Pixelflinger提供。
+
+而opengl 硬实现的时候，打印为
+
+I/SurfaceFlinger( 2077): OpenGL informations:
+I/SurfaceFlinger( 2077): vendor    : Imagination Technologies
+I/SurfaceFlinger( 2077): renderer  : PowerVR SGX 531
+I/SurfaceFlinger( 2077): version   : OpenGL ES-CM 1.1
+
+从./DisplayHardware/DisplayHardware.cpp:    LOGI("renderer  : %s", gl_renderer); 打印出来的
+
+也就是说，opengl硬实现的时候，libpixelflinger.so 就没有用了吗？
+但是把这个库删除了还不行，init都起不来（20120117因为还有很多库依赖这个库，编译时候决定了），打印 untracked pid %d exited （init.c中）
+
+pixelflinger 是google在android上面弄的OpenGL 的render. 
+
+OpenGL/ES:
+1. Software: agl (libagl) => PixelFlinger (libpixelflinger, JIT supports ARM only)
+2. Hardware: hgl (libhgl, vendor specific 厂商特定的render) 
+
+相比与普通的linux 系统, Google 对android 做了太多的改动.(from How Android Differs from GNU/Linux?)
+
+Mesa3D/OpenGL → PixelFlinger(OpenGL|ES) (20120117 android4.0就使用了mesa 实现软opengl2.0)
+
+这个库编译出 so .a 两个版本  .a是给recovery用的  那么这个库是什么作用呢？
+是软opengl libagl（gles v1的渲染库）
+
+看看pixelflinger 到底是个什么东西。
+
+依赖这个库的有：libsurfaceflinger.so libui.so libGLES_android.so
+
+libui.so 里面只调用了一个函数: gglGetPixelFormatTable [所以这个pixelflinger 是不能删除的 :-)]
+难道opengl硬实现的时候，libui.so 也要调用pixelflinger里面的这个函数？ 这个函数只有pixelflinger有
+libui.so libGLES_android.so调用。 实际上这个函数没有干啥正经事，就是罗列了像素格式，在format.cpp
+
+关于ashmem的理解：
+ashmem是基于shmem实现的。ashmem_create_region 就是打开/dev/ashmem 然后 设置名字和size  就可以mmap这个
+其中 `name' is an optional label to give the region。从ashmem.c中可以看出，如果此处没有给出name，则使用"dev/ashmem"
+好像无法创建多个ashmem
+
+节点名称/dev/ashmem, 为用户空间程序提供内存分配机制，实现类似malloc的功能[类似malloc??!!]
+C libutils库对其进行了封装：system/core/libcutils/ashmeme-*.c [ashmem-dev.c  ashmem-host.c]
+
+ashmem是android的内存分配/共享机制，在dev目录下对应的设备是/dev/ashmem，相比于传统的内存分配机制，如malloc、 
+anonymous/named mmap，其好处是提供了辅助内核内存回收算法的pin/unpin机制
+匿名/有名 mmap？！
+
+ashmme的典型用法是先打开设备文件，然后做mmap映射。
+
+第一步通过调用ashmem_create_region函数，这个函数完成这几件事：
+
+1）fd = open("/dev/ashmem", O_RDWR);
+2）ioctl(fd, ASHMEM_SET_NAME, region_name); // 这一步可选 名字可以不设置
+3）ioctl(fd, ASHMEM_SET_SIZE, region_size);
+
+
+第二步，应用程序一般会调用mmap来把ashmem分配的空间映射到进程空间：
+
+mapAddr = mmap(NULL, pHdr->mapLength, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+
+android代码里面的是
+mappedAddress = mmap(0, size, PROT_READ|PROT_WRITE, MAP_SHARED, hnd->fd, 0); //注意MAP_SHARED参数
+
+应用程序还可以通过ioctl来pin和unpin某一段映射的空间，以提示内核的page cache算法可以把哪些页面回收，这是一般mmap做不到的。
+
+可以说ashmem以较小的代价（用户需进行额外的ioctl调用来设置名字，大小，pin和unpin），获得了一些内存使用的智能性。
+ashmem本身实现也很小巧，只有不到700行。原因是借助了内核已经有的工具，例如shmem_file_setup(支撑文件),
+cache_shrinker（slab分配算法的页面回收的回调函数）等。
+
+如果ashmem不使用内核驱动实现，则pin/unpin的语义比较难以实现，或者即使实现，效率也不会很高。但查询android源码，
+使用pin /unpin很少，看来ashmem还是没有很好地用起来。
+
+如果不使用ashmem驱动，并且舍弃pin/unpin语义，那么模拟ashmem的语义还是很简单的。首先，ashmem_create_region可以为进程创建一
+个唯一的文件（如进程名＋时戳），打开，然后返回这个文件的fd；接着应用程序可以进性一般的mmap操作了。如果不使用ashmem_create_region接
+口函数，那么使用anonymous的mmap就可以了，但这种方式属于正在被丢弃的方式，而且并不是所有的系统都支持，比如Macos就不支持。
+
+mmap系统调用并不是完全为了用于共享内存而设计的， 他本身提供了不同于一般对普通文件的访问方式，进程能像读写内存相同对普通文件的操作
+而Posix或系统V的共享内存IPC则纯粹用于共享目的，当然mmap()实现共享内存也是其主要应用之一。
+mmap系统调用使得进程之间通过映射同一个普通文件实现共享内存
+
+
+如何查看一个进程mmap的某个区域是MAP_SHARED还是MAP_PRIVATE?   strace  可以看到。 
+
+=================================================================================
+===========================20120113 Hisi 图形系统新认识===========================
+=================================================================================
+海思平台的测试让我对android的图形系统有了新的认识：
+1 skia 根本就没有用到opengl，海思只是用2D图形加速对接了一个 bitblt（李东辉说默认情况下还没有使用）
+2 他的surfaceflinger 通过修改Android.mk 没有使用libEGL.so 而是使用了libGLES_android.so
+  这样就固定使用了软件opengl的egl了
+3 进而做了如下测试：把system/lib/egl里面VIVANTE的3个驱动（egl  v1 v2） 删除，android系统照样能流畅的运行
+  当时在nxp平台也做过类似操作，删除sgx驱动后，系统会变得很慢。
+【我现在的分析：skia跟opengl没有关系，但是surfaceflinger跟opengl有关，原来nxp的surfaceflinger使用软的opengl会慢但是现在hisi由于cpu主频高，使用软opengl也很流畅】 但是海思实现了copybit ，我把这个删除，界面就有些卡顿和闪烁了。
+这个 copybit驱动： open("/dev/graphics/fb2", O_RDWR, 0); 里面通过ioctl 调用了 fb的混合，移动等功能。
+
+也就是说海思平台：凭借自己CPU速度和2D加速的很好对接，就实现了android流畅运行，跟opengl没有毛关系！ 完全颠覆我之前的认识。
+
+那么，谁在用这个copybit驱动呢？ 
+
+经过测试，海思平台得出如下重要结论：
+他发布的默认状态：surfaceflinger直接使用libGLES_android.so（通过修改Android.mk）,这是android中唯一跟opengl
+接口的地方（因为已经证实：skia跟opengl没有毛关系，虽然skia源码里面有gl的目录）这里这样改就强制使用软opengl了
+（海思拙劣做法：libGLES_android.so 在system/lib/elg  system/lib各放一份）。软opengl 使用system/lib/hw/copybit.godbox.so
+这个库直接操作 framebuffer驱动
+高速CPU + 2D加速就实现了android界面流畅运行，没有跟硬opengl产生关系。 如果将 copybit.godbox.so 界面立刻卡顿。
+
+修改surfaceflinger Android.mk 使之链接 libEGL.so 而不是libGLES_android.so  然后删除所有opengl软实现，安装opengl硬实现
+系统照样可以顺畅运行（感觉别之前更流畅一点点） 这是合理的，硬openg的性能要比 2D 加速提供的混合和移动好些！
+
+运行opengl的测试程序 angeles，安装硬驱动的明显流畅，top显示cpu 45% 左右，使用软驱动的 卡顿，top cpu 98%  这个结果合理！
+
+如果安装opengl硬驱动，但是surfaceflinger使用libGLES_android.so（修改Android.mk） 同时删除copybit驱动，则出现：
+界面卡顿，但是运行 angeles 测试程序流畅！并且top cpu  45% 
+
+说明android界面用了 软opengl 但是运行的测试程序用的却是硬件opengl！  好啊！明白不少！
+
+现在完美的做法应该是：不用软opengl 不用 copybit 修改surfaceflinger回复原始的依赖libEGL.so 
+
+
+20120115 
+虽然海思强制surfaceflinger 调用 libGLES_android.so 而不是libEGL.so 但libui.so 还是一直调用libEGL.so 的，这竟可以。
+
+20120117 
+libagl（也就是opengl的软实现）调用copybit
+老版本 copybit 和OpenGL 同时存在时，SurfaceFlinger优先copybit。后来作为 OpenGL|ES 1.1后端使用，SurfaceFlinger只调用OpenGLES的接口
+(注意这种演进方式)
+
+-------------------------------------------------------------------------------------------------
+libui.so  提供了overlay  key/event  EGLutiles.cpp(这个文件相当实现简单啊) 的实现  有相当多的库依赖 libui.so
+4.0 把overlay部分从libui里面去掉了（为什么？原来又是什么意思呢？）
+libui是整个GUI系统的中枢，这个库提供了一些接口，由其他的库通过类继承方式实现。
+
+eglutils.cpp 只在EGLUtils::selectConfigForPixelFormat
+调用了 eglGetConfigs eglChooseConfig eglGetConfigAttrib 3个函数
+
+surfaceflinger 调用 EGLUtils::selectConfigForNativeWindow （其他处调用全为test）
+
+froyo的libagl 还依赖 copybit模块，但是我看到android4.0 的ligagl已经不用copybit了（why？ “日”后再说）
+（4.0 还有一个libagl2 readme.txt: libAgl2 provides software GL ES 2.0 implementation using Pixelflinger2 in external/mesa3d
+也就是说，原来的libagl只能提供opegl 1.1 
+）
+froyo libagl的Android.mk中有：
+
+# Set to 1 to use gralloc and copybits （copybit跟gralloc又有什么关系呢？）
+LIBAGL_USE_GRALLOC_COPYBITS := 1
+（选择使用，但是删除libcopybit.so 竟然也能工作！）（20120216因为nxp平台就没有使用copybit模块，此模块是软opengl使用的）
+比较4.0 的libagl 和 2.2 的libagl 区别主要就是去除copybit的支持
+4.0的libagl（opengl 1.1） 还是要依赖 GRALLOC_HARDWARE_MODULE_ID 的
+
+
+
+--------------------------
+如果处理器只有2D硬件加速而没有3D硬件加速，则可以利用opengl中的libagl，实现封装在libagl里的copybit，因为相对3D API来说，这个模块的封装基本是做好的，只要去实现一个copybit HAL即可；如果处理器2D/3D硬件加速均有，那么可以丢开 copybit，去实现openGL ES 2D/3D API 的加速功能。
+Copybit模块在android2.0以后归OpenGL管理，在libagl中专门有一个copybit.cpp文件对其进一步封装并进行管理
+注意在android.mk中有个宏定义，默认是打开的
+#define LIBAGL_USE_GRALLOC_COPYBITS
+
+//检查是否有copybit
+static bool checkContext(ogles_context_t* c)
+
+libagl对copybit的调用
+hw_get_module(COPYBIT_HARDWARE_MODULE_ID, &module)
+
+操作copybit  Texture.cpp  Array.cpp
+
+--------------------------
+
+1 DisplayHardware是对显示设备的抽象，包括FrameBuffer和Overlay， 它加载FrameBuffer和Overlay插件，并初始化OpenGLES
+
+void DisplayHardware::init(uint32_t dpy)
+{
+    mNativeWindow = new FramebufferNativeWindow();
+    framebuffer_device_t const * fbDev = mNativeWindow->getDevice();
+
+    mOverlayEngine = NULL;
+    hw_module_t const* module;
+    if (hw_get_module(OVERLAY_HARDWARE_MODULE_ID, &module) == 0) {
+        overlay_control_open(module, &mOverlayEngine);
+    }
+
+...
+
+}
+
+FramebufferNativeWindow 是framebuffer 的抽象，它负责加载libgralloc，并打开framebuffer设备。FramebufferNativeWindow并不直接使用 framebuffer，而是自己创建了两个Buffer：1. queueBuffer负责显示一个Buffer到屏幕上，它调用fb->post去显示 and 2. dequeueBuffer获取一个空闲的Buffer，用来在后台绘制。
+
+
+这两个函数由eglSwapBuffers调过来，调到:
+
+egl_window_surface_v2_t::swapBuffers：
+    nativeWindow->queueBuffer(nativeWindow, buffer);
+    nativeWindow->dequeueBuffer(nativeWindow, &buffer);
+
+
+msm7k/liboverlay是Overlay的实现，与其它平台不同的是，高通平台上的Overlay并不是提供一个 framebuffer设备，而通过fb0的ioctl来实现的，ioctl分为两类操作：
+OverlayControlChannel用于设置参数，比如设置Overlay的位置，宽度和高度：
+bool OverlayControlChannel::setPosition(int x, int y, uint32_t w, uint32_t h) {
+    ov.dst_rect.x = x;
+    ov.dst_rect.y = y;
+    ov.dst_rect.w = w;
+    ov.dst_rect.h = h;
+    ioctl(mFD, MSMFB_OVERLAY_SET, &ov);
+}
+libgralloc 是显示缓存的抽象，包括framebuffer和普通Surface的Buffer
+
+
+framebuffer只是/dev/graphic/fb0的包装，Surface的Buffer则是对/dev/pmem、ashmem和GPU内存的包装，它的目标主要是方便硬件加速
+misc/pmem.c: 对物理内存的管理，算法和用户空间的接口。
+msm_msm7x2x_allocate_memory_regions分配几大块内存用于给pmem做二次分配。
+
+
+SurfaceFlinger担任server角色，负责将各个surface根据 Z order合成 (composer)。 View及其子类画在surface 的canvas的SkBitmap上。
+
+back buffer是canvas绘图时对应的bitmap (见android_view_Surface.cpp::lockCanvas)，绘画总是在back buffer上，更新时back buffer和front buffer互换。
+
+A surface typically has more than one buffer (usually two front/back) to do double-buffered rendering: the application can be drawing its next UI state while the surface flinger is compositing the screen using the last buffer, without needing to wait for the application to finish drawing.
+
+A window has a single view hierarchy attached to it,
+
+A Bitmap is just an interface to some pixel data. A Bitmap is simply a wrapper for a collection of pixels（注意这种编程思想）
+
+A canvas draws on a Bitmap or an open GL container（GL容器就不是一个raster吗？最终不是也要渲染到一块内存里吗）
+
+The window is tied to a Surface and the ViewRoot asks the Surface for a Canvas that is then used by the Views to draw onto. After View draw its data to canvas, ViewRoot will call surface.unlockCanvasAndPost(canvas) to schedule surfaceFlinger::composeSurfaces() which do the actually display to display panel. SurfaceFlinger handles to transfers drawn data in canvas to surface front buffer or backbuffer.
+
+
+ViewRoot 不是View，而是Handler，作用：
+A. 向DecorView分发收到的用户发起的event事件，如按键触屏
+B. 与WindowManagerService交互，完成Activity的GUI绘制。
+
+developer group answer for ViewRoot & View
+1. what is the relationship between ViewRoot and View class?
+The ViewRoot is the root of each view hierarchy. Like you said, there is one ViewRoot per window(1个window一个viewroot,1个viewroot new 1个 Surface). The ViewRoot is responsible to handling the layout and drawing of the view hierarchy. The view hierarchy is made of Views and ViewGroups. A ViewGroup is a special View that can contain other Views.
+Is all view ,its children's view and their viewRoot share the same canvas for draw? 
+Yes, but that Canvas might change on every drawing operation. The ViewRoot acquires a Canvas from the underlying Surface and hands that Canvas to the top-level View. 
+
+2. What is the relationship within View, canvas and Surface. To my thinking, every view will be attached a canvas and surface. 
+No, the Views are not attached to the Canvas nor（也不） the Surface.（注意）
+The window is tied to a Surface and the ViewRoot asks the Surface for a Canvas that is then used by the Views to draw onto.
+（window捆绑一个surface，然后viewroot请求surface里面的canvas供view 在上面画）
+
+> canvas hold the bitmap for view, will the actual view drawn data will be in canvas' bitmap?  Yes.(我也是这么理解的)
+
+> After View draw its data to canvas, ViewRoot will call surface.unlockCanvasAndPost(canvas) to schedule surfaceFlinger::composeSurfaces() which do the actually display to display panel.
+ Yes. 
+
+> Where is the drawn data in canvas transfer to surface front buffer or backbuffer? I cannot find the code to do that. 
+ It's done by SurfaceFlinger.
+
+
+Layer
+
+每个surface又对应一个layer, SurfaceFlinger负责将各个layer的front buffer合成（composite）绘制到屏幕上。
+
+A Layer is something that can be composited by SurfaceFlinger (should have been called LayerFlinger). There are several types of Layers if you look in the code, in particular the regular ones (Layer.cpp) , they are backed by a Surface, and the LayerBuffer (very badly chosen name) which don't have a backing store, but receive one from their client. . Note that the GGLSurface type, should have been called GGLBuffer.
+
+Multiple layers are just composited to the final buffer in their Z order.
+
+
+显示系统
+=================================================================================
+class DisplayHardware : public DisplayHardwareBase
+
+实际上 gralloc.so 把 用于surface的 graphics alloc 与 framebuffer 做了一个统一。
+因为framebuffer 跟 surface的buffer 本来没有什么本质区别，只是framebuffer 的数据可以显示在屏幕上，而其他buffer 不能看到
+
+#define GRALLOC_HARDWARE_MODULE_ID "gralloc"
+/* Name of the graphics device to open*/
+
+#define GRALLOC_HARDWARE_FB0 "fb0"
+#define GRALLOC_HARDWARE_GPU0 "gpu0"
+libgralloc 是显示缓存的抽象，包括framebuffer和普通Surface的Buffer” 而普通surface的buffer 是用 ashmem 或者 pmem
+
+--------------------------------
+libglslcompiler.so
+tools/intern/oglcompiler 目录生成的
+libIMGegl.so
+eurasiacon/imgegl目录生成
+
+libpvr2d.so
+eurasia/pvr2d 目录生成
+
+libpvrANDROID_WSEGL.so
+libsrv_init.so
+libsrv_um.so
+
+基本可以断定 以 gl开头的函数都是opengl 定义的标准函数
+
+eurasia/eurasiacon/graphicshal  就是生成 gralloc.so 的源码了！ 跟刘坡单独给我的那个一样。
+
+PVR2D 系列函数好像是imagination 公司自己的，不再opengl标准行列
+
+PVR2DGetFrameBuffer
+
+gralloc_device_alloc 调用  PVRSRVExportDeviceMem 他里面 调用 fd = open("/dev/pvrsrvkm", O_RDWR);
+
+
+图形驱动在 kernel 中的位置： 
+drivers/gpu/ 下面  原生drm  vga   omap（android）增加pvr
+
+用户空间看到的 设备节点是 pvrsrvkm
+
+不再脚本里面显示创建 设备节点 还是在/dev 生成 fb0 /dev/graphics/fb0
+
+这个脚本 检测 /proc/device 里面罗列了设备驱动注册的时候 给每个设备驱动取得名字 
+不执行 fb的 也会有fb0 节点 因该是mdev生成的
+
+用do_gettimeofday 函数可以查看vpmfb 里面一个 双屏切换函数 要执行 20 ms 据说是为了解决 1080 输出的问题！ 这也太怪异了吧 用数据拷贝的方法解决 1080I 输出的问题？
+这20ms 的时间很是影响菜单展示效果啊！
+
+经过测试： framebuffer 切换一次 需要 35ms   分析认为 即使35ms  也可以达到 30fps 的速度。所以优化这个地方没有意义
+
+
+
+关键的东西终于出来了：
+在 gralloc.c 中 :
+
+__map 函数调用了 PVRSRVMapDeviceMemory， __map又被gralloc的 gralloc_register_buffer 调用了！
+
+android 对  registerBuffer unregisterBuffer的定义
+
+    int (*registerBuffer)(struct gralloc_module_t const* module,buffer_handle_t handle);
+    int (*unregisterBuffer)(struct gralloc_module_t const* module, buffer_handle_t handle);
+
+还有一个 gralloc_device_alloc
+opengl的gralloc
+
+	psAllocDevice->alloc	= gralloc_device_alloc;
+	psAllocDevice->free	= gralloc_device_free;
+这个函数的实现靠调用 PVRSRVAllocDeviceMem  这个函数实现在 用户空间（ bridged_pvr_glue.c 文件中）
+
+PVRSRVBridgeCall 封装ioctl 用于调用 opengl kernel 空间的 功能函数
+
+kernel 空间 PVRSRVAllocDeviceMemBW 函数实现内存分配 进而调用 _PVRSRVAllocDeviceMemKM 再调用 AllocDeviceMem 
+
+Almost all activities interact with the user, so the Activity class takes care of creating a window for you in 
+which you can place your UI with setContentView.
+
+
+跟侯乐武讨论 iptv里面一个界面放大的操作。我此时的理解：
+
+每个窗口都有一个surface，surface不一定都是fb那么大，如果比fb小，surfaceflinger 应该知道这个surface要flinger到fb的什么位置
+
+gtk qt 基于 dfb  dfb又基于sdl  sdl又基于dfb  看似一个死循环。实际上应该这样理解：比如一个平台已经移植好了sdl，那么fdb不许要移植直接可以运行。
+如果一个平台已经有了移植好的dfb，sdl也不许要移植，可以直接运行。 这就是基于的含义。
+
+
+关于surfaceflinger 
+SurfaceFlinger只是负责merge Surface的控制，比如说计算出两个Surface重叠的区域，至于Surface需要显示的内容，则通过skia，opengl和 pixflinger来计算
+他调用大量opengl V1.1 的函数。在 LayerBase.cpp  LayerBlur.cpp  LayerDim.cpp SurfaceFlinger.cpp  文件里
+调用glGetString  glGetIntegerv glReadPixels 等
+
+
+海思平台 copybit.so 里的blit函数加打印，发现 android桌面时间变化会调用3次blit 程序推出的收缩效果更是调用数十次
+注意：调用的不是 ctx->device.blit = blit_copybit; 而是 ctx->device.stretch
+跟踪发现，正常界面操作走的流程是：
+libagl里面的copybit.cpp里面的copybit 函数
+static bool copybit(GLint x, GLint y, GLint w, GLint h,
+        EGLTextureObject* textureObject, const GLint* crop_rect,
+        int transform, ogles_context_t* c)
+{
+
+    /* and now the alpha-plane hack. This handles the "Fade" case of a
+     * texture with an alpha channel. (fade:褪色 逐渐消失)
+     */
+if (alphaPlaneWorkaround) {
+copybit->stretch(copybit, &tmpCbImg, &dst, &tmpCbRect, &tmpdrect, &tmp_it)
+}
+else {
+copybit->stretch(copybit, &dst, &src, &drect, &srect, &it);//多数走这里
+}
+}
+
+调用copybit函数的有: drawTexiOESWithCopybit_impl drawTriangleFanWithCopybit_impl
+正常界面操作是从 drawTriangleFanWithCopybit_impl 进入的
+
+drawPrimitivesTriangleFan -> drawTriangleFanWithCopybit -> drawTriangleFanWithCopybit_impl
+
+
+/* Tries to draw a triangle fan using copybit hardware. */
+
+drawTriangleFanWithCopybit(ogles_context_t* c, GLint first, GLsizei count) 
+{
+    /* We are looking for the glDrawArrays call made by SurfaceFlinger */ 
+    return drawTriangleFanWithCopybit_impl(c, first, count);
+}
+
+opengl 与 copybit的联系：
+glDrawArrays() 调用drawArraysPrims[mode](c, first, count);  mode 为6的时候就是copybit
+
+/* BeginMode */
+#define GL_POINTS                         0x0000
+#define GL_LINES                          0x0001
+#define GL_LINE_LOOP                      0x0002
+#define GL_LINE_STRIP                     0x0003
+#define GL_TRIANGLES                      0x0004
+#define GL_TRIANGLE_STRIP                 0x0005
+#define GL_TRIANGLE_FAN                   0x0006  /**/
+
+surfaceflinger 中 layerbase.cpp layerdim.cpp layerblur.cpp surfaceflinger.cpp
+
+实测，正常界面操作顺序是：
+void SurfaceFlinger::composeSurfaces(const Region& dirty)
+{
+sp<LayerBase> const* const layers
+layer->draw(clip);
+}
+
+void LayerBase::draw(const Region& inClip) const
+{
+//虚函数灵活用法。一般在类外部调用虚函数，这里在类内部调用，涉及到this指针
+onDraw(clip);}  调用下面的onDraw  
+...
+}
+Layer::onDraw(const Region& clip) 调用
+LayerBase::drawWithOpenGL 调用的 
+glDrawArrays(GL_TRIANGLE_FAN, 0, 4); （这个函数在v1 v2 都有）
+
+继承关系：
+class Layer : public LayerBaseClient
+class LayerBaseClient : public LayerBase
+
+
+
+另外：在调整代码的时候发现几点：
+1 一个类定义了纯虚函数，就是abstract类，继承他的类，如果没有对这个函数实现，那么他会继续是个抽象类！
+2 onDraw(xx) const 与 onDraw(xx) 不是一个函数，也就是说基类中 onDraw(xx) 在其派生类中 onDraw(xx) const
+  这是2个函数，不会覆盖基类中的函数。如果没有使用纯虚函数，类中的每个函数都必须要实现。
+
+-------------------
+surfaceflinger里面的类继承关系
+
+class LayerBase : public RefBase
+{
+    /**
+     * draw - performs some global clipping optimizations
+     * and calls onDraw().
+     * Typically this method is not overridden, instead implement onDraw()
+     * 注意：LayerBaseClient Layer 两个派生类确实没有 overridden draw方法
+     * to perform the actual drawing.  
+     */
+    virtual void draw(const Region& clip) const;
+    
+    /**
+     * onDraw - draws the surface.
+     */
+    virtual void onDraw(const Region& clip) const = 0; //这是个纯虚函数 因此，类是个抽象基类
+}
+
+我在copybit里面加上打印得到： 第三 第六为源 目的地址 
+
+I/        ( 1079): ##########1280 720 813d4000 1280 720 98875000
+I/        ( 1079): ##########1280 720 81c9e000 1280 720 98875000
+I/        ( 1079): ##########1280 25 80b2a000 1280 720 98875000
+
+I/        ( 1079): ##########1280 720 813d4000 1280 720 984f1000
+I/        ( 1079): ##########1280 720 81596000 1280 720 984f1000
+I/        ( 1079): ##########1280 25 80b2a000 1280 720 984f1000
+
+-------
+20120217
+1 打印这个硬件copybit，多数是从src的 HAL_PIXEL_FORMAT_RGB_565 拷贝到 HAL_PIXEL_FORMAT_BGRA_8888（疑惑）
+这里的源地址经证实，是GraphicBufferAllocator::alloc(谁调这个函数呢) 分配的pmem内存
+
+2 1280 25 80b2a000 1280 720 984f1000  经尺子测量，这里的25是状态条的高度。
+1280 25 80b2a000表示源数据区域1280x25（状态条） 1280 720 984f1000表示framebuffer是 1280x720
+HI_TDE2_Bitblit 函数还有srect(x,y,w,h) drect分别为0 0 1280 25   0 0 1280 25 表示把源区域拷贝到目的区域的顶端。
+
+为什么拷贝完1280x720区域后紧接着就要拷贝1280x25，因为拷贝完1280x720后，状态条就被覆盖了，所以要拷贝。但我想最合理的应该是拷贝1280 720的时候就不要覆盖状态条
+实际上，状态条是一个叠加在其他窗口上的一个独立窗口，跟应用程序不在一个窗口里面。如何决定一个窗口上面是否显示状态条呢？
+
+HI_TDE2_Bitblit 99%情况，只拷贝1280 x 720  1280 x 25 两种尺寸，一个是全屏apk，一个是状态条。
+如果有对话框弹出：
+1280 270 80d7a000 1280 720 985e7000 
+0 0 1280 270 0 237 1280 270
+
+以上可以证明2件事：1 copybit只拷贝窗口数据，2 状态条，对话框都是单独的窗口。
+
+状态条时间变化，就会引起2此1280x720 1次1280x25 拷贝，这效率也太低了吧。不理解。
+
+可以发现  0x98875000 0x984f1000 相差1280x720x4 = 0x384000  基本断定，这个就是双缓冲 framebuffer了
+源地址都在PMEM范围里
+
+
+-------------HTC手机的dev目录
+crw-rw---- system   audio     10,   2 2010-09-10 08:54 pmem_venc
+crw-rw---- system   audio     10,   1 2010-09-10 08:54 pmem_adsp
+crw-rw---- system   graphics  10,   0 2010-09-10 08:54 pmem
+--------------
+984f1000 这个应该是物理地址了
+
+--------------------------------
+20120216 新理解
+
+地址范围  权限  偏移  主设备：次设备  节点  （主设备：次设备 好像不是dev节点的那个主次设备号，好像跟磁盘分区有关）
+比如 9d13b000-9d13d000 rwxp 0003b000 00:0c 3029511    /system/lib/libstlport.so
+ls -i /system/lib/libstlport.so 会得到 3029511
+objdump -x libstlport.so 可以看到:
+ 10 .init_array   00000014  0003b000  0003b000  0003b000  2**2   //3b000 开始是数据区，所以属性变为 rwxp
+
+使用 busybox 的ls -i /dev/pmem 得到 67
+
+----------------------------
+20120219
+在apk进程找到了 /dev/pmem
+在gralloc/mapper.cpp 的 gralloc_map (由gralloc_lock调用)函数中加打印
+
+surfaceflinger 与 活动apk 同时mmap /dev/pmem节点，所以pmem用于共享物理内存。
+
+某个apk（必须是当前apk，切换到后台的就看不到了）：
+4f03e000-50010000 rwxs 80948000 00:0d 67         /dev/pmem
+51425000-52c5a000 rwxs 80948000 00:0d 67         /dev/pmem
+
+gralloc_lock(){
+  //打印看，多数情况这个条件不成立。偶尔成立，是在apk进程调用的。
+  if (!(current_value & private_handle_t::LOCK_STATE_MAPPED)) { 
+    err = gralloc_map(module, handle, vaddr);
+  }
+  *vaddr = (void*)hnd->base; 
+}
+
+
+这个函数在surfaceflinger 和 apk里面都有调用到
+
+gralloc_lock 里面有 *vaddr = (void*)hnd->base;  
+gralloc_map  里面有 *vaddr = (void*)hnd->base;
+lock里面的不能删除，可能是因为调用 gralloc_map 的if不一定进入。
+gralloc_map: mappedAddress = mmap(0, size, ..., hnd->fd, 0);
+
+cat proc/1385(apk)/fd/ 见 42 44 两设备是 pmem，在所有打开pmem的地方加打印没有发现调用
+其实 apk进程通过binder取得 /dev/pmem设备的描述符 hnd->fd （在binder驱动中打开设备）
+
+./Parcel.cpp:status_t Parcel::writeFileDescriptor(int fd)
+在binder的内核模块 binder_transaction 函数中，我们可以看到
+case BINDER_TYPE_FD:
+这里如果是文件描述符，就在目标进程中重新打开同一个文件
+
+
+在SkBitmap::HeapAllocator::allocPixelRef 加打印，显示这个分配函数也是surfaceflinger 调用的。
+SkMallocPixelRef::~SkMallocPixelRef() 里面释放这个空间。
+
+应用程序运行的时候，SkBitmap内存几乎是分配后用完就释放。屏幕上看到的是经surfaceflinger 合成后到fb的结果。
+中间过程不会一直占用内存。
+
+
+动态库也可以在函数里面打印函数地址，比如我在copybit.cpp里面加
+LOGI("%x",tde_copy); 可以打印tde_copy函数的地址
+
+
+20120119
+skia不用硬加速的一个原因：硬加速要求所有Skbitmap 的buffer都是物理连续，这很难保证
+
+---------------------------------
+
+1 目录拓扑结构
+  frameworks/base/graphics 基本是对 Skia的封装 里面有大量的 private static native int
+  frameworks/base/core/jni/android/graphics 连接java graphics 和 Skia
+
+  这里还包括 surface 系统 surface java代码里面的native调用 
+      frameworks/base/libs/surfaceflinger
+      frameworks/base/libs/surfaceflinger_client
+       
+
+2 libui.so 包含：
+  FramebufferNativeWindow.cpp
+  GraphicBuffer.cpp 
+  GraphicBufferMapper.cpp
+  GraphicBufferAllocator.cpp
+  PixelFormat.cpp
+  Region.cpp
+  Rect.cpp
+  //Overlay.cpp  ICS 没有了。
+  主要是与 fb 通讯
+
+4.0版本去掉overlay，由 HWComposer 实现
+
+ 都是在这里打开图形驱动的so的比如：
+ overlay.cpp : hw_get_module(OVERLAY_HARDWARE_MODULE_ID, &module)
+ GraphicBufferAllocator.cpp : hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module)
+ GraphicBufferMapper.cpp    : hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module)
+ FramebufferNativeWindow.cpp : hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module)
+ 后3个怎么都调用同一个 so 啊
+
+3 韩超书：
+  FramebufferNativeWindow是gralloc.so 的主要调用者。Android通常使用fb作为显示，但是使用gralloc也可以不用framebuffer设备
+  ( NXP 就没有用fb设备，而用pvr opengl )。android源码中的默认 gralloc 仍然使用了 fb。
+
+
+4 突然想到：现在由于 fb 的bug 导致vpmfb里面多了一个1080p的buffer 其实可以模仿MSM里面 fb的做法
+  开一个 720p的 一个 1080p的 然后用 BLIT 拷贝 。这样android 认为是单buffer， 可以节省进10M内存 
+  不行，nxp 的blit+stretch 太慢了，不如flip 效果好！
+
+5 Overlay 没有java部分，只有本地调用
+
+6 OpengL:在java层使用java标准包作为接口api
+   两个包
+  android.opengl
+  javax.microedition.khronos.opengles  （为了实现OpenGl标准化，使用java标准包）
+  在:frameworks/base/opengl/java/javax/microedition/khronos
+
+  framework/base/opengl
+
+7 frameworks/base/core/jni/android/graphics/Canvas.cpp
+  这里只定义了 class SkCanvasGlue 
+  这里跟 OpenGL 产生了联系     
+  static SkCanvas* initGL(JNIEnv* env, jobject) {
+        return new SkGLCanvas; // Sk GL Canvas
+   }
+
+  调用处为：　Canvas.java
+  
+    /**
+     * Construct a canvas with the specified gl context. All drawing through
+     * this canvas will be redirected to OpenGL. Note: some features may not
+     * be supported in this mode (e.g. some GL implementations may not support
+     * antialiasing or certain effects like ColorMatrix or certain Xfermodes).
+     * However, no exception will be thrown in those cases.
+     * 
+     * <p>The initial target density of the canvas is the same as the initial
+     * density of bitmaps as per {@link Bitmap#getDensity() Bitmap.getDensity()}.
+     */
+    public Canvas(GL gl) {
+        mNativeCanvas = initGL();
+        mGL = gl;
+        mDensity = Bitmap.getDefaultDensity();
+    }
+
+    /**
+     * Return the GL object associated with this canvas, or null if it is not
+     * backed by GL.
+     */
+    public GL getGL() {
+        return mGL;
+    }
+
+
+    /**
+     * Construct a canvas with the specified bitmap to draw into. The bitmap
+     * must be mutable.
+     * 
+     * <p>The initial target density of the canvas is the same as the given
+     * bitmap's density.
+     *
+     * @param bitmap Specifies a mutable bitmap for the canvas to draw into.
+     */
+    public Canvas(Bitmap bitmap) {
+        if (!bitmap.isMutable()) {
+            throw new IllegalStateException(
+                            "Immutable bitmap passed to Canvas constructor");
+        }
+        throwIfRecycled(bitmap);
+        mNativeCanvas = initRaster(bitmap.ni());
+        mBitmap = bitmap;
+        mDensity = bitmap.mDensity;
+    }
+
+//没有参数的构造函数
+    /**
+     * Construct an empty raster canvas. Use setBitmap() to specify a bitmap to
+     * draw into.  The initial target density is {@link Bitmap#DENSITY_NONE};
+     * this will typically be replaced when a target bitmap is set for the
+     * canvas.
+     */
+    public Canvas() {
+        // 0 means no native bitmap
+        mNativeCanvas = initRaster(0);
+    }
+
+可见，创建Canvas的时候，可以用Bitmap 还可以　GL
+
+
+
+
+【tip】在java中类名.this得到的是什么?这种用法应该只有在内部类，或者匿名类（匿名类应该也是一种内部类）中使用有意义，我懂的
+
+“类名.class" 怎么理解
+在虚拟机当中存在Class这个类
+其他的类的的名称加上.class（即类名.class）是这个类的一个对象。当我们需要使用这个类的时候可以用class的函数通过类名.class来加载这个类或者直接通过使用这个类来让虚拟机加载你的类.
+
+EGLDisplay eglGetDisplay(NativeDisplayType display)
+{
+    EGLDisplay dpy = EGLDisplay(uintptr_t(display) + 1LU); //这是强制类型转换不是函数调用
+}
+
+
+typedef void *EGLSurface;  //怎么只是个void*呢？
+
+
+/* This class represents the basic building block for user interface components.
+A View occupies a rectangular area on the screen and is responsible for drawing and
+event handling. View is the base class for widgets, which are used to create interactive UI 
+components (buttons, text fields, etc.)
+
+The basic cycle of a view is as follows:
+
+An event comes in and is dispatched to the appropriate view. The view handles the event and 
+notifies any listeners. If in the course of processing the event,
+the view's bounds may need to be changed, the view will call requestLayout()
+
+Similarly, if in the course of processing the event the view's appearance
+may need to be changed, the view will call invalidate() If either requestLayout() or invalidate() 
+were called, the framework will take care of measuring, laying out, and drawing the tree as appropriate.
+
+Note: The entire view tree is single threaded. You must always be on the UI thread when calling any 
+method on any view.
+If you are doing work on other threads and want to update the state of a view from that thread, you 
+should use a Handler
+
+*/
+
+public class View{          // ***** View 就是 minigui中的 window 概念
+
+/**
+* Invalidate the whole view. If the view is visible, onDraw will
+* be called at some point in the future. This must be called from a
+* UI thread. To call from a non-UI thread, call postInvalidate().
+*/
+public void invalidate()  // 看android源码里面 Arc 那个demo
+{
+}
+
+    /**
+     * Mark the the area defined by dirty as needing to be drawn. If the view is
+     * visible, onDraw will be called at some point in the future.
+     * This must be called from a UI thread. To call from a non-UI thread, call
+     * postInvalidate().
+     *
+     * WARNING: This method is destructive to dirty.
+     * @param dirty the rectangle representing the bounds of the dirty region
+     */
+public void invalidate(Rect dirty)
+{}
+
+    /**
+     * Cause an invalidate to happen on a subsequent cycle through the event loop.
+     * Use this to invalidate the View from a non-UI thread. //在非UI线程中操作(minigui基础)
+     *
+     * @see #invalidate()
+     */
+    public void postInvalidate() {
+    }
+
+};
+
+
+
+16 关于Activity
+
+class Activity {
+
+   View mDecor = null;  //Activity类里没有实例化mDecor  ‘deikc  decoration 装修
+   Window mWindow;  // AAA
+   mWindow = PolicyManager.makeNewWindow(this);
+
+    public Window getWindow() {
+        return mWindow;
+    }
+    public void setContentView(int layoutResID) {
+        getWindow().setContentView(layoutResID);
+    }
+}
+
+[20111229] 注意，getWindow 是activity实现的一个函数 直接返回mWindow
+
+class ActivityThread {
+
+View decor = r.window.getDecorView(); // BBB
+
+//这里将之前 setContentView 时构建的DecorView传给Activity
+a.mDecor = decor; //这里实例化Activity的View
+
+}
+
+//上面BBB处  MidWindow.java中
+    public final View getDecorView() {
+        if (mDecor == null) {
+            installDecor();  //与window.setContentView都调用这个函数
+        }
+        return mDecor;
+    }
+
+
+注意：Decor View是Activity中所有View的根
+
+
+Activity是Android应用程序的载体，就像VC中的 App类
+Window是一个抽象类，具体在PhoneWindow.java中实现
+当我们调用Activity的setContentView方法的时候，实际上是调用Window对象的setContentView方法，所以我们可以看出Activity绘制完全交给Window对象处理
+Activity聚合了一个Window对象。 可能调用 PhoneWindow.java 或者 MidWindow.java 里面的 setContentView  ,此函数调用 installDecor
+看看此函数实现：
+
+void installDecor() {
+        if (mDecor == null) {
+            mDecor = generateDecor(); // 创建一个 DecorView
+            mDecor.setIsRootNamespace(true);
+        }
+}
+
+class DecorView extends FrameLayout { //20120215 注意decorview是layout ！
+
+}
+
+class FrameLayout extends ViewGroup {
+
+}
+
+class ViewGroup extends View {
+
+}
+
+DecorView 是所有窗口的根View，我们在Activity中调用setContentView 就是放到DecorView中
+类聚合关系：
+Activity->Window->DecorView
+
+Activity被创建后，他的attach 方法会将Activity添加到ActivityThread当中 
+attach方法中执行： 
+mWindow = PolicyManager.makeNewWindow(this);
+创建Window对象 最后其实就是调用  return new PhoneWindow(context);
+
+Window聚合了DocerView，准确的说应该是PhoneWindow类，Window只是个抽象类。用户调用setContentView的时候把一颗已经实例化的View树扔给DocerView
+SetContentView->installDecor->generateDecor直接new了一个DecorView对象
+
+DecorView是PhoneWindow的一个内部类，他默认会包含一个灰色标题栏，然后在标题栏下面会包含一个空白区域来当作setContentView时候放置用户View
+
+DecorView创建后，调用
+mContentParent.addView()   将用户的View添加到DecorView中
+
+看看MidWindow中 setContentView的实现
+    @Override
+    public void setContentView(int layoutResID) {
+        if (mContentParent == null) {
+            installDecor();
+        } else {
+            mContentParent.removeAllViews();
+        }
+        mLayoutInflater.inflate(layoutResID, mContentParent);
+        final Callback cb = getCallback();
+        if (cb != null) {
+            cb.onContentChanged();
+        }
+    }
+
+    @Override
+    public void setContentView(View view) {
+        setContentView(view, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT));
+    }
+
+    @Override
+    public void setContentView(View view, ViewGroup.LayoutParams params) {
+        if (mContentParent == null) {
+            installDecor();
+        } else {
+            mContentParent.removeAllViews();
+        }
+        mContentParent.addView(view, params);
+        final Callback cb = getCallback();
+        if (cb != null) {
+            cb.onContentChanged();
+        }
+    }
+
+
+17 
+PolicyManager 是什么呢？  代码只有几十行
+
+class PolicyManager {
+    private static final String POLICY_IMPL_CLASS_NAME =
+        "com.android.internal.policy.impl.Policy";
+
+    public static Window makeNewWindow(Context context) {
+        return sPolicy.makeNewWindow(context);
+    }
+}
+
+——————————————————————————————————————
+class MidWindow extends Window{
+    // This is the top-level view of the window, containing the window decor.
+    private DecorView mDecor;
+
+    // This is the view in which the window contents are placed. It is either
+    // mDecor itself, or a child of mDecor where the contents go.
+    private ViewGroup mContentParent;
+
+}
+
+Policy.java 在哪里？
+
+./frameworks/policies/base/phone/com/android/internal/policy/impl/Policy.java
+./frameworks/policies/base/mid/com/android/internal/policy/impl/Policy.java
+
+用的是哪个呢？下面是mid中的实现
+
+package com.android.internal.policy.impl; //通PolicyManager中的String
+
+class Policy implements IPolicy {
+
+    public MidWindow makeNewWindow(Context context) {
+        return new MidWindow(context);
+    }
+
+    public MidLayoutInflater makeNewLayoutInflater(Context context) {
+        return new MidLayoutInflater(context);
+    }
+
+    public MidWindowManager makeNewWindowManager() {
+        return new MidWindowManager();
+    }
+
+}
+
+最终system/framework 里面有 android.policy.jar  就是frameworks/policies/base/下 mid 或者 phone 编译生成的
+
+MidWindow.java 中
+class MidWindow extends Window { //class Window 是抽象类
+
+}
+
+
+15 Java 类的实例化必须new，直接定义相当于类指针
+
+Java舍弃了C ++语言中容易引起错误的指针（以引用取代）、多重继承（以接口取代）等特性
+（接口为什么可以取代多重继承， JAVA用接口间接实现多继承（看来多重继承只是interface的一个应用而已））
+接口最重要的功能就是多态性 ？！
+
+THINK IN JAVA： 
+有关联的类A与类B的关系有包含与属于两种。 
+如果是A包含B就在B类中用实例化一个A类的对象来实现。 
+如果是B属于A则通过B类继承A类来实现。 
+
+MyInterface是一个接口，直接使用new关键字肯定要报错的
+
+接口不能被实例化
+public interface Test { 
+    public void doIt(); 
+} 
+语句：Test Tone = new Test();就是错的
+
+
+Test Tone = new Test(){ 
+  public void doIt(){ 
+      System.out.print("--------"); 
+   } 
+}; 就可以 实际上new了一个匿名内部类 ，而且这个匿名内部类 实现了Test接口
+
+接口式的匿名内部类
+
+
+*****
+关于java抽象类和接口
+抽象类和接口具有相似性，甚至可以互相替换
+某种意义上说，接口是一种特殊形式的抽象类
+
+
+仔细研究一下 android中对线程的 C++ 封装 
+
+Reports of my death are greatly exaggerated）。
+
+
+
+18  关于LinearLayout 设置背景  安广界面大的背景就是一张1280*720的图片 
+
+class LinearLayout extends ViewGroup{
+}
+
+class ViewGroup extends View {
+}
+
+class View{
+public void setBackgroundColor(int color)
+public void setBackgroundResource(int resid)
+public void setBackgroundDrawable(Drawable d)
+}
+
+问题：彭辉查出代码在Activity的onCreate里面载入大量图片，应该在onResume里面载入 （理由？！）
+
+
+
+public interface ViewParent {
+
+}
+
+/*The top of a view hierarchy, implementing the needed protocol between View and the WindowManager. */
+class ViewRoot extends Handler implements ViewParent {
+
+}
+
+class Application {
+
+}
+
+
+19 
+A Handler allows you to send and process Message and Runnable objects associated with a thread's MessageQueue.
+Each Handler instance is associated with a single thread and that thread's message queue 
+
+
+
+20 
+class FrameLayout extends ViewGroup    帧布局  api11之后支持 lass LinearLayout extends ViewGroup   线性布局
+class TableLayout extends LinearLayout 表格布局
+
+线性布局是adioGroup, TabWidget, TableLayout, TableRow, ZoomControls的父类
+
+abstract class ViewGroup extends View implements ViewParent, ViewManager { //一个抽象类
+}
+
+public interface ViewParent {
+
+}
+
+A ViewGroup is a special view that can contain other views
+The view group is the base class for layouts and views containers
+
+21 java语法 
+接口与抽象类一样都是用于定义多个类的共同属性，但是比抽象类概念更深入一层
+是一个纯抽象类，只提供形式，不提供实现，也可以包含数据成员但默认为 final static
+是个常量，不能更改的。
+
+接口允许我们在看起来不相干的对象之间定义共同行为
+在UML中，实现接口用带有空三角的虚线表示
+interface <------ Car
+
+interface 接口名 [extends 父接口名] {
+
+}
+接口的数据成员一定要赋初值
+
+### 对象转型
+对象可以被转型为其所属类实现的接口类型 (原来如此)
+例如 
+interface dor
+class Car implement dor
+
+Car a = new Car();
+dor b = a;  //对象转型为接口类型
+
+可以生明接口类型的变量，并用他来访问对象
+
+
+
+
+22  关于Dialog
+
+class Dialog {
+
+    Window mWindow;  //这2个定义跟Activity及其相似  这说明Dialog类 类似于一个Activity
+    View mDecor;
+
+    setContentView();  //这个函数在Activity中也有  
+}
+
+一般不会直接实例化这个类，而是使用子类 AlertDialog  ProgressDialog  DataPickerDialog  TimePickerDialog
+
+class AlertDialog extends Dialog implements DialogInterface {
+
+}
+
+class ProgressDialog extends AlertDialog {
+
+}
+
+public class DatePickerDialog extends AlertDialog implements OnClickListener, 
+        OnDateChangedListener {
+
+}
+
+
+
+###Create a Custom Dialog###
+new 一个 Dialog类实例 然后调用其 setContentView 即可个性化一个Dialog了 //慢慢体现了OO的强大
+
+### Showing a Dialog ###
+A dialog is always created and displayed as  part of an Activity
+You should normally create dialogs from within your Activity's onCreateDialog(int) callback method.
+
+
+23 关于Intent
+/* An intent is an abstract description of an operation to be performed.
+ It can be used to launch an android.app.Activity
+ */
+public class Intent implements Parcelable, Cloneable {
+
+}
+
+
+24 Context 类
+
+/**
+ * Interface to global information about an application environment.  This is
+ * an abstract class whose implementation is provided by
+ * the Android system.  It
+ * allows access to application-specific resources and classes, as well as
+ * up-calls for application-level operations such as launching activities,
+ * broadcasting and receiving intents, etc.
+ */
+
+public abstract class Context {
+
+}
+
+其与Activity的关系：
+public class ContextWrapper extends Context {
+
+}
+
+public class ContextThemeWrapper extends ContextWrapper {
+
+}
+
+public class Activity extends ContextThemeWrapper {
+
+}
+
+25 OnClickListener
+
+
+
+26
+ 
+this指的是本对象，当前编写的类实例化后所产生的对象。
+什么时候用this？ 记得大二的时候就看过java中的this，当时就不懂。
+使用this.来指向当前类的属性和方法
+
+没有任务影响,只是当你传入的参数和你类成员属性名字一样时,你就不好区分了,这时你用this可以代表当前对象的属性,没有加this代表传入参数. 
+在这个例子中，构造函数Hello中，参数s与类Hello的变量s同名，这时如果直接对s进行操作则是对参数s进行操作  （看来是为了避免冲突，如果没有冲突就可以不用this）
+用外部类的类名加上 this 引用来说明要调用的是外部类的方法 run.
+
+
+27 UI的event系统
+事情起因： 电视/广播按键快速切换  功能键 A，B，C快速按，导致的按键堆积问题。
+
+每个event对象都有发生这个事件时候的时间，在PhoneWindow.java中判断　按键事件的发生时间和当前时间的差值，达到一定长度就丢弃。　但是电视/广播就必须在activity里面单独处理
+
+
+public class KeyEvent implements Parcelable {
+    /* Retrieve the time this event occurred, */
+    public final long getEventTime() {
+        return mEventTime;
+    }
+}
+
+
+
+28 Android 虚拟机的线程就是真实linux线程。dalvic里thread.c 
+
+/* Create a thread as a result of java.lang.Thread.start(). */
+
+bool dvmCreateInterpThread(Object* threadObj, int reqStackSize)
+{
+    cc = pthread_create(&threadHandle, &threadAttr, interpThreadStart,
+            newThread);
+}
+
+在android toolbox 或 busybox的ps 无法显示线程信息，但ddms 可以，证实一个java线程对应一个真实的linux线程
+
+在dalvik源码里面可以找到完整的 从Thread.start 最终调用到 java_lang_VMThread.c 然后到 dvmCreateInterpThread 这个函数
+
+DDMS 的全称是 Dalvik Debug Monitor Service 是 Android 开发环境中的Dalvik虚拟机调试监控服务
+
+在eclipse 上启动方法：Window->Open Perspective->Other...->DDMS
+
+可以查看线程信息 （要点击 Update Threads 按钮）
+
+从中可以看出，每个apk进程 有一个main 线程  一个GC线程（ 垃圾回收线程 ）
+
+每个apk包都包含
+main
+GC 
+Signal Catcher
+JDWP
+Compiler
+Binder Thread 等线程
+
+
+java.lang.Thread 源码在dalvic虚拟机中实现的，不是如之前所想，在jdk包里面（确实不应该，因为jdk包里面的都是class 不是dex）
+
+但是，java的线程怎么就转换成了linux的线程了呢？
+
+dalvik/libcore/luni/src/main/java/java/lang 就是 java.lang 包的全部源码
+
+比如:
+public interface Runnable {
+
+    /**
+     * Starts executing the active part of the class' code. This method is
+     * called when a thread is started that has been created with a class which
+     * implements {@code Runnable}.
+     */
+    public void run();
+}
+
+
+29 
+理解一下 View的post 方法，为什么可以把一个操作提交到UI Thread
+
+Handler 又是个什么东西呢？
+
+在android.os 包里面 不再java系统包里
+
+
+ * A Handler allows you to send and process Message and Runnable
+ * objects associated with a thread's MessageQueue.
+
+public class Handler {
+
+     /*
+     * Causes the Runnable r to be added to the message queue.
+     * The runnable will be run on the thread to which this handler is 
+     * attached. 
+      */
+
+    public final boolean post(Runnable r)
+    {
+       return  sendMessageDelayed(getPostMessage(r), 0);
+    }
+
+       private final Message getPostMessage(Runnable r) {
+        Message m = Message.obtain();  //可以用这种方法实例化  看下面就会明白
+        m.callback = r;
+        return m;
+    }
+
+}
+
+
+android.os 包
+
+Defines a message containing a description and arbitrary data object that can be
+ * sent to a Handler. 
+
+public final class Message implements Parcelable {
+
+    /**
+     * Return a new Message instance from the global pool. Allows us to
+     * avoid allocating new objects in many cases.
+     */
+   public static Message obtain() {
+   
+   }
+
+}
+
+/*
+ * Low-level class holding the list of messages to be dispatched by a
+ * {@link Looper}.  Messages are not added directly to a MessageQueue,
+ * but rather through {@link Handler} objects associated with the Looper.
+ */
+
+public class MessageQueue {
+
+}
+
+实际相当于发送一函数指针
+
+/**
+ * Represents a command that can be executed. Often used to run code in a
+ * different Thread.//经常用于线程 但是不局限于，比如post(runnable) 就相当于发一个函数指针过去
+ */
+public interface Runnable {
+
+    /**
+     * Starts executing the active part of the class' code. This method is
+     * called when a thread is started that has been created with a class which
+     * implements {@code Runnable}.
+     */
+    public void run();
+}
+
+我的理解，Runnable 接口就相当于C中的函数指针的概念
+
+
+
+
+30
+注意，这个操作不是鼠标，而是database的位置，叫做游标
+ 
+public interface Cursor {
+}
+
+
+getContentResolver 方法 属于Context 类
+
+
+/**
+ * This class provides applications access to the content model.
+ */
+
+public abstract class ContentResolver {
+
+}
+
+
+public abstract class ContentProvider implements ComponentCallbacks {
+
+}
+
+
+31 关于Drawable 和 Canvas  的关系？！  什么是Drawable
+
+
+/* A Drawable is a general abstraction for "something that can be drawn."  Most
+ * often you will deal with Drawable as the type of resource retrieved for
+ * drawing things to the screen; the Drawable class provides a generic API for
+ * dealing with an underlying visual resource that may take a variety of forms.
+ * Unlike a {@link android.view.View}, a Drawable does not have any facility to
+ * receive events or otherwise interact with the user.
+*/
+
+public abstract class Drawable {
+    /**
+     * Draw in its bounds (set via setBounds) respecting optional effects such
+     * as alpha (set via setAlpha) and color filter (set via setColorFilter).
+     *
+     * @param canvas The canvas to draw into
+     */
+    public abstract void draw(Canvas canvas);   //Drawable 要画到 Canvas上
+
+}
+
+下面的Drawable扩展类都要重写 draw 方法
+
+public class BitmapDrawable extends Drawable {
+
+private Bitmap mBitmap;  
+
+    @Override
+    public void draw(Canvas canvas) {
+           ....
+          canvas.drawBitmap()
+           ....
+    }
+}
+//属于Drawable 包含Bitmap
+
+
+在res文件夹中，有 drawable drawable-hdpi drawable-ldpi drawable-mdpi 多个目录  这个drawable跟 Drawable类有关系吗？
+
+//无处不体现面向对象的思想，就连一个颜色都是一个Drawable
+//A specialized Drawable that fills the Canvas with a specified color with respect to the clip region. （android也有剪切区域的！）
+// 看来，drawable跟canvas 根本就不是一类东西
+public class ColorDrawable extends Drawable {
+
+    @Override
+    public void draw(Canvas canvas) {
+        canvas.drawColor(mState.mUseColor); //就是调用canvas的drawColor  那为什么不直接用canvas呢？
+    }
+
+}
+
+###可以看出 Drawable 是对Canvas的高级封装  
+
+
+/**
+ * The Canvas class holds the "draw" calls. To draw something, you need
+ * 4 basic components: A Bitmap to hold the pixels, a Canvas to host
+ * the draw calls (writing into the bitmap), a drawing primitive (e.g. Rect,
+ * Path, text, Bitmap), and a paint (to describe the colors and styles for the
+ * drawing).  Canvas处理所有的 画 操作
+ */
+
+public class Canvas {
+
+}
+
+Canvas 里面有了 drawLine  drawPoint等
+
+
+32  Java基础知识
+一个类里面含有内部接口，那么这个类可以实例化吗？
+类含有内部接口，继承这个类的时候不用实现这个接口
+
+
+final  关键字
+根据程序上下文环境，Java关键字final有“这是无法改变的”或者“终态的”含义，它可以修饰非抽象类、非抽象类成员方法和变量。你可能出于两种理解而需要阻止改变：设计或效率。
+final类不能被继承，没有子类，final类中的方法默认是final的。
+final方法不能被子类的方法覆盖，但可以被继承。
+final成员变量表示常量，只能被赋值一次，赋值后值不再改变。
+final不能用于修饰构造方法。
+注意：父类的private成员方法是不能被子类方法覆盖的，因此private类型的方法默认是final类型的。 
+
+2、final方法
+如果一个类不允许其子类覆盖某个方法，则可以把这个方法声明为final方法。
+使用final方法的原因有二：
+第一、把方法锁定，防止任何继承类修改它的意义和实现。
+第二、高效。编译器在遇到调用final方法时候会转入内嵌机制，大大提高执行效率。
+
+
+
+33 android framework中充斥着大量的 Callback 接口（interface） 到底是什么结构呢？
+就比如  Drawable.Callback 接口。
+
+
+看看，View要实现Drawable.Callback接口
+public class View implements Drawable.Callback {
+   
+}
+
+不明白啊！  为什么要Callback！ Drawable的Callback到底是什么意思？！
+
+什么叫做 animated drawables ？ 
+
+
+public class DrawableContainer extends Drawable implements Drawable.Callback {  //Callback是干什么的呢？
+
+}
+
+public class AnimationDrawable extends DrawableContainer {
+
+}
+
+33 关于Drawable 
+Android offers a custom 2D graphics library for drawing shapes and images.  the android.graphics.drawable package 
+包括 Drawable 基类， BitmapDrawable 等
+
+
+回调函数就是一个通过函数指针调用的函数
+作为参数传递给另一个函数，当这个指针被用为调用它所指向的函数时，我们就说这是回调函数
+
+34 java体会：
+View实现了 Drawable.Callback接口，  ClipDrawable 也实现了 Drawable.Callback 
+
+结果调用 ClipDrawable 的 invalidateDrawable 就调用到了 View里面的 invalidateDrawable 所以叫做Callbake,从Drawable 回调到 View里面
+
+
+java 用 interface 实现类似C语言的Callback机制   
+
+java中回调的实现，是通过接口的方式实现的。  【其实，在C++中，用虚函数也可以实现类似 Callback的效果，本质都是一样的】
+
+定义一个简单接口，并在该接口中声明我们要调用的方法。
+
+用interface 实现 callback
+
+public interface RequestResults {
+     public void requestFailed(String message);
+     public void requestSucceeded(String xml);
+}
+
+
+public class TestMe implements RequestResults {
+    public TestMe() {
+        ClassB b = new ClassB(this);
+    }
+
+    public void requestFailed(String message) {
+        // TODO Auto-generated method stub
+    }
+
+    public void requestSucceeded(String xml) {
+       // TODO Auto-generated method stub
+    }
+}
+
+  public class ClassB {
+    RequestResults results;
+
+    public ClassB(RequestResults results) {
+        this.results = results;
+    }
+}
+
+但是，android中 View 实现了 Drawable.Callback   ClipDrawable 也实现了Drawable.Callback 。怎么感觉会递归呢？不对ClipDrawable里面的 setCallback 不是自己这个Drawable 而是其他的 Drawable。注意，所有 extends Drawable implements Drawable.Callback 的 Drawable 都会再管理另外的Drawable
+
+比如 public class ClipDrawable extends Drawable implements Drawable.Callback
+/* A Drawable that clips another Drawable based on this Drawable's current level value. */
+
+所以这里实现的Callback 的 setCallback不是本Drawable 否则就真的递归的。是不是能实现递归调用的效果呢？ 确实实现了一个连续回调的效果
+
+
+35
+View 的构造函数接受 Context 参数。我们经常有2种 Contest：Activity，Application（这2个类都是由Context类继承而来）
+
+
+
+36 xml 里面的 <selector>  <animated-rotate>
+
+Android通过selector改变界面状态
+
+
+37 王永杰,把apk打开动画 和 activity切换动画都去掉了。
+
+38 20120216 gralloc的逻辑总觉的是在绕圈。
+
+那么，Skbitmap里面分配的内存，怎么跟gralloc里面的pmem分配的内存结合呢？
+
+
+39 surfaceflinger_client/surface.cpp 
+void Surface::init()
+{
+mUsage = GRALLOC_USAGE_HW_RENDER;
+}
+
+surfaceflinger里面的surface 跟java空间的surface不是一回事。
+
+
+40 20120217
+每个apk进程会调用skia库函数，应该是通过共享内存与system server 进程传递图形数据的
+
+
+20120217 21:01
+思考：如果系统没有PMEM驱动会怎样呢？
+显然没有PMEM也就不能使用2D加速函数了，那么surfaceflinger使用OpenGL硬加速不用2D加速行吗？就像nxp平台的？
+
+private_handle_t 继承 native_handle 在 gralloc_alloc_buffer里面创建。
+
+android 2.2 surfaceflinger 驻留在system_server 进程，4.0 有独立的 system/bin/serfaceflinger 进程
+
+海思平台在system_service里面注册了一个 :MemService::instantiate() 管理内存分配
+system_server里面去掉memservice 就会打印 I/ServiceManager( 1266): Waiting for sevice MemService...
+
+3 SufaceFlinger主要功能是：
+
+1） 将Layers （Surfaces） 内容的刷新到屏幕上
+2） 维持Layer的Zorder序列，并对Layer最终输出做出裁剪计算。
+3） 响应Client要求，创建Layer与客户端的Surface建立连接
+4） 接收Client要求，修改Layer属性（输出大小，Alpha等设定）
+
+typedef struct alloc_device_t {
+    struct hw_device_t common;
+    int (*alloc)(...);
+    int (*free)(...);
+} alloc_device_t;
+
+
+private_handle_t 继承了 native_handle   而
+typedef struct {
+    int version;        /* sizeof(native_handle_t) */
+    int numFds;         /* number of file-descriptors at &data[0] */
+    int numInts;        /* number of ints at &data[numFds] */
+    int data[0];        /* numFds + numInts ints */  这个难道就是buffer？！
+} native_handle_t;
+
+
+-------------------WebUI视频透明方法--------------
+20111228  15:22  silence
+WebUI 实现DVB，区域透明是个问题，可以借鉴原来DVB区域透明的方法：
+
+android:background="#00000000" 
+
+ColorDrawable colorDrawable = new ColorDrawable(Color.argb(0, 0, 0, 0));
+      getWindow().setBackgroundDrawable(colorDrawable); 使得整个window先透明
+
+这个是在activity里面调用的，那么activity可以访问 getWindow函数？
+
+
+系统解析了xml里面的 android:background 后，要做怎样的处理呢？
+setContentView 解析了xml layout文件，然后又是怎么处理的呢？
+没有找到在哪里解析的  android:background （系统中有好几个xml解析器，不知道用的哪个）
+
+在development.android.com/reference/android/view/view.html
+关于View控件的说明：
+XML Attributes
+Attribute Name       Related Method               Description
+android:alpha        setAlpha(float)              alpha property of the view, as a value between 0 (completely transparent) and 1 (completely opaque). 
+android:background   setBackgroundResource(int)   
+
+
+丁然想出来一个方法（要充分利用资源）
+继承一个WebView,重载onDraw，调用canvas.clipRect(Rect rect, Region.Op op) 抠掉一个区域 （clip 剪切 使系统不画这个区域） 并且Region.Op 必须是XOR 这个区域才不会被刷新。   clip区域，应该是要画的区域，而不是不画的区域，所以要XOR
+
+常磊：网页上描述区域透明 用 div 标签描述（不明白）
+
+public void setBackgroundResource (int resid)
+
+Set the background to a given resource. The resource should refer to a Drawable object or 0 to remove the background.
+Related XML Attributes
+
+android:background
+
+A drawable to use as the background. This can be either a reference to a full drawable resource (such as a PNG image, 9-patch, XML state list description, etc), or a solid color such as "#ff000000" (black).
+May be a reference to another resource, in the form "@[+][package:]type:name" or to a theme attribute in the form "?[package:][type:]name".
+May be a color value, in the form of "#rgb", "#argb", "#rrggbb", or "#aarrggbb".
+This corresponds to the global attribute resource symbol background.
+Related Methods
+
+setBackgroundResource(int)
+
+这个xml 属性对应这个函数，那么是怎么调用到的呢？  这个设置的是 view 的 background 而不是整个窗口的
+
+在View.java开头看到view支持的attr属性：
+ * @attr ref android.R.styleable#View_background
+ * @attr ref android.R.styleable#View_clickable
+ * @attr ref android.R.styleable#View_contentDescription
+ * @attr ref android.R.styleable#View_drawingCacheQuality
+ * @attr ref android.R.styleable#View_duplicateParentState
+ * @attr ref android.R.styleable#View_id
+ * @attr ref android.R.styleable#View_fadingEdge
+ * @attr ref android.R.styleable#View_fadingEdgeLength
+。。。。
+
+public View (Context context, AttributeSet attrs, int defStyle)  其中的一个 constructor
+
+attrs: the attributes of the XML tag that is inflating the view
+
+
+case com.android.internal.R.styleable.View_background:   com包在哪？ 这不是一个包
+xxxx
+这个好像是编译生成的类包
+
+那这个又是什么类呢？
+
+【如何使用com.android.internal包里面的类？】 -com还是一个包啊
+com.android.internal里面的类是Android的内部类，在ADK里是不可以调用用的，但我在做了一个项目需要用到com.android.internal里的类。据闻有一些高手能用到Android的内部类
+
+这种就是没有公开的class,有@hide标志的。
+如果用到这种类，有两种办法，
+1.把你的应用放在android源码树下编译。可以直接import进来的。
+2.把源码树中用到的这种类的@hide去掉，重新编译sdk，在得到的sdk环境下不需要源码树也可以编译你的应用
+用到这种类的应用不保证向后兼容，因为这些类随着android版本更新，可能会发生变化或者消失。
+
+framework/base 下面有很多以 com.开头的包，为什么在development 参考中没有这些保
+framework/base/core/java/com/android/internal 下面都是内部类
+
+[Android 机制] com.android.internal.R和android.R有什么区别么？
+
+
+com.开头的包都是隐藏的，运行环境会有，但是开发环境你找不到的，就是系统会用它，但是不能显示的告诉你去用
+android.R 这个就是你对应开发环境中的，让你用的，位置：对应的平台下/data/res/
+com，位置：源码framework/core/java/com/android/internal/下面
+
+./widget/LockPatternUtils.java:import com.android.internal.R;  但是这个包在哪里呢？生成的？
+
+
+com.android.internal.R.styleable在源代码中的 frameworks/base/core/res/res/values 中的styles.xml   themes.xml  attrs.xml  【包 怎么可能是 xml 文件呢？】
+
+20111228：证实，这个包确实是内部编译生成的
+out/target/common/R/com/android/internal/R.java
+
+package com.android.internal;
+public final class R {
+    public static final class styleable {
+        public static final int View_background = 12;
+
+
+那 R.java 这个文件又是怎么生成的呢？靠什么生成？
+
+在framework/base 也只能搜索到：
+grep View_background . -R
+./core/java/android/view/View.java: * @attr ref android.R.styleable#View_background
+./core/java/android/view/View.java:                case com.android.internal.R.styleable.View_background:
+./core/java/android/view/View.java:     * @attr ref android.R.styleable#View_background
+所以不是这里生成的，而是
+
+./core/res/res/values/attrs.xml  
+
+    <declare-styleable name="View">
+        <!-- A drawable to use as the background.  This can be either a reference
+             to a full drawable resource (such as a PNG image, 9-patch,
+             XML state list description, etc), or a solid color such as "#ff000000"
+            (black). -->
+        <attr name="background" format="reference|color" />  //只不过 name="background 改成了View_background
+             //因为这行 xml的上级是 View ^_^
+
+
+
+View.java 里面：
+
+        final int N = a.getIndexCount();
+        for (int i = 0; i < N; i++) {
+            int attr = a.getIndex(i);
+            switch (attr) {    // 循环检测
+                case com.android.internal.R.styleable.View_background:
+//注意这种写法，没有import com.android.internal  而是直接写了全称。
+                    background = a.getDrawable(attr);
+                    break;
+                case com.android.internal.R.styleable.View_padding:
+                    padding = a.getDimensionPixelSize(attr, -1);
+                    break;
+                  
+
+        if (background != null) {  //所以，xml里面检测到 android:background  就会调用这里了
+            setBackgroundDrawable(background);
+        }
+
+
+
+
+有2个 setBackgroundDrawable 函数
+1 是 View里面的
+2 是 public abstract class Window {
+public abstract void setBackgroundDrawable (Drawable drawable)
+Since: API Level 1
+Change the background of this window to a custom Drawable. Setting the background to null will make the window be opaque. To make the window transparent, you can use an empty drawable (for instance a ColorDrawable with the color 0 or the system drawable android:drawable/empty.)
+//但是，我的理解，这个透明应该是窗口透明，但是如果窗口后面还有窗口，应该做叠加，而不是一透到底啊！透到了视频层。
+}
+
+5 系统自带的apk  clock  背景半透明，把桌面都透过来了，是怎么做到的呢？
+
+6 20120221
+吴昊：Home apk 用上面提到的方法背景不能全透明，但是普通apk就可以。经查王永杰在20110518 对 framework做过修改
+把 ImageWallpaper 里 drawFrame注释掉，就不会画默认的背景。
+
+关于设置apk背景透明。
+
+设置activity透明的方法：
+getWindow().setBackgroundDrawable(colorDrawable)  //设置这个acvitity附着的window的背景为透明
+
+class View{
+public void setBackgroundColor(int color)
+public void setBackgroundResource(int resid)
+public void setBackgroundDrawable(Drawable d)
+}
+
+<LinearLayout android:background="#00000000"  
+这2处，那里管图形层的透明呢？
+
+
+20120222
+遗留问题：一个apk一个surface还是一个activity一个surface。
+实际是一个 viewroot 一个surface，那么谁又拥有一个viewroot？
+
+ViewRoot不是一个 view  而是一个单独的类。在这里 new Surface()
+
+还有是一个activity一个window还是一个apk一个呢？
+sdk里面有一个Hierarchy Viewer 双击运行。那么他可以连接真实机器吗？
+
+--------------------------------------
+使用 Hierarchy View观察模拟器
+一层层打开setting程序 会看到
+com.android.settings.Settings
+com.android.settings.SubSettings
+com.android.settings.SubSettings
+...
+
+任何一个窗口都是一个 PhoneWindow@DecorView
+
+-------------------------------------------------
+ * A ViewStub is an invisible, zero-sized View that can be used to lazily inflate
+ * layout resources at runtime.
+
+ViewStub只能Inflate一次 (什么叫做inflate)
+ViewStub是一个轻量级的View，它一个看不见的，不占布局位置，占用资源非常小的控件
+
+可以为ViewStub指定一个布局，在Inflate布局的时候，只有ViewStub会被初始化，然后当ViewStub被设置为可见的时候，或是调用
+了ViewStub.inflate()的时候，ViewStub所向的布局就会被Inflate和实例化，然后ViewStub的布局属性都会传给它所指向的布局
+
+(可是，这个是继承了View怎么会是轻量的呢 view本身就很大啊?)
+
+ViewStub组件是为了提高布局的重用性，及布局的模块化(这个解释有点意思)
+
+
+原型是char *fgets(char *s, int n, FILE *stream);  从流中读取n-1个字符，除非读完一行
+
+Loader::Loader()
+{
+    FILE* cfg = fopen("/system/lib/egl/egl.cfg", "r");
+        while (fgets(line, 256, cfg)) {  //会自动进入下一行？
+    }
+}
+
+class Vector : private VectorImpl   私有继承 VectorImpl
+
+
+4.0 Dev Tools 中有cpu使用率显示
+
+20120323 22：32 使用eclipse +虚拟机  测试apidemo apk 不能自动编译更新到虚拟机中.最后只能用源码里面的 mmm 编译 生成
+-----
+20120327 ApiDemo 可以传到平台板子实验
+
+./adb connect 192.168.100.10 (板子的ip地址)
+./adb install ApiDemo.apk (如果此时同时打开模拟器会提示，需要关闭模拟器)
+
+graphics/openglel/FrameBuffer Object 这个在模拟器上不支持，只显示红色
+在3716C 上支持 ，显示2个立方体，性能ok！
+
+20120401 用最新版本eclipes + 4.0.3模拟器 +4.0.3 Apidemo程序 可以正常编译运行 但是这个apk不能用eclipes覆盖安装提示：
+
+Re-installation failed due to different application signatures.
+You must perform a full uninstall of the application. WARNING: This will remove the application data!
+Please execute 'adb uninstall com.example.android.apis' in a shell.
+Launch canceled!
+在模拟器上先删除apidemo 再用eclipes安装即可。
+
+
+20120418 
+ics setting 可以设置闪烁刷新区域，但是华硕tf101 以及博通平台 在setting里面动鼠标只有鼠标区域刷新但是在Home动鼠标 整屏刷新，有问题！
+
+20120516 赵毅辉，在做dvb小窗口的时候，1个activity上放一个viewgroup 
+调用了 mPlayList.setBackgroundDrawable(new BitmapDrawable(application.getPlayListBg()));
+结果所有列表操作变得很慢，如果去掉背景图就很快。
+
+实践证明（赵毅辉） 用getwindow回来的window的setBackgroundDrawable 也慢
+说明android在这种情况下没有做必要的剪切，而是全部画了一下。
+
+-----------------------
+2 view的 setpadding 函数
+-----------------------
+20120813
+赵毅辉，Absseekbar控件修改得到焦点后的状态。
+public abstract class AbsSeekBar extends ProgressBar {
+}
+
+
+ViewGroup 类里面实现的ViewParent的
+focusableViewAvailable 就是 mParent.focusableViewAvailable(v);
+mParent 是ViewGroup从View那里继承来的，obviously,ViewGroup也后parent
+但是，viewgroup 的 parent 肯定还是viewgroup,那么这个函数一直向上调用（类似递归），那何时是头呢？
+系统还有一处实现了ViewParent 就是 ViewRootImpl（他就不是一个view了） ：
+
+public void focusableViewAvailable(View v) {
+   ... //真正的实现
+}
+
+The top of a view hierarchy, implementing the needed protocol between View and the WindowManager.
+
+模拟器 logcat,执行 3D的demo程序：
+D/libEGL  (   53): egl.cfg not found, using default config 【Loader::Loader()打印出来的】
+D/libEGL  (   53): loaded /system/lib/egl/libGLES_android.so
+
+加载驱动的时候，会尝试从libGLES_android.so中加载EGL、GLESV1_CM、GLESV2三个部分的函数
+
+
+D/libEGL  (  218): loaded /system/lib/egl/libGLES_android.so
+
+    /* buffer will be used as an OpenGL ES texture */
+    GRALLOC_USAGE_HW_TEXTURE      = 0x00000100
+    /* buffer will be used as an OpenGL ES render target *
+    GRALLOC_USAGE_HW_RENDER       = 0x00000200
+    /* buffer will be used by the 2D hardware blitter */
+    GRALLOC_USAGE_HW_2D           = 0x00000C00,
+    /* buffer will be used with the framebuffer device */
+    GRALLOC_USAGE_HW_FB           = 0x00001000,
+    /* mask for the software usage bit-mask */
+    GRALLOC_USAGE_HW_MASK         = 0x00001F00,
+
+   // enable pmem in that case, so our software GL can fallback to
+   // the copybit module.
+pmem不行时就try_ashmem
+
+删除硬件opengl加速，保留libGLES_android.so 系统能够启动，但非常慢
+这些函数指针是在LoadDriver时赋值，也是从libGLES_android.so中查找出GLESV1_CM和GLESV2两组函数来对其进行了赋值操作
+
+libGLES_android.so 是libagl目录生成的
+
+把system/libs/egl/libGLES_android.so 删除后的结果
+E/libEGL  (  824): eglGetDisplay:631 error 300c (EGL_BAD_PARAMETER)
+E/libEGL  (  824): eglInitialize:645 error 3008 (EGL_BAD_DISPLAY)
+
+
+===============================================================================
+20121107 关于Surface  SurfaceView  GLSurfaceView  SurfaceHolder  SurfaceTexture
+
+Surface: Surface.java 和 Surface.cpp 靠jni文件 android_view_Surface.cpp 联系
+
+Surface: Handle on to a raw buffer that is being managed by the screen compositor.
+
+获得Surface对应的显示缓冲区，
+虽然在SurfaceFlinger在创建Layer时已经为每个Layer申请了两个缓冲区，但是此时在JAVA层看不到这两个缓冲区，JAVA层要
+想在Surface上进行画图操作，必须要先把其中的一个缓冲区绑定到Canvas中，然后所有对该Canvas的画图操作最后都会画到该缓冲区内。
+
+
+public class Surface {
+    //mCanvas 在 android_view_Surface.cpp中使用: so.canvas = env->GetFieldID(clazz, "mCanvas");
+　　private Canvas mCanvas; 
+    //Create an empty surface, which will later be filled in by readFromParcel() [并未发现用readFromParcel]
+    public Surface(){
+        mCanvas = new CompatibleCanvas(); //Canvas子类 其实这个类什么都没做
+    }
+
+    public Canvas lockCanvas(Rect dirty) {
+        return lockCanvasNative(dirty);  //Native调用 android_view_Surface.cpp 的 Surface_lockCanvas
+    }
+}
+
+Surface_lockCanvas(...)
+{
+// Associate a SkCanvas object to this surface (c++层的Surface对象)
+}
+
+
+class SurfaceView extends View {
+   //双Surface
+   Surface mSurface = new Surface();    // Current surface in use
+   Surface mNewSurface = new Surface(); // New surface we are switching to
+
+   public Surface getSurface() {
+      return mSurface;
+   }
+
+   updateWindow(){
+      //操作 mSurface 与 mNewSurface 
+      mSurface.transferFrom(mNewSurface);  
+   }
+
+   SurfaceHolder mSurfaceHolder = new SurfaceHolder() { 
+      public Canvas lockCanvas() {
+          Canvas c = null;
+          ...
+          c = mSurface.lockCanvas(frame); //SurfaceHolder的lockCanvas调用Surface的lockCanvas
+          ...
+      }
+   };
+
+   public SurfaceHolder getHolder() {
+       return mSurfaceHolder;
+   }
+}
+
+public class Test extends Activity {
+   class MyView extends SurfaceView implements SurfaceHolder.Callback{ 
+      SurfaceHolder holder;
+      holder = this.getHolder();
+       
+       //SurfaceHolder.Callback 在底层Surface状态发生变化的时候通知View
+       @Override  
+        public void surfaceChanged(...) {}  
+        @Override  
+        public void surfaceCreated(SurfaceHolder holder) {  
+            new Thread(new MyThread()).start();  //启动下面的 MyThread 线程
+        }  
+        @Override  
+        public void surfaceDestroyed(...) {}  
+   }
+  
+   class MyThread implements Runnable{  //Runnable 是线程接口
+      public void run() {  
+          Canvas canvas = holder.lockCanvas(null);//获取画布  
+          canvas.drawRect(new RectF(40,60,80,80), mPaint);  
+          holder.unlockCanvasAndPost(canvas);//解锁画布，提交画好的图像         
+       }  
+   }
+}
+
+class VideoView extends SurfaceView
+class Preview extends SurfaceView
+class GLSurfaceView extends SurfaceView
+
+实例化 Surface 的有 WindowManagerService.java SurfaceView.java ViewRoot.java
+Surface的Canvas的Bitmap保存像素数据，SurfaceHolder的lockCanvas获取Canvas对象
+
+
+“swap的时间 会跟onDrawFrame的时间有关系(onDrawFrame在swap前执行)” onDrawFrame 是在 GLSurfaceView 类中定义的
+
+Android开发时，经常看到画图时推荐使用SurfaceView，而不是使用View（View也可以用来画图）
+原因有二：
+SurfaceView双buffer机制:Frontbuffer/Backbuffer，避免闪烁(与fb的filp有何关系？)
+SurfaceView允许在非UI线程中绘制
+
+这两个buffer是交替显示(flip)到界面上的 即当前看到的是front buffer的内容，如果此时界面发生变化，那么back buffer
+就会在原来的基础上把内容画好，然后front buffer与back buffer交换一下位置
+由于存在两个buffer，如果每次都把所有内容都重新画一遍则不会有什么问题，但如果每次画的内容都是一部分，那就有问题了：
+一部分、一部分地交替显示，这当然不是我们想要的。解决的办法是：每次清屏，然后把所有东西再画一遍。（ 这句话没有明白 ）
+
+看看 SurfaceView 的原始注释吧：
+One of the purposes of this class is to provide a surface in which a secondary thread can render in to the screen. 
+
+SurfaceView本来就是采用双缓冲的技术实现的，所以此处只练习View的双缓冲使用（View也可以双缓冲？！）  那么fb的flip又是在哪个层次起作用的呢？
+
+
+每个surface创建一个Canvas对象（但属性时常改变），用来管理view在surface上的绘图操作，如画点画线。每个canvas对象对应一个bitmap，存储画在surface上的内容
+每个Surface通常对应两个buffer，一个front buffer, 一个back buffer。其中，back buffer就是canvas绘图时对应的bitmap 。因此，绘画总是在back buffer上（是每个surface都有2个buffer吗/还是surfaceview 有2个surface呢？）
+
+
+“in Surface's two graphic buffers” 不对啊 Surface怎么会有2个buffer呢？
+
+
+关注一下 GlSurfaceView 里面的 createSurface。
+这里LayerBuffer的创建是在SurfaceFlinger中由SurfaceFlinger的友员类BClient调用createSurface函数new出LayBuffer对象
+关于LayerBuffer类的创建。 在Java层，我们调用Surface_init函数之后，会对应于android_view_Surface.cpp函数中的Surface_init函数，
+此函数会调用SurfaceComposerClient类的createSurface函数
+
+GraphicBufferAllocator 
+GraphicBuffer  对 surfaceflinger 提供接口 
+
+GraphicBuffer构造函数和GraphicBuffer::reallocate 调用initSize调用GraphicBufferAllocator类的alloc调用mAllocDev->alloc(是gralloc里面的pmem分配)
+GraphicBuffer::GraphicBuffer() 还有一个空壳构造函数
+
+应用层申请一个Surface，通过jni和binder调用到surfaceflinger中，最终创建一个Layer(常用)或LayerDim类。在Layer类中有一个成员变量：
+sp mBuffers[NUM_BUFFERS]; （4.0都变化了）
+Layer的成员函数SetBuffers()初始化了该数组：
+
+    for (size_t i=0 ; i<NUM_BUFFERS ; i++) {
+        mBuffers[i] = new GraphicBuffer();
+    }
+
+
+系统启动后：
+调用LayerDim::initDimmer调用buffer = new GraphicBuffer(...);
+w=1280 h=720 分配 1280x720x2 字节,这个地址在pmem驱动内存的开始位置
+然后调用了Layer::setBuffers
+{
+    for (size_t i=0 ; i<NUM_BUFFERS ; i++) { //android为每个Layer分配了两个显示缓冲，便于PageFlip
+        mBuffers[i] = new GraphicBuffer(); //无参数构造，这时没有调用gralloc的pmem分配内存
+    }
+}
+
+而是到了 Layer::requestBuffer  (4.0已经不是这样实现)
+{
+    buffer = mBuffers[index];
+    if (buffer!=0 && buffer->getStrongCount() == 1) {
+        err = buffer->reallocate(w, h, mFormat, effectiveUsage); //上面的new GraphicBuffer到这里真正分配内存
+    } else {
+        // here we have to reallocate a new buffer because we could have a
+        // client in our process with a reference to it (eg: status bar),
+        // and we can't release the handle under its feet.
+        buffer.clear();
+        buffer = new GraphicBuffer(w, h, mFormat, effectiveUsage);
+        err = buffer->initCheck();
+    }
+
+}
+======================================
+现在需要理解surfaceflinger_client的作用
+如何在应用客户端（Surface client）和服务端（SurfaceFlinger - Layer）之间传递和同步显示缓冲区
+
+android_view_surface.cpp 调用Surface.cpp里面的函数返回surface的layer buffer的地址
+然后调用：
+bitmap.setPixels(info.bits)
+setBitmapDevice(bitmap)
+所以，理解了为什么surface绑定Canvas的时候，是个空壳的Canvas
+但是，这个地址拿到后，在2个进程里面，怎么处理的呢？
+
+4.0的例子程序里面有一个 Surface Window 
+
+=====================
+<activity android:name=".graphics.WindowSurface"
+        android:label="Graphics/Surface Window">
+    <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.SAMPLE_CODE" />
+    </intent-filter>
+</activity>
+====================
+
+
+SurfaceTexture: Captures frames from an image stream as an OpenGL ES texture
+SurfaceTexture.java 通过 jni 调用SurfaceTexture.cpp (2个同名文件，这里调用jni版)
+
+
+视频播放中通过 MediaPlayer.setDisplay(SurfaceHolder holder) 来设置视频的渲染
+这种渲染方式与一般的2D动画渲染有所不同，2D动画渲染是主动渲染，通过调用invalidate()来强迫View重新绘制。
+而视频播放的渲染是被动的，其内容决定于视频的内容。
+
+
+In Android, every window gets implemented with an underlying Surface object, an object 
+that gets placed on the framebuffer by SurfaceFlinger, the system-wide screen composer.
+
+Each Surface is double-buffered.  双buffer是surface的？ 并不是说framebuffer是双的？
+The back buffer is where drawing takes place and the front buffer is used for composition. 
+
+Each Surface is double-buffered.  所有迹象标明 双buffer是属于surface的
+
+
+mLockedBuffe
+./base/libs/ui/Surface.cpp 中使用
+
+// must be used from the lock/unlock thread
+sp<GraphicBuffer>           mLockedBuffer;
+sp<GraphicBuffer>           mPostedBuffer;
+
+./base/include/ui/GraphicBuffer.h:class GraphicBuffer
+
+GraphicBufferAllocator::GraphicBufferAllocator(): mAllocDev(0) 
+
+
+
+----------SurfaceFlinger---------
+
+status_t Surface::lock()
+{
+   SurfaceTextureClient::lock() {
+      dequeueBuffer(){
+          //  sp<ISurfaceTexture> mSurfaceTexture; 
+          mSurfaceTexture->dequeueBuffer(); //binder 调用
+          ...
+          mSurfaceTexture->requestBuffer(); //binder 调用
+      }
+}
+
+ 调用 dequeueBuffer 调用 mSharedBufferClient->dequeue()，和 getBufferLocked 调用
+sp<GraphicBuffer> buffer = s->requestBuffer(index, usage); //这是一个binder调用，
+
+调用到surface flinger里面的layer.cpp里面的 requestBuffer 调用buffer->reallocate（buffer是GraphicBuffer*）
+调用initSize 调用allocator.alloc（allocator是 GraphicBufferAllocator）调用mAllocDev->alloc进入gralloc驱动。
+
+threadLoop 是 SurfaceFlinger的主循环体 
+
+这里注意了 SurfaceFlinger类 保护继承 protected Thread 类
+
+而在Thread类中 
+private:
+    // Derived class must implement threadLoop(). The thread starts its life
+    // here. There are two ways of using the Thread object:
+    // 1) loop: if threadLoop() returns true, it will be called again if
+    //          requestExit() wasn't called.
+    // 2) once: if threadLoop() returns false, the thread will exit upon return.
+    virtual bool        threadLoop() = 0;
+---私有纯虚函数---
+
+android 创建线程最终还是调用 linux的 线程创建。
+重点： 创建的线程就是 _threadLoop 
+        res = createThreadEtc(_threadLoop,
+                this, name, priority, stack, &mThread);
+this指针 最终传送到 pthread_create 的 arg参数。
+所以： int Thread::_threadLoop(void* user)  就传到了 这里的 user 
+_threadLoop 是对 threadLoop 的简单封装。
+
+ThreadLoop()
+{
+ waitForEvent
+ handleTransaction
+ handlePageFlip // 处理页翻转
+ handleRepaint  // 计算需要刷新的区域
+根据每个Layer的可见区域与需要刷新区域的交集区域从Z-order序列从底部开始绘制到主surface上
+
+ postFramebuffer //调用hw.flip  flip的实现：调用 eglSwapBuffers 
+}
+
+
+//This is because threads are essentially used like this:
+//(new ThreadSubclass())->run();
+这里的继承关系非常复杂。
+
+surfaceflinger目录下 有一个DisplayHardware 目录 里面有
+DisplayHardware.cpp和DisplayHardwareBase.cpp
+DisplayHardware层根据flinger命令调用HAL进行HW的操作。
+
+ThreadLoop
+主要是等待其他接口发送的event，进行显示数据的合成以及显示
+
+
+EGLBoolean egl_window_surface_v2_t::swapBuffers()
+{
+nativeWindow->queueBuffer(nativeWindow, buffer);
+}
+
+FramebufferNativeWindow::queueBuffer（）
+{
+int res = fb->post(fb, handle);
+}
+
+queueBuffer的解释：
+hook called by EGL when modifications to the render buffer are done 
+this unlocks and post the buffer.
+
+
+surfaceflinger 分为 surfaceflinger 和 surfaceflinger_client 
+surfaceflinger 里面包含displayhardware目录有displayhardware.cpp
+displayhardwarebase.cpp    displayhareware 继承 DisplayHardwareBase
+关系：基本不是继承
+SurfaceFlinger里面包含graphicPlane 这个类又包含mHw 这个里面又包含Displayhardware
+里面包含mNativeWindow( 在DisplayHardware类的最后定义 ）
+
+sp<FramebufferNativeWindow> mNativeWindow;  是FramebufferNativeWindow类型指针
+
+FramebufferNativeWindow  是ui中的，这个就复杂了 是什么概念？
+在这个类中，打开gralloc 模块
+
+NativeBuffer的概念 清楚！
+
+
+FramebufferNativeWindow这个类的说明：
+主要实现 framebuffer 的管理，这个类主要用于SurfaceFlinger，
+实际上，这是framebuffer之上，android_native_windos_t的实现
+当前他还很简单，只管理 2个 buffer （ front合back buffer ）
+
+
+
+
+------android的layer和surface----
+有4种layer：Layer，LayerDim，LayerBlur，LayerBuffer（4.0只有前2种）
+Layer代表正常的 Normal Layer是使用最多的一种 Layer ，一般的应用程序在创建 surface 的时候都是采用的这样的 layer 
+LayerBuffer 很容易理解成 Layer 的 Buffer ，实际上是一个 Layer 类型
+
+各个 Layer 的效果大家可以参考 Surface.java 里面的描述
+
+Normal Layer 为每个 Surface 分配两个 buffer ： front buffer 和 back buffer ，这个前后是相对的概念，
+他们是可以进行 Flip 的
+Front buffer 用于 SurfaceFlinger 进行显示，而 Back buffer 用于应用程序进行画图，当 Back buffer 
+填满数据 (dirty) 以后，就会 flip ， back buffer 就变成了 front buffer 用于显示，而 front buffer 就变成了 back buffer 用来画图
+这两个 buffer 的大小是根据 surface 的大小格式动态变化的。这个动态变化的实现我没仔细看，可以参照 ： 
+/frameworks/base/lib/surfaceflinger/layer.cpp 中的 setbuffers()
+这里用到一个 NUM_BUFFERS 宏  他在layer.h中定义为 2 
+
+class SurfaceFlinger : public BnSurfaceComposer, protected Thread
+从类图中可以看到 SurfaceFlinger 是一个线程类，继承 Thread 类 
+
+
+当创建 SurfaceFlinger 这个服务的时候会启动一个 SurfaceFlinger 监听线程，这个线程会一直等待事件的发生，
+比如说需要进行 sruface flip
+
+frameworks/base/libs/ui/GraphicBuffer.cpp 
+sp<GraphicBuffer> mBuffers[NUM_BUFFERS]; 
+
+visibleRegionScreen 
+然后将各个窗口的可见区域画到一个主 layer 的相应部分，最后就拼接成了一个完整的屏幕，然后将主 layer 输送到 FB 显示
+
+在将各个窗口可见区域画到主 layer 过程中还包括存在透明度的 alpha 计算
+
+
+Android 组合各个 layer 并送到 FB 显示的具体过程： 
+这里会处理每个窗口 surface buffer 之间的翻转
+void SurfaceFlinger::handlePageFlip()
+void SurfaceFlinger::computeVisibleRegions(
+./include/ui/Region.h:class Region 
+Region类定义了各种  加减操作  与或操作
+
+
+SurfaceView在游戏开发中有着举足轻重的地位 它对于画面的控制有着更大的自由度，不像View要用 handler来更新
+
+
+---------------Gralloc-------------------
+
+1 dev->device.alloc   = gralloc_alloc; 先把 gralloc_alloc 注册到  gralloc驱动里面去
+那么就可以通过gralloc驱动调用到 gralloc_alloc函数
+
+这块的思路是把framebuffer 与普通的内存 统一管理起来
+
+gralloc_alloc 函数里面判断 usage 是否为GRALLOC_USAGE_HW_FB
+
+* (*registerBuffer)() must be called before a buffer_handle_t that has not
+* been created with (*alloc_device_t::alloc)() can be used.
+
+2 Graphic Mapper是干什么的？
+SurfaceFlinger分配内存作为 Surface 缓冲，客户端怎样在这个作图缓冲区上工作呢？这个就是 Mapper(GraphicBufferMapper)要干的事情。
+两个进程间如何共享内存，如何获取到共享内存？Mapper就是干这个得。需要利用到两个信息：共享缓冲区设备句柄，分配时的偏移量。Mapper利用这样的原理：
+客户端只有lock,unlock,实质上就是mmap和ummap的操作。
+
+客户端只有lock,unlock,实质上就是mmap和ummap的操作。对于同样一个共享缓冲区，偏移量才是总要的，起始地址不重要。实际上他们操作了同一物理地址的内存块。我们在上面讨论了native_handle_t对private_handle_t 的包裹过程，从中知道服务端给客户端传递了什么东西。
+
+
+/*
+ * This implements the (main) framebuffer management. This class is used
+ * mostly by SurfaceFlinger, but also by command line GL application.
+ * 
+ * In fact this is an implementation of android_native_window_t on top of
+ * the framebuffer.
+ * 
+ * Currently it is pretty simple, it manages only two buffers (the front and 
+ * back buffer).  【等等 前后两个buffer 由这里管理】
+ * 
+ */
+
+GRALLOC_HARDWARE_MODULE_ID 这个用在hw_get_module() 有以下几处
+关键就在于：FramebufferNativeWindow.cpp (base/libs/ui里面)
+
+FramebufferNativeWindow::FramebufferNativeWindow()  在构造函数里面：
+
+
+swapBuffers()
+
+/* If we can't do the page_flip, just copy the back buffer to the front */
+fb 可以在硬件上支持2个buffer切换 若不支持，需要拷贝后端 buffer 到 前端 buffer 
+
+framebuffer_open
+gralloc_open
+
+
+GraphicBufferAllocator 类：
+FramebufferNativeWindow 类：  
+
+在 FramebufferNativeWindow 的构造函数里面
+
+这个类里面定义了
+    framebuffer_device_t* fbDev;
+    alloc_device_t* grDev;
+都是hw_device_t 的派生结构体
+
+
+-------
+#define GRALLOC_HARDWARE_MODULE_ID "gralloc"
+/* Name of the graphics device to open*/
+
+#define GRALLOC_HARDWARE_FB0 "fb0"
+#define GRALLOC_HARDWARE_GPU0 "gpu0"
+------------------------------------------------------------------
+
+可见 模块就只有 gralloc  并没有 framebuffer 模块
+
+hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module) 然后
+
+err = framebuffer_open(module, &fbDev);
+err = gralloc_open(module, &grDev);
+
+这两个调用分别对应 ：
+#define GRALLOC_HARDWARE_FB0 "fb0"
+#define GRALLOC_HARDWARE_GPU0 "gpu0"
+
+static inline int framebuffer_open(const struct hw_module_t* module, 
+        struct framebuffer_device_t** device) {
+    return module->methods->open(module, 
+            GRALLOC_HARDWARE_FB0, (struct hw_device_t**)device);
+}
+
+static inline int gralloc_open(const struct hw_module_t* module, 
+        struct alloc_device_t** device) {
+    return module->methods->open(module, 
+            GRALLOC_HARDWARE_GPU0, (struct hw_device_t**)device);
+}
+注意 module 参数 既要用到调用函数，又是参数，参数就是为了下面的 
+dev->device.common.module = const_cast<hw_module_t*>(module);
+
+其实，这里的open 都是一个函数：
+gralloc_device_open（）
+{
+ if (!strcmp(name, GRALLOC_HARDWARE_GPU0)) {
+     ;  //$$$$$$$$$$$$$$$$4
+ } else {
+    fb_device_open();
+ }
+}
+
+fb_device_open（）
+{
+ if (!strcmp(name, GRALLOC_HARDWARE_FB0)) { //这里肯定相等了
+     status = gralloc_open(module, &gralloc_device); // 这里又相当于调用了一遍上面$$$$$$$$$$$$$$$$$$$$处，绕圈玩呢？！
+ }
+}
+可见，
+#define GRALLOC_HARDWARE_FB0 "fb0"
+#define GRALLOC_HARDWARE_GPU0 "gpu0"
+这两个设别都有用到
+
+
+继承关系:private_module_t ->gralloc_module_t -> hw_module_t  而
+int hw_get_module(const char *id, const struct hw_module_t **module) 
+参数恰恰是最基本的 hw_module_t  这个函数可以得到模块中
+
+struct private_module_t HAL_MODULE_INFO_SYM = { 结构体的地址。
+
+上面的继承关系是一条线 另外
+gralloc_context_t只有这个一个结构体 -> alloc_device_t()->hw_device_t(common) （外加alloc free函数指针）
+
+再看这个函数：
+gralloc_device_open（）
+{
+//跟踪发现if调用3次
+//第3次是从GraphicBufferAllocator::GraphicBufferAllocator() 里面调用的
+ if (!strcmp(name, GRALLOC_HARDWARE_GPU0)) {
+        gralloc_context_t *dev; //定义指针  
+ 
+        dev = (gralloc_context_t*)malloc(sizeof(*dev)); //分配空间
+
+        /* initialize our state here */
+        memset(dev, 0, sizeof(*dev)); //清零
+
+        /* initialize the procs */
+        dev->device.common.tag = HARDWARE_DEVICE_TAG; //common 是hw_device_t
+        dev->device.common.version = 0;
+        dev->device.common.module = const_cast<hw_module_t*>(module); //这里赋值的是
+        // hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module)返回的值，实际上是
+         // private_module_t 类型了已经
+        dev->device.common.close = gralloc_close;
+
+        dev->device.alloc   = gralloc_alloc; //看下面的定义
+        dev->device.free    = gralloc_free;  //看下面的定义
+
+        *device = &dev->device.common;
+        status = 0;
+ } else {
+    fb_device_open(); //跟踪发现这里调用1次 并且最先调用 调用这里的时候导致调用上面if 3次中的第一次
+ }
+}
+
+前两次是从这里
+FramebufferNativeWindow::FramebufferNativeWindow() 产生的
+第三次是这样调用的
+GraphicBufferAllocator::GraphicBufferAllocator()
+    : mAllocDev(0)
+{
+    hw_module_t const* module;
+    int err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module);
+	LOGD("GRALLOC_HARDWARE_MODULE_ID %s %d",__func__, err);
+    LOGE_IF(err, "FATAL: can't find the %s module", GRALLOC_HARDWARE_MODULE_ID);
+    if (err == 0) {
+        gralloc_open(module, &mAllocDev);
+    }
+}
+
+
+
+typedef struct alloc_device_t {
+    struct hw_device_t common;
+
+    /* 
+     * (*alloc)() Allocates a buffer in graphic memory with the requested
+     * parameters and returns a buffer_handle_t and the stride in pixels to
+     * allow the implementation to satisfy hardware constraints on the width
+     * of a pixmap (eg: it may have to be multiple of 8 pixels). 
+     * The CALLER TAKES OWNERSHIP of the buffer_handle_t.
+     * Returns 0 on success or -errno on error.
+     */
+    
+    int (*alloc)(struct alloc_device_t* dev,
+            int w, int h, int format, int usage,
+            buffer_handle_t* handle, int* stride);
+
+    /*
+     * (*free)() Frees a previously allocated buffer. 
+     * Behavior is undefined if the buffer is still mapped in any process,
+     * but shall not result in termination of the program or security breaches
+     * (allowing a process to get access to another process' buffers).
+     * THIS FUNCTION TAKES OWNERSHIP of the buffer_handle_t which becomes
+     * invalid after the call. 
+     * 
+     * Returns 0 on success or -errno on error.
+     */
+    int (*free)(struct alloc_device_t* dev,
+            buffer_handle_t handle);
+
+} alloc_device_t;
+
+这里的实现太乱套了
+
+跟上面一样的：
+fb_context_t (只有一个结构体)-> framebuffer_device_t(device) ->hw_device_t(common)+其他跟fb有关的信息合函数指针
+
+
+gralloc.default.so 有3个文件
+LOCAL_SRC_FILES := gralloc.cpp 	framebuffer.cpp mapper.cpp
+
+
+fb_device_open函数里面的
+        alloc_device_t* gralloc_device;
+		LOGD("AAAAAASSSSSS %s",__func__);
+        status = gralloc_open(module, &gralloc_device);
+是完全没有用，因为gralloc_device 这个局部变量 其他地方完全没有引用
+反正这里的逻辑非常怪异，思路混乱。
+
+        if (!fbDev || !grDev)
+            return;
+从这里可以看到，必须是fbDev grDev 都要初始化成功
+
+
+
+-------------------------------
+GraphicBuffer 继承了 EGLNativeBase  继承了 android_native_buffer_t
+
+
+-------------------------------
+window.h 定义
+struct ANativeWindow {
+    int (*setSwapInterval)(); //设置swap间隔(现在显然不是固定间隔，那么如何出发swap呢)
+    int (*dequeueBuffer)();   
+    int (*queueBuffer)();
+}
+
+//FB管理，是ANativeWindow在FB上的实现，主要用于surfaceflinger 也用于命令行 OpenGL 应用
+//当前实现很简单，仅负责管理2个buffer
+class FramebufferNativeWindow: public ANativeWindow {
+
+}
+
+
+-----------------------------
+JellyBean中 Fb的Swap流程：
+
+SurfaceFlinger::onMessageReceived(...) { //此函数调用见 MessageQueue 节
+   handlePageFlip(); //###
+   postFramebuffer();
+}
+
+//遍历各Layer,取得并锁住该Layer的frontBuffer，生成该Layer的2D贴图（Texture）计算更新区域
+
+SurfaceFlinger::handlePageFlip() {
+
+  lockPageFlip(currentLayers);
+//核心实现，count 表示可见层数量
+  for (size_t i=0 ; i<count ; i++) {
+    if (!currentLayers[i]->visibleRegionScreen.isEmpty())
+      mVisibleLayersSortedByZ.add(currentLayers[i]);
+  }
+  
+  unlockPageFlip(..); //SurfaceFlinger 类的
+}
+
+SurfaceFlinger::lockPageFlip(...)
+{
+  for(...){
+      LayerBase layer(layers[i]);
+      layer->lockPageFlip(...);// 跟LayerBase联系起来了
+ //可是LayerBase LayerDim 没有实现 只有Layer有实现 
+  }
+}
+
+Layer::lockPageFlip(...)
+{
+  if (mQueuedFrames > 0){ //有排队的帧才...
+  }
+}
+
+mQueuedFrames 初始化为 0 
+void Layer::onFrameQueued() {
+
+    android_atomic_inc(&mQueuedFrames); //原子加 1
+
+}
+
+SurfaceFlinger::postFramebuffer() {
+   hw.flip(mSwapRegion); //还支持 mSwapRegion？！
+}
+
+DisplayHardware::flip(...) {
+   eglSwapBuffers(...);
+}
+
+OpenGL 软实现：
+eglSwapBuffers -》 d->swapBuffers() -》 egl_window_surface_v2_t::swapBuffers() -》
+nativeWindow->queueBuffer(...) -》 FramebufferNativeWindow::queueBuffer（）-》
+fb->post(fb, handle) -》 gralloc 的 fb_post
+
+
+OpenGL 硬实现(BCM7231)：
+
+libGLES_nexus.so源码:rockford/middleware/v3d
+其中 egl_client.c 定义(硬实现 egl需要对接平台)：
+eglSwapBuffers(EGLDisplay dpy, EGLSurface surf)
+{
+#ifdef DIRECT_RENDERING //即单buffer，android不采用
+   return EGL_FALSE;
+#else
+...
+#endif
+}
+
+eglCreateWindowSurface(..., EGLNativeWindowType win)
+{
+//一层层 eventually, platform_get_info()进入 display_android.c 的
+   DispWindowGetInfo(){
+      dst->query(..., &info->width); // dst 是传入的 FramebufferNativeWindow 对象
+      dst->query(..., &info->height);
+      /* android is double buffered at the moment - but configured to 
+         triple buffered when first installing frame buffer 为何？ */
+      info->swapchain_count = 3;
+   }
+}
+
+typedef struct ANativeWindow* EGLNativeWindowType;
+
+EGLNativeWindowType android_createDisplaySurface(void) {
+    w = new FramebufferNativeWindow();
+}
+
+Displayhardware.cpp :
+
+DisplayHardware::init()
+{
+  mNativeWindow = new FramebufferNativeWindow();
+  //framebuffer 与 egl(opengl) 建立了关联
+  surface = eglCreateWindowSurface(mNativeWindow.get());
+}
+
+--------------------------------
+SF 的 MessageQueue
+
+surfaceflinger 自己实现了一个 MessageQueue.cpp 
+
+MessageQueue::init(sp<SurfaceFlinger>& flinger) {
+   mFlinger = flinger;
+   mLooper = new Looper(true); // 创建一个looper 没有调 prepare
+   mHandler = new Handler(*this);  
+}
+
+MessageQueue::cb_eventReceiver -》 eventReceiver() -》 signalRefresh() -》
+MessageQueue::Handler::signalRefresh() -》 mLooper->sendMessage(this, REFRESH) /or
+MessageQueue::Handler::signalInvalidate() -》 mLooper->sendMessage(this, INVALIDATE)
+
+Looper::sendMessage( MessageHandler handler, Message& message ) {
+  //把handler insertAt 到一个 Vector 里 （搞懂Vector是啥）
+}
+ 
+
+SurfaceFlinger::threadLoop(){
+    waitForEvent();//2.2这里直接调用 postFramebuffer()
+}
+
+void SurfaceFlinger::waitForEvent() {
+    mEventQueue.waitMessage();
+}
+
+MessageQueue::waitMessage() {
+  mLooper->pollOnce(-1); // -1表示永远等待
+}
+
+Looper::pollOnce( timeout ) {
+   pollInner(...);
+}
+Looper::pollInner(int timeout) {
+  handler->handleMessage(message); // 这里handler从一个Vector中来
+} 
+
+MessageQueue::Handler::handleMessage(){
+  case REFRESH:
+    -> onMessageReceived -> handleRepaint -> composeSurfaces 
+}
+
+
+定义：
+class MessageBase : public MessageHandler {}
+class MessageQueue {
+  class Handler : public MessageHandler { }
+}
+
+---------------------------
+BitTube.cpp
+
+
+---------------------------
+HWComposer
+service/surfaceflinger/DisplayHardware/ 目录下：
+DisplayHardware.cpp
+DisplayHardwareBase.cpp
+HWComposer.cpp
+
+HWComposer.cpp中：
+hw_get_module(HWC_HARDWARE_MODULE_ID, &mModule);
+
+
+---------------
+20121113  关于surfaceflinger.cpp 的 onTransact 
+
+SurfaceFlinger::onTransact()
+{
+...
+    // #define AID_CAMERA        1006  /* camera devices */   跟这个有关系吗？
+    case 1006:{ // send empty update
+        signalRefresh(); // 调 mEventQueue.refresh() 调 mEvents->requestNextVsync(); 
+        return NO_ERROR;
+    }
+}
+
+
+SurfaceFlinger::readyToRun(){
+    // start the EventThread
+    mEventThread = new EventThread(this);
+    mEventQueue.setEventThread(mEventThread);
+
+}
+
+EventThread从VsyncHandler派生，实现onVsyncReceived
+EventThread : public Thread, public DisplayHardware::VSyncHandler {
+
+}
+
+// 可见，赋值的时候就 run 了
+EventThread::onFirstRef(){
+ run(...);
+}
+
+
+
+驱动显示同步的 Event 是： DISPLAY_EVENT_VSYNC = 'vsyn'
+在这里发出：
+bool EventThread::threadLoop() {
+    vsync.header.type = DISPLAY_EVENT_VSYNC;
+    postEvent(vsync);// 满足一个复杂条件（没懂）发送这个消息
+}
+
+---------
+surfaceflinger.cpp中
+如果检测到overlay 
+
+            // when using overlays, we assume a fully transparent framebuffer
+            // NOTE: we could reduce how much we need to clear, for instance
+            // remove where there are opaque FB layers. however, on some
+            // GPUs doing a "clean slate" glClear might be more efficient.
+            // We'll revisit later if needed.
+把整个fb清零了，但是有时候可能需要剪切。但是他说有的GPU，全屏清可能比局部效率更高。
+
+那么如果，虽然有overlay，但是并没有fb区域透明，此时就不需要清，那么这个逻辑也会清？！
+
+
+-----
+camera 类分为2类，图形的和硬件：前者，opengl的透视图，后者 真正的摄像头。
+
+
+----------
+关于VideoView
+VideoView extends SurfaceView {
+SurfaceHolder mSurfaceHolder;
+mMediaPlayer = new MediaPlayer();
+mMediaPlayer.setDisplay(mSurfaceHolder);
+}
+
+//20121114 赵毅晖说我们的多媒体播放器用了SurfaceView 开始是不透明的，
+把SurfaceHolder设到mediaplayer里后，就透明了。 为何？
+
+------------
+ISurfaceComposer 是 surfaceflinger 对外唯一接口，他的某些函数又返回一组接口
+
+class ISurfaceComposer : public IInterface {
+    sp<ISurfaceComposerClient> createConnection();
+    sp<IGraphicBufferAlloc> createGraphicBufferAlloc()
+    sp<IDisplayEventConnection> createDisplayEventConnection() //数据通道BitTube
+    sp<IMemoryHeap> getCblk();
+}
+#######SurfaceComposerClient####
+-外1-----------
+SurfaceComposerClient继承RefBase，当
+sp<SurfaceComposerClient> abc = new SurfaceComposerClient(...); 的时候，onFirstRef 
+被调用（第一次ref时，sp 类重载 = ）。
+--------------
+
+-外2------------
+new SurfaceComposerClient 的地方：
+﻿① android_view_Surface.cpp : SurfaceSession_init() //这显然是常规图形的调用处
+② BootAnimation.cpp : BootAnimation::BootAnimation()
+其他还有很多，基本都是test
+----------------
+
+SurfaceComposerClient.cpp中定义的：
+ComposerService::ComposerService() {
+    // sp<ISurfaceComposer> mComposerService;
+    getService("SurfaceFlinger", &mComposerService); 
+
+    mServerCblkMemory = mComposerService->getCblk();
+    mServerCblk = static_cast<surface_flinger_cblk_t volatile *>(
+            mServerCblkMemory->getBase());
+}
+
+// 外部直接调用 ComposerService::getComposerService 函数
+sp<ISurfaceComposer> ComposerService::getComposerService() {
+                            //这里调用上面的构造函数，连接服务器
+    return ComposerService::getInstance().mComposerService;
+}
+
+
+SurfaceComposerClient::onFirstRef(){ //此函数在 RefBase 中定义
+  // sp<ISurfaceComposerClient>  mClient 
+  sp<ISurfaceComposer> sm(getComposerService());
+  sp<ISurfaceComposerClient> mClient = sm->createConnection();
+}
+
+-外-------------
+createConnection 的实现：
+sp<ISurfaceComposerClient> SurfaceFlinger::createConnection()
+{
+    sp<ISurfaceComposerClient> bclient;
+    sp<Client> client(new Client(this));
+    status_t err = client->initCheck();
+    if (err == NO_ERROR) {
+        bclient = client;
+    }
+    return bclient;
+}
+--------------
+android_view_surface.cpp： 
+Surface_init() {
+  // SurfaceComposerClient* client
+  sp<SurfaceControl> surface = client->createSurface();
+}
+
+sp<SurfaceControl> SurfaceComposerClient::createSurface(...) {
+  sp<ISurface> surface = mClient->createSurface( ... );
+  return new SurfaceControl( surface, ... );
+}
+
+#############################################
+####SurfaceTextureClient####
+
+ISurfaceTexture 接口提供的服务也在surfaceflinger里面吗？
+
+SurfaceTexture.cpp : 
+
+SurfaceTexture::SurfaceTexture(...) {
+  mBufferQueue = new BufferQueue(...);
+}
+
+而 new SurfaceTexture(...); cpp代码仅2处：
+① Layer.cpp: Layer::onFirstRef(){
+     mSurfaceTexture = new SurfaceTexture(...); //◆
+   }
+② jni surfacetexture.cpp : SurfaceTexture_init()
+
+-外-----------------
+new Layer() 有3处：
+1 sp<ISurface> SurfaceFlinger::createSurface(...){ //分别调用3种+++
+ sp<Layer> SurfaceFlinger::createNormalSurface(...){
+     sp<Layer> layer = new Layer(this, display, client);
+  }
+  sp<LayerDim> SurfaceFlinger::createDimSurface(...) {
+    sp<LayerDim> layer = new LayerDim(this, display, client);
+}
+  }
+//下面2个在 hwui 目录，跟surfaceflinger貌似无关
+2 Layer* LayerCache::get(...)
+3 Layer* LayerRenderer::createTextureLayer
+--------------------
+
+wp<IBinder> Layer::getSurfaceTextureBinder() {
+  return mSurfaceTexture->getBufferQueue()->asBinder(); //◆   
+}
+
+
+void SurfaceTextureClient::setISurfaceTexture( sp<ISurfaceTexture>& surfaceTexture)
+{
+    mSurfaceTexture = surfaceTexture;
+}
+
+
+Surface.cpp 定义 Surface/SurfaceControl 2个类
+
+
+BufferQueue::BufferQueue(...) {
+   sp<ISurfaceComposer> composer(ComposerService::getComposerService());
+   //sp<IGraphicBufferAlloc> mGraphicBufferAlloc
+   mGraphicBufferAlloc = composer->createGraphicBufferAlloc(); //实现 ﻿①
+}
+
+﻿① 在server端
+sp<IGraphicBufferAlloc> SurfaceFlinger::createGraphicBufferAlloc()
+{
+    sp<GraphicBufferAlloc> gba(new GraphicBufferAlloc());
+    return gba;
+}
+
+sp<GraphicBuffer> GraphicBufferAlloc::createGraphicBuffer(...) {
+
+  sp<GraphicBuffer> graphicBuffer(new GraphicBuffer(...));
+  return graphicBuffer;
+
+}
+
+
+class Surface : public SurfaceTextureClient{
+    struct SurfaceInfo {
+        uint32_t    w;
+        uint32_t    h;
+        uint32_t    s; //stride 1行的像素数
+        uint32_t    usage;
+        PixelFormat format;
+        void*       bits;
+    };
+}
+
+ISurface 接口仅定义 getSurfaceTexture, 在：
+sp<ISurface> Layer::createSurface()
+sp<ISurface> LayerBaseClient::createSurface()
+中定义，且 Layer:LayerBaseClient
+
+surface.cpp surface的客户端,每个 surface 对应一个layer  SurfaceFlinger 将各个layer的front buffer合成到屏幕。
+surfaceflinger 的 Layer
+
+---------
+JB对Surface 做大量改进，引入在PC机上早已成熟的VSYNC(垂直同步)，Triple Buffering。
+VSync是垂直同期(Vertical Synchronization)的简称。基本的思路是将你的FPS和显示器的刷新率同期起来。其目的是避免一种称之为"撕裂"的现象
+
+// 此线程在没有 VSync 事件的系统上模拟之。2009年我就想过这个问题，应该申请专利的。
+class VSyncThread : public Thread {
+}
+
+-----------------
+class HWComposer{
+    class EventHandler {
+        void onVSyncReceived(int dpy, nsecs_t timestamp) = 0;
+    };
+
+}
+
+---------------
+SurfaceFlinger 本身是线程类
+class SurfaceFlinger : protected Thread
+void SurfaceFlinger::onFirstRef() {
+  run(...);
+}
+
+readyToRun 由 Threads.cpp 定义，被_threadLoop调用
+
+
+
+
+20121019
+2年前开始关注gralloc模块，现在做个总结。gralloc应该代表graphics alloc
+
+--- BCM平台 4.0平台调用gralloc的为 /system/bin/surfaceflinger进程
+I/NEXUS   (  648): using (fd=-848450944)
+I/NEXUS   (  648): id           = BCMNEXUS
+I/NEXUS   (  648): xres         = 1220 px  //博通已经把osd缩小了
+I/NEXUS   (  648): yres         = 680 px
+I/NEXUS   (  648): xres_virtual = 1220 px
+I/NEXUS   (  648): yres_virtual = 1360 px
+I/NEXUS   (  648): bpp          = 32
+I/NEXUS   (  648): r            = 16:8
+I/NEXUS   (  648): g            =  8:8
+I/NEXUS   (  648): b            =  0:8
+I/NEXUS   (  648): width        = 194 mm (159.731964 dpi)
+I/NEXUS   (  648): height       = 108 mm (286.925934 dpi)
+I/NEXUS   (  648): refresh rate = 60.00 Hz
+D/NEXUS   (  648): gralloc_device_open[799]: Graphics Allocator [ICS] Build Date[Sep  7 2012 Time:14:11:20]
+D/NEXUS   (  648): gralloc_device_open: Graphics Allocator IN DELAYED ALLOCATION MODE
+
+---nxp平台 2.2平台 surfaceflinger挂靠在 system_server 进程
+I xxx /gralloc ( 2058): using (fd=23)
+I xxx /gralloc ( 2058): id           = 
+I xxx /gralloc ( 2058): xres         = 1280 px
+I xxx /gralloc ( 2058): yres         = 720 px
+I xxx /gralloc ( 2058): xres_virtual = 1280 px
+I xxx /gralloc ( 2058): yres_virtual = 1440 px
+I xxx /gralloc ( 2058): bpp          = 16
+I xxx /gralloc ( 2058): r            = 11:5
+I xxx /gralloc ( 2058): g            =  5:6
+I xxx /gralloc ( 2058): b            =  0:5
+I xxx /gralloc ( 2058): width        = 203 mm (160.157639 dpi)
+I xxx /gralloc ( 2058): height       = 114 mm (160.421051 dpi)
+I xxx /gralloc ( 2058): refresh rate = 28.67 Hz
+D xxx /gralloc ( 2058): RRRRRRRRRRRRR 4 4096 1280
+D xxx /gralloc ( 2058): RRRRRRRRRRRRR 4 4096 1280
+
+
+-----
+4.0 实现 LayerDim 很简单，只实现了一个 onDraw，就死一个灰色半透明效果。
+引用只有1处 SurfaceFlinger::createDimSurface
+
+“for now we treat Blur as Dim, until we can implement it efficiently”
+4.0 Layer类型只有 Layer LayerDim 2种
+
+
+SurfaceFlinger::createSurface -> createNormalSurface / createDimSurface
+
+
+
+SurfaceFlinger::composeSurfaces  ->  layer->draw(clip) -> LayerDim::onDraw / Layer::onDraw
+
+
+LayerBase 的函数只在 surfaceflinger.cpp 中调用
+
+
+
+status_t SurfaceFlinger::addLayer_l( LayerBase layer )
+{
+    mCurrentState.layersSortedByZ.add(layer); //把一个层加入Z序
+}
+
+SurfaceFlinger::addLayer(...){
+    addLayer_l(...);
+}
+
+SurfaceFlinger::addClientLayer(...){
+    addLayer_l(...);
+}
+
+
+java 层调用 nativeAddLayer 调用 SkLayerRasterizerGlue::addLayer
+
+
+4.0 跟 2.2 很不同，增加了 BufferQueue的管理
+
+
+4.0 的graphics buffer分配流程
+
+---20121229----------------------------
+
+BufferQueue 类 mBufferCount，表示一个surface能有多少个buffer，最少2个，最多 32个
+    enum { MIN_UNDEQUEUED_BUFFERS = 2 };
+    enum { NUM_BUFFER_SLOTS = 32 };
+
+这样看：BufferQueue 管理的是1个surface的几个buffer，而不是多个surface的buffer?!
+可以理解成：一个surface的buffer数可以在2-32之间
+
+
+#ifdef TARGET_DISABLE_TRIPLE_BUFFERING  // 这个没有定义，难道4.0 每个surface都已经是3个buffer了？
+#warning "disabling triple buffering"
+    mSurfaceTexture->setBufferCountServer(2);
+#else
+    mSurfaceTexture->setBufferCountServer(3);
+#endif
+
+surfaceflinger makefile
+ifeq ($(TARGET_DISABLE_TRIPLE_BUFFERING), true)  //单独平台可以配置。
+	LOCAL_CFLAGS += -DTARGET_DISABLE_TRIPLE_BUFFERING
+endif
+
+
+----------------
+mSlots 这个在 SurfaceTextureClient.h（客户端）和bufferQueue.h(服务端)中名字同定义不同：
+BufferSlot mSlots[NUM_BUFFER_SLOTS]; // NUM_BUFFER_SLOTS = 32;
+
+-----------------
+BufferQueue::dequeueBuffer(...) {
+  if( mSlots[buf].mGraphicBuffer == NULL ) {
+    sp<GraphicBuffer> graphicBuffer( mGraphicBufferAlloc->createGraphicBuffer(...));
+    mSlots[buf].mGraphicBuffer = graphicBuffer;
+  }
+}
+
+
+
+SkCanvasGlue  canvas部分 java与cpp的接口
+
+
+
+------------
+ISurfaceComposer 是 surfaceflinger 对外唯一接口，他的某些函数又返回一组接口
+
+class ISurfaceComposer : public IInterface {
+    sp<ISurfaceComposerClient> createConnection();
+    sp<IGraphicBufferAlloc> createGraphicBufferAlloc()
+    sp<IDisplayEventConnection> createDisplayEventConnection()
+    sp<IMemoryHeap> getCblk();
+}
+#######SurfaceComposerClient####
+-外1-----------
+SurfaceComposerClient继承RefBase，当
+sp<SurfaceComposerClient> abc = new SurfaceComposerClient(...); 的
+时候，onFirstRef 被调用（第一次被ref的时候），实际上是在 sp 类，重载
+= 时调用的。
+--------------
+
+-外2------------
+new SurfaceComposerClient 的地方：
+﻿① android_view_Surface.cpp : SurfaceSession_init() //这显然是常规图形的调用处
+② BootAnimation.cpp : BootAnimation::BootAnimation()
+其他还有很多，基本都是test
+----------------
+
+SurfaceComposerClient.cpp中定义的：
+ComposerService::ComposerService() {
+    // sp<ISurfaceComposer> mComposerService;
+    getService("SurfaceFlinger", &mComposerService); 
+
+    mServerCblkMemory = mComposerService->getCblk();
+    mServerCblk = static_cast<surface_flinger_cblk_t volatile *>(
+            mServerCblkMemory->getBase());
+}
+
+// 外部直接调用 ComposerService::getComposerService 函数
+sp<ISurfaceComposer> ComposerService::getComposerService() {
+                            //这里调用上面的构造函数，连接服务器
+    return ComposerService::getInstance().mComposerService;
+}
+
+
+SurfaceComposerClient::onFirstRef(){ //此函数在 RefBase 中定义
+  // sp<ISurfaceComposerClient>  mClient 
+  sp<ISurfaceComposer> sm(getComposerService());
+  sp<ISurfaceComposerClient> mClient = sm->createConnection();
+}
+
+-外-------------
+createConnection 的实现：
+sp<ISurfaceComposerClient> SurfaceFlinger::createConnection()
+{
+    sp<ISurfaceComposerClient> bclient;
+    sp<Client> client(new Client(this));
+    status_t err = client->initCheck();
+    if (err == NO_ERROR) {
+        bclient = client;
+    }
+    return bclient;
+}
+--------------
+android_view_surface.cpp： 
+Surface_init() {
+  // SurfaceComposerClient* client
+  sp<SurfaceControl> surface = client->createSurface();
+}
+
+sp<SurfaceControl> SurfaceComposerClient::createSurface(...) {
+  sp<ISurface> surface = mClient->createSurface( ... );
+  return new SurfaceControl( surface, ... );
+}
+
+#############################################
+####SurfaceTextureClient####
+
+ISurfaceTexture 接口提供的服务也在surfaceflinger里面吗？
+
+SurfaceTexture.cpp : 
+
+SurfaceTexture::SurfaceTexture(...) {
+  mBufferQueue = new BufferQueue(...);
+}
+
+而 new SurfaceTexture(...); cpp代码仅2处：
+① Layer.cpp: Layer::onFirstRef(){
+     mSurfaceTexture = new SurfaceTexture(...); //◆
+   }
+② jni surfacetexture.cpp : SurfaceTexture_init()
+
+-外-----------------
+new Layer() 有3处：
+1 sp<ISurface> SurfaceFlinger::createSurface(...){ //分别调用3种
+ sp<Layer> SurfaceFlinger::createNormalSurface(...){
+     sp<Layer> layer = new Layer(this, display, client);
+  }
+  sp<LayerDim> SurfaceFlinger::createDimSurface(...) {
+    sp<LayerDim> layer = new LayerDim(this, display, client);
+}
+  }
+//下面2个在 hwui 目录，跟surfaceflinger貌似无关
+2 Layer* LayerCache::get(...)
+3 Layer* LayerRenderer::createTextureLayer
+--------------------
+
+wp<IBinder> Layer::getSurfaceTextureBinder() {
+  return mSurfaceTexture->getBufferQueue()->asBinder(); //◆   
+}
+
+
+void SurfaceTextureClient::setISurfaceTexture( sp<ISurfaceTexture>& surfaceTexture)
+{
+    mSurfaceTexture = surfaceTexture;
+}
+
+
+Surface.cpp 定义 Surface/SurfaceControl 2个类
+
+
+BufferQueue::BufferQueue(...) {
+   sp<ISurfaceComposer> composer(ComposerService::getComposerService());
+   //sp<IGraphicBufferAlloc> mGraphicBufferAlloc
+   mGraphicBufferAlloc = composer->createGraphicBufferAlloc(); //实现 ﻿①
+}
+
+﻿① 在server端
+sp<IGraphicBufferAlloc> SurfaceFlinger::createGraphicBufferAlloc()
+{
+    sp<GraphicBufferAlloc> gba(new GraphicBufferAlloc());
+    return gba;
+}
+
+sp<GraphicBuffer> GraphicBufferAlloc::createGraphicBuffer(...) {
+
+  sp<GraphicBuffer> graphicBuffer(new GraphicBuffer(...));
+  return graphicBuffer;
+
+}
+
+
+class Surface : public SurfaceTextureClient{
+    struct SurfaceInfo {
+        uint32_t    w;
+        uint32_t    h;
+        uint32_t    s; //stride 1行的像素数
+        uint32_t    usage;
+        PixelFormat format;
+        void*       bits;
+    };
+}
+
+ISurface 接口仅定义 getSurfaceTexture, 在：
+sp<ISurface> Layer::createSurface()
+sp<ISurface> LayerBaseClient::createSurface()
+中定义，且 Layer:LayerBaseClient
+
+surface.cpp surface的客户端,每个 surface 对应一个layer  SurfaceFlinger 将各个layer的front buffer合成到屏幕。
+
+----
+skia
+
+1 简介
+  Skia是一个非常严谨的向量显示引擎。精湛的向量图形技术[minigui图形技术不是向量的]
+
+"Skia’s first product, SGL, is a portable graphics engine capable of rendering 
+state-of-the-art 2D graphics on low-end devices 
+such as mobile phones, TVs, and handhelds,” the Web site said. “SGL is feature-set 
+compatible with existing 2D standards, making 
+it ideal to serve as a back-end for public formats such as SVG, PDF, and OpenVG. 
+SGL is licensed as source or binary, and can be 
+customized to match specific HW/framebuffer requirements.”
+
+Hardware-accelerated 2D drawing
+Android 3.0 offers a new hardware-accelerated OpenGL renderer that gives a 
+performance boost to many common graphics operations for applications running in
+ the Android framework.
+When the renderer is enabled, most operations in Canvas, Paint, Xfermode, ColorFilter, 
+Shader, and Camera are accelerated.Developers can control how hardware-acceleration 
+is applied at every level, from enabling it globally in an application to enabling 
+it in specific Activities and Views inside the application. （在apk里面控制的，所
+以是针对某个apk而不是整个android系统级别的操作）
+
+
+All Android-powered devices running Android 4.0 are required to support
+ hardware-accelerated 2D drawing. Developers can take advantage of this to add
+ great UI effects while maintaining optimal performance on high-resolution screens, 
+even on phones. For example, developers can rely on accelerated scaling, rotation, 
+and other 2D operations, as well as accelerated UI components such as TextureView 
+and compositing modes such as filtering, blending, and opacity.
+
+
+class SkBitmap{
+    class Allocator{
+        virtual bool allocPixelRef(SkBitmap*, SkColorTable*) = 0; //纯虚函数 抽象基类
+    }; //C++ 也可以在一个类中再定义一个类? 那这个抽象基类会导致SkBitmap 无法实例化吗？因该不会
+
+    class HeapAllocator : public Allocator {
+        virtual bool allocPixelRef(SkBitmap*, SkColorTable*);
+    };
+
+    /** Default construct creates a bitmap with zero width and height, and no pixels.
+        Its config is set to kNo_Config. */
+    SkBitmap();  //两种构造函数
+    /** Constructor initializes the new bitmap by copying the src bitmap. All fields are copied,
+        but ownership of the pixels remains with the src bitmap.*/
+    SkBitmap(const SkBitmap& src);
+
+    /*Returns the address of the pixel specified by x,y for 32bit pixels.*/   
+    //通过x，y坐标返回 4字节pixel buffer的地址 
+    inline uint32_t* getAddr32(int x, int y) const;
+    // 2字节 1字节 1bit 格式都是单独处理的
+    /* Returns the address of the pixel specified by x,y for 16bit pixels.*/
+    inline uint8_t* getAddr1(int x, int y) const;
+     // 运行时自动检测 Pixel 格式，返回地址
+    void* getAddr(int x, int y) const;
+    void* fPixels; // buffer 地址
+};
+
+
+uint32_t* SkBitmap::getAddr32(int x, int y) const {
+return ((char*)fPixels + y * fRowBytes + (x << 2));
+}
+
+fRowBytes 代表一行的字节数（不知道什么时候初始化的）
+fPixels   代表这个Bitmap的buffer地址
+
+void SkBitmap::setPixels(void* p, SkColorTable* ctable) {
+    fPixels = p; //这里设置
+}
+
+bool SkBitmap::HeapAllocator::allocPixelRef(SkBitmap* dst, SkColorTable* ctable) {
+    Sk64 size = dst->getSize64();
+    if (size.isNeg() || !size.is32()) {
+        return false;
+    }
+
+    void* addr = sk_malloc_flags(size.get32(), 0);  // returns NULL on failure
+    if (NULL == addr) {
+        return false;
+    }
+    //这里很复杂，反正分配的空间就是跟SkBitmap关联起来了
+    dst->setPixelRef(new SkMallocPixelRef(addr, size.get32(), ctable))->unref(); 
+    // since we're already allocated, we lockPixels right away
+    dst->lockPixels();
+    return true;
+}
+
+void* sk_malloc_flags(size_t size, unsigned flags)
+{
+    void* p = malloc(size); //调用普通内存分配函数
+    return p;
+}
+
+
+class SkCanvas{
+    /* Fill the entire canvas' bitmap( 构造函数指定 )  with the specified color and mode. */
+    void drawColor(color, mode);  // 实际调用 drawPaint
+    /* Fill the entire canvas' bitmap with the specified paint. */
+    virtual void drawPaint(const SkPaint& paint);  // 注意：是个虚函数  这里应该是要OpenGL了！
+};
+
+//  These are the virtual drawing methods
+void SkCanvas::drawPaint(const SkPaint& paint) {
+    ITER_BEGIN(paint, SkDrawFilter::kPaint_Type)
+
+    while (iter.next()) {   //20120208 什么情况下 这个地方会循环呢？
+        iter.fDevice->drawPaint(iter, paint); // A
+    }
+    ITER_END
+}
+
+fDevice 为 class SkDevice
+
+---------------------------
+20120208
+在用户接口都是用 canvas.drawRect 即 SkCanvas::drawRect 实现里面都有 iter.fDevice->drawRect
+这会调到 SkDevice::drawRect 而他的实现，就是 draw.drawRect(r, paint);
+
+当然还有继承 SkDevice 的 pdfdevice   gpudevice 都单独实现了 drawRect
+
+
+ITER_BEGIN ITER_END 是两个宏，里面定义了 SkDrawIter  iter(this);
+PC版Skia证实，调用了这个函数（只要没有 SkCanvas 类的公有派生 就应该调用这个）
+
+class SkDrawIter : public SkDraw 
+
+最后调用了 
+class SkDevice{
+
+    virtual void drawPaint(const SkDraw&, const SkPaint& paint);
+};
+
+void SkDevice::drawPaint(const SkDraw& draw, const SkPaint& paint)  // A处 PC版走这里
+{
+    draw.drawPaint(paint);
+}
+
+pc版 src/gl下面是空的，android版则有文件 比如 SkGLDevice.cpp  这就是OpenGL跟Skia对接的接口层
+
+class SkGLDevice : public SkDevice {  //显然，android用了这个派生类
+    virtual void drawPaint(const SkDraw&, const SkPaint& paint);
+}
+
+
+void SkGLDevice::drawPaint(const SkDraw& draw, const SkPaint& paint) 
+{
+...  
+    SkGL::DrawVertices(4, GL_TRIANGLE_FAN, vertex, texs, NULL, NULL, this->updateMatrixClip());
+...
+}
+
+/* 事例程序 标明调用了 opengl接口标准的函数 */
+void SkGL::DrawVertices(...)  //画顶点
+{
+...
+    glEnable(GL_TEXTURE_2D);
+    glDisable(GL_TEXTURE_2D);
+...
+    glDisableClientState(GL_COLOR_ARRAY);
+    glShadeModel(GL_FLAT); 
+...
+    glDrawElements(mode, count, GL_UNSIGNED_SHORT, indexArray);
+    glDrawArrays(mode, 0, count);
+}
+
+这时，就理解什么叫做skia 基于 opengl 了 
+
+
+3 最基本的画图操作
+    SkBitmap bitmap;
+    bitmap.setConfig(SkBitmap::kARGB_8888_Config, w, h);
+    bitmap.allocPixels();
+
+    SkCanvas canvas(bitmap);  //这里Canvas跟bitmap有了关系
+    canvas.drawColor(SK_ColorBLUE); //这里应该对接OpenGl了吧！
+
+    SkPaint paint;
+    paint.setTextAlign(SkPaint::kCenter_Align);
+
+    canvas.drawText(text.c_str(), text.size(),2, 3, paint);
+
+那么Canvas 就把该画的东西写入了Bitmap类的buffer里面( 可以做一个实验 )
+
+奇怪，好像没有用 OpenGL啊！
+
+4 Skia打印使用SkDebugf(需打开logcat) 
+
+5 java 层的Canvas 跟这里的SkCanvas 又有什么关系呢？
+
+
+6 在SkPostConfig.h中有一项：
+
+#if defined(SK_SCALAR_IS_FIXED) && defined(SK_SCALAR_IS_FLOAT)
+    #error "cannot define both SK_SCALAR_IS_FIXED and SK_SCALAR_IS_FLOAT"
+#elif !defined(SK_SCALAR_IS_FIXED) && !defined(SK_SCALAR_IS_FLOAT)
+    #ifdef SK_CAN_USE_FLOAT
+        #define SK_SCALAR_IS_FLOAT
+    #else
+        #define SK_SCALAR_IS_FIXED
+    #endif
+#endif
+
+判断 Scaler是浮点还是定点。那么CPU有浮点运算器，应该是浮点最快。还有 OpenGl是否支持 Scalar
+
+通过 SkScan.cpp 里面加打印可以判断 SK_SCALAR_IS_FLOAT 是定义的( 20110818 )
+
+
+
+void SkBlitter::blitRect(int x, int y, int width, int height)
+{
+    while (--height >= 0)
+        ;//this->blitH(x, y++, width); //这行注掉 整个图形系统Rect元素比如选中条都不显示了 哈哈！！
+}
+更为神奇的是，这里的blitH用的不是 SkBlitter 类里面的，而是 SkARGB32_Shader_Blitter 里面的
+class SkARGB32_Shader_Blitter : public SkShaderBlitter {
+     virtual void blitH(int x, int y, int width)
+};
+
+class SkShaderBlitter : public SkRasterBlitter {
+};
+
+class SkRasterBlitter : public SkBlitter {
+};
+
+
+void SkARGB32_Shader_Blitter::blitH(int x, int y, int width) 
+{
+uint32_t*   device = fDevice.getAddr32(x, y);  //获得Bitmat的x，y坐标处的地址
+if(xxx)
+    fXfermode->xfer32(device, span, width, NULL);//测试发现 这行注掉都没有关系
+else
+    fProc32(device, span, width, 255);  //这行注掉抽屉里面的图标没有了只剩下轮廓和
+文字  设置里面，选中条没有了。可见这行最重要
+
+}
+
+SkBlitRow::Proc32   fProc32;  //注意 fProc32 只是一个函数指针
+fProc32 = SkBlitRow::Factory32(flags); //这里被初始化
+而：
+SkBlitRow::Factory32(unsigned flags)
+{
+   proc = gDefault_Procs32[flags];//取出一组函数中的一个
+}
+而：
+static const SkBlitRow::Proc32 gDefault_Procs32[] = {
+    S32_Opaque_BlitRow32,
+    S32_Blend_BlitRow32,
+    S32A_Opaque_BlitRow32, //不透明  这个用得更多 （通过打印跟踪）
+    S32A_Blend_BlitRow32   //透明    偶尔调用
+};  // 4中混合模式
+
+skia: optimize S32A_Blend_BlitRow32 using arm/neon instructions  可惜nxp没有NEON
+
+
+看看这个混合公式：
+
+static inline SkPMColor SkPMSrcOver(SkPMColor src, SkPMColor dst) {
+    return src + SkAlphaMulQ(dst, SkAlpha255To256(255 - SkGetPackedA32(src)));
+}
+
+static inline uint32_t SkAlphaMulQ(uint32_t c, unsigned scale) {
+    uint32_t mask = gMask_00FF00FF;
+//    uint32_t mask = 0xFF00FF;
+
+    uint32_t rb = ((c & mask) * scale) >> 8;
+    uint32_t ag = ((c >> 8) & mask) * scale;
+    return (rb & mask) | (ag & ~mask);
+}
+
+
+SkXfermode*         fXfermode;
+这里无一例外使用了多态
+在抽屉中移动选中框的时候使用的是：
+SkDstOutXfermode::xfer32()
+{
+    do {
+        unsigned a = SkGetPackedA32(*src);
+        *dst = SkAlphaMulQ(*dst, SkAlpha255To256(255 - a));
+        dst++;
+        src++;
+    } while (--count != 0); 
+//这不就是纯软件alpha混合嘛！为什么不用opengl呢？ opengl的glue(src/gl目录)又是什么时候用呢？
+}    
+//可见，有大量的alpha混合操作是很复杂的，并不能用2D或者 OpenGl的 blit 加速（那么原来
+的Copyblit是怎么对接的呢？晕！）
+// 这里貌似是涉及到了我的那个关于Alpha的经典问题:后两层先混合，再和第一层混合
+
+
+/** \class SkXfermode   //专门处理 透明模式的 
+
+    SkXfermode is the base class for objects that are called to implement custom
+    "transfer-modes" in the drawing pipeline. The static function Create(Modes)
+    can be called to return an instance of any of the predefined subclasses as
+    specified in the Modes enum. When an SkXfermode is assigned to an SkPaint,
+    then objects drawn with that paint have the xfermode applied.
+*/
+
+
+
+
+
+
+
+7 SK_DEBUG 如何打开？ 正常情况下显然是没有打开的。
+  在SkPreConfig.h define 即可 但是打开后 系统起不来了。
+
+
+
+8 什么时候使用 src/gl 里面的东西呢？
+skia 编译的时候加了 LOCAL_ARM_MODE := arm 以提高效率
+
+google搜索 S32A_Opaque_BlitRow32 有一些可用信息
+
+明天验证一下 skia 的alpha混合公式！
+
+static inline SkPMColor SkPMSrcOver(SkPMColor src, SkPMColor dst) {
+    return src + SkAlphaMulQ(dst, SkAlpha255To256(255 - SkGetPackedA32(src)));
+}
+
+SrcOver 是12种 porter-duff 的一种
+
+android java
+
+PorterDuff.Mode 	ADD 	Saturate(S + D)  
+PorterDuff.Mode 	DARKEN 	[Sa + Da - Sa*Da, Sc*(1 - Da) + Dc*(1 - Sa) + min(Sc, Dc)]  
+... 
+PorterDuff.Mode 	XOR 	[Sa + Da - 2 * Sa * Da, Sc * (1 - Da) + (1 - Sa) * Dc]  
+
+
+完全可以断定，Android 2.2  alpha混合，是由skia 由软件逐点运算出来的，没有使用任何加速。
+
+那么 copypblit 是怎么工作的呢？ opengl是怎么工作的呢？ 搞不懂！
+
+
+
+由于 Skia 与 Cairo 的同构型相当高，也可参照 [Cairo :: documentation] 建立所需的背景知识。
+可以对比 cairo
+
+PostScript是一种编程语言，最适用于列印图像和文字（无论是在纸，胶片或非物质的CRT都可）。
+用现今的行话讲，它是页面描述语言。1985年由Adobe推出         
+
+
+9 skia 编译
+依赖：libfreetype6-dev
+否则提示 ft2build.h 找不到
+You can generate the Unix makefiles by running ./gyp_skia （ 是一个python脚本）
+
+然后执行 make 即可，东西生成在 out/Debug 目录下
+
+./out/Debug/skhello 打印
+SkFontHost::OpenStream failed opening 1 （好像是缺少字体）
+
+原因是在ubuntu11.10 上 没有
+#define SK_FONT_FILE_PREFIX    "/usr/share/fonts/truetype/msttcorefonts/"  
+定义的 msttcorefonts 文件夹，指定一个有字库的文件夹即可，比如把一个字库拷贝到 /home/gaojie/
+然后指定此文件夹。
+
+下载的字体一般是ttc或ttf格式的
+文泉驿 黑体 在 /usr/share/fonts/truetype/wqy/wqy-microhei.ttc
+打开这个字体文件，显示name：WenQuanYi Micro Hei
+两者的不同处是 TTC 档会含超过一种字型，例如繁体 Windows 的 Ming.ttc 就包含细明体及
+新细明体两种字型 (两款字型不同处只是英文固定间距)，而 TTF 就只会含一种字型.
+TTC是几个TTF合成的字库，安装后字体列表中会看到两个以上的字体。两个字体中大部分字都一
+样时，可以将两种字体做成一个TTC文件，现在常见的TTC中的不同字体，汉字一般没有差别，只
+是英文符号的宽度不一样，以便适应不同的版面要求
+
+
+SkFontHost_linux.cpp 里面
+SkOSFile::Iter  iter(SK_FONT_FILE_PREFIX, ".ttf");改为
+SkOSFile::Iter  iter(SK_FONT_FILE_PREFIX, ".ttc");
+
+#define SK_FONT_FILE_PREFIX      "/home/gaojie/"   wqy-microhei.ttc 放入此目录  
+skhello就可以显示汉字了
+
+./gm -w ./ 会在当前目录下生成大量png和pdf图片。看到这个似乎理解到了skia的强大
+./gm -w ./ --match convexpaths  只运行否一个测试
+
+
+gm源码在 gm目录
+
+类内部函数 this->makePaths(); 和直接调用 makePaths(); 有啥区别
+
+SkTArray<SkPath> fPaths; 虽然是个 array模板类 但是array只是个名字，怎么可以
+canvas->drawPath(fPaths[i], paint);  fPaths[i] 这样表达呢？
+好像是重载了运算符 [] 
+
+
+10 我在海思2.2平台单独测试一下skia：
+
+skia里SK_SCALAR_IS_FLOAT 宏成立！
+
+src/view/ 没用,这是skia自己的窗口系统，android没有使用，他的窗口系统在java层自己实现的。
+这里有window，widget，各种控件比如listview textbox等等，android只用了skia项目的一部分代码
+但是，默认makefile只添加了
+    SkEvent.cpp \
+    SkEventSink.cpp \
+    SkOSMenu.cpp \
+    SkTagList.cpp \
+    SkView.cpp \
+    SkViewPriv.cpp \
+    SkWindow.cpp \
+    SkTouchGesture.cpp
+几个文件
+
+
+./samplecode/SampleApp.cpp
+生成了 测试程序 SampleApp  打开后出现一个窗口
+
+
+class SkBorderView : public SkWidgetView
+class SkWidgetView : public SkView 
+都是这种套路
+
+
+pixelflinger 是个3D的，skia是个矢量的，搞不懂啊
+
+
+4.0的skia例子比较丰富，可以在模拟器中实验！(4.0模拟器选择hvga)
+
+不能运行啊，晕死！
+错误提示：
+W/WindowManager(   78): Failure taking screenshot for (120x180) to layer 21005
+D/dalvikvm(  590): Not late-enabling CheckJNI (already on)
+I/WindowManager(   78): createSurface Window{41293978 Starting com.skia.sampleapp 
+paused=false}: DRAW NOW PENDING
+
+
+By adding Skia engine to Chrome, Google can ensure good graphics performance on 
+devices that don't have a grphics processing unit.
+
+Optional GL-based acceleration of certain graphics operations including shader 
+support and textures (module gl/) 但是：gl在基本skia上层，要搞清楚
+
+10 kGPU_Backend 是啥意思？！
+
+android4.0 里 
+gpu目录生成了一个静态库
+LOCAL_MODULE:= libskiagpu
+LOCAL_MODULE_TAGS := optional
+include $(BUILD_STATIC_LIBRARY)  
+
+./external/skia/bench/Android.mk:LOCAL_STATIC_LIBRARIES := libskiagpu
+./external/skia/android_sample/SampleApp/Android.mk:    libskiagpu
+./external/skia/gm/Android.mk:LOCAL_STATIC_LIBRARIES := libskiagpu
+./external/webkit/Android.mk:LOCAL_STATIC_LIBRARIES := libxml2 libxslt libhyphenation 
+libskiagpu 也就这个有用！
+./packages/apps/SampleApp/Android.mk:    libskiagpu
+
+android2.2 
+生成 libskiagl.so 只有
+./frameworks/base/core/jni/Android.mk（生成libandroid_runtime.so）引用 libskiagl   
+这是直接引用到上层了 跟4.0差别很大啊
+android_view_ViewRoot.cpp
+android/graphics/Canvas.cpp 引用了 SkGLCanvas
+
+其实SkGLCanvas.cpp很简单没有干什么，但是他继承了SkCanvas类，所以继承了 drawPoints 等
+函数，而这些函数又是根据device调用的所以就调到了SkDevice里面去了。
+
+4.0中，感觉gpu跟上层无关了啊！ 只有 /skia/gpu/ 生成的libskiagpu.so 引用了 SkGpuCanvas 
+
+我不知到4.0 怎么使用SkGpuCanvas
+
+
+/**
+ *  Subclass of SkDevice, which directs all drawing to the GrGpu owned by the
+ *  canvas.
+ */
+class SK_API SkGpuDevice : public SkDevice
+
+class SkPDFDevice : public SkDevice
+
+理解skia与opengl的关系
+
+gpu目录只编译了部分文件，从out/Debug/obj.target/gr/src/gpu/里面可以看出
+
+分析 gm程序 每执行一个测试，调用3次 new SkGpuDevice
+分别为：
+SkGpuCanvas::SkGpuCanvas(GrContext* context, GrRenderTarget* renderTarget) {
+    SkASSERT(context);
+    fContext = context;
+    fContext->ref();
+    this->setDevice(new SkGpuDevice(context, renderTarget))->unref();
+}
+
+（SkGpuCanvas.cpp里面只有几行代码）
+gmmain.cpp中 2次
+gc->setDevice(new SkGpuDevice(context, rt))->unref();
+
+gm.cpp 中
+void GM::drawContent(SkCanvas* canvas) { //drawContent 这个并不是虚函数
+    this->onDraw(canvas); 
+   //实验证明 直接调用onDraw跟this->onDraw一样效果，那为什么要this呢?
+   //用this这样写，虚函数的意思更明显的一点
+}
+
+convexpaths.cpp中
+class ConvexPathsGM : public GM {
+  virtual void onDraw(SkCanvas* canvas) {
+    ...
+  }
+}
+
+./gmmain.cpp中
+gm->draw(canvas);
+
+
+gc->setDevice(new SkGpuDevice(context, rt))->unref();
+在 SkGpuCanvas 构造函数里面调用依次   外面用的时候又调用一次，为何？
+外面调用是给 SkDeferredCanvas 用的，
+gc = new SkDeferredCanvas;这样写没有传入device
+当然，等价于  gc = new SkDeferredCanvas(new SkGpuDevice(context, rt));
+
+SkDeferredCanvas  （还有一个 SkGPUCanvas）
+使用 class DeferredDevice : public SkDevice （里面所有实现都是空的）
+
+
+终于明白几种后端的意思了
+  kRaster_Backend,
+  kGPU_Backend,
+  kPDF_Backend,
+
+----------------------------------------------------------
+SkPDFDevice* dev = new SkPDFDevice(size, size, identity);
+SkCanvas c(dev);  
+
+gm程序依赖了libGL.so   ./out/gyp/gm.target.mk 中有 -lGL  这个文件是生成的
+./gyp/gpu.gyp:              '-lGL', 原始文件
+
+编译的时候 make V=1 显示详情
+
+
+11 李东辉的调研结果：
+最终影响速度的是：drawbitmap函数
+
+12 2.2里面的SkGLCanvas.cpp到4.0改成了SkGpuCanvas.cpp
+class SkGpuCanvas : public SkCanvas
+
+那么Gpu方式的Canvas又有那些操作是加速的呢？
+
+4.0的SkGpuCanvas和2.2的SkGLCanvas使用方法不同
+
+2.2中：
+指定MEMORY_TYPE_GPU，然后系统走到
+mGlCanvas = new Canvas(gl);   //** 4.0 中 private GLES20Canvas mGlCanvas;
+看到Canvas.java中，其中一个构造函数：
+
+    public Canvas(GL gl) {
+        mNativeCanvas = initGL();
+        mGL = gl;
+        mDensity = Bitmap.getDefaultDensity();
+    }
+
+initGL();在 ./core/jni/android/graphics/Canvas.cpp 定义 注意这是个jni ，cpp程序
+
+    static SkCanvas* initGL(JNIEnv* env, jobject) {
+        return new SkGLCanvas;
+    }
+
+
+class SkCanvasGlue {
+    static SkCanvas* initGL(JNIEnv* env, jobject) {
+        return new SkGLCanvas;
+    }
+}
+
+意思是上层要创建特定的Gl canvas 才能使用skia的GL 后端。
+也只有在 GL canvas 上才能使用 opengl的函数画3d图形吧。
+
+最后加速的好像可能就是一个copybit吧
+
+而对于一般的比如画矩形，使用的buffer不是物理连续的，所以无法使用openGl。如果在java层
+建立了GPU类型的Canvas
+则会分配物理连续内存，使用SkGlDevice(或者4.0的 SkGPUDevice)
+
+20120213结论：opengl对图形的加速只表现在 copybit（拷贝，移动，带alpha混合的拷贝）至
+于skia运算过程中的alpha混合，以及对画点画线画矩形都无法加速
+
+
+加速对于常规的图形操作意义不大。
+
+
+4.0中 Canvas.java里面没有 Canvas(GL gl)构造函数了。
+
+skia/src/gl 跟 现在的skia/src/gpu下的内容完成了相同的功能，
+并且4.0 中没有像原来一样单独生成libskiagl.so 而是把 SkGpuDevice.cpp SkGpuCanvas.cpp 
+一起成成到libskiagpu.a中，并且没有什么地方使用！
+4.0多了一个 libskiagpu.a 好像没有地方用啊，不知到干什么的。显然他不等价与 libskiagl.so
+
+
+13 skia的bliter系统
+SkBlitter （海思平台 class SkHSBlitter: public SkBlitter）
+
+
+
+14 安卓2.2中 skia/src/gl下面有2套实现，比如：
+SkGLDevice.cpp
+SkGLDevice_SWLayer.cpp （这个就是软件的，相当于直接使用SkDevice.cpp）
+
+SkGLDevice::drawBitmap 的实现，调用
+SkGL::DrawVertices(4, GL_TRIANGLE_FAN, pts, tex, NULL, NULL, iter); 调用 glDrawArrays （这就跟libagl里面的copybit一致了）
+
+
+派生类构造函数不会自动调用基类构造函数的
+派生类构造函数“必须”调用基类构造函数  使用：后面加基类构造函数
+如果基类是纯需函数或者默认构造函数除外，或者只有一个构造函数，参数为空的。这个也可以
+理解，因为可以默认调用。需要参数的就不行了。
+
+
+构造函数中的 explicit 关键字
+
+关键字explicit可以禁止“单参数构造函数”被用于自动类型转换
+class Stack
+{
+	explicit Stack(int size);
+};
+没有explicit的话Stack s = 40;能编译通过
+而有explicit则不能，必需Stack s(40);
+
+
+15  Canvas.java 
+    public void drawPaint(Paint paint) {
+        native_drawPaint(mNativeCanvas, paint.mNativePaint);
+    }
+在canvas.cpp中最终调用到了 canvas->drawPaint 这样java 跟cpp 就联系起来了。
+  
+
+16 优化图形性能的时候， 
+skia 里面的skcanvas.cpp中的drawBitmapRect（最后调到skDevice.cpp 里面的drawBitmap）函数 最耗时。
+
+
+17 20120213 对skia与opengl的关系的认识更进了一步。
+如果不运行3D应用，其实android跟opengl一点关系都没有，图形方面完全是软件实现的，硬件加速只能针对粗旷的
+drawPoints  （我想应该不是简单指在buffer里面置一个像素点，是不是能画出占多个像素点的圆形或方形“大点”）
+drawRect
+drawPath
+drawBitmap
+drawSprite
+drawText
+drawPosText
+drawVertices （画顶点）
+这些函数在SkDevice.cpp中定义，好像是到了图形的最后输出阶段。
+
+画成png，就是话到bitmap再保存成png，话到pdf，要实现skpdfdevice.cpp  那我就不明白skgpudevice了！是为了加速吗？
+
+
+
+19 4.0里面的skia，看到了更大的不懂的空间！
+
+4.0里面新定义了
+class HardwareCanvas extends Canvas
+class GLES20Canvas extends HardwareCanvas
+
+GLES20Canvas类里面重新定义了 drawRect  然后调用native 函数
+但是这样感觉，这个Canvas就跟skia完全没有关系了啊！
+./android_view_GLES20Canvas.cpp: { "nDrawPath", "(III)V", (void*) android_view_GLES20Canvas_drawPath },
+
+./android_view_GLES20Canvas.cpp 包含
+#include <SkBitmap.h>
+#include <SkCanvas.h>
+#include <SkMatrix.h>
+#include <SkPaint.h>
+#include <SkRegion.h>
+#include <SkScalerContext.h>
+#include <SkTemplates.h>
+#include <SkXfermode.h>
+#include <SkiaShader.h>
+#include <SkiaColorFilter.h>
+
+那么，skia那一套复杂的机制，矢量逻辑怎么跟这里的opengl 结合在一起呢？太神奇了吧！
+
+可能是这样，其他的矢量运算都还是skia自己的，只是涉及到Canvas 画的时候，使用这里面实现的。
+因为只有画的操作可以加速，其他的比如 矢量运算，剪切等，是无法加速的！
+
+所以android4.0没有用SkGpuCanvas SkGpuDevice等,而2.2在Canvas里面有 Canvas(GL) 构造函数，可以调用到SkGlCanvas
+
+
+唯一用到的是在Webkit中单独的使用
+
+
+关注： frameworks/base/libs/hwui 目录
+
+ 
+
+/**
+ * OpenGL renderer used to draw accelerated 2D graphics. The API is a
+ * simplified version of Skia's Canvas API. 这个类的api是skia的Canvas api的简化版
+ */
+class OpenGLRenderer {
+
+这里的函数直接由 java层的Canvas类的继承类 GLES20Canvas 调用
+
+2.2 java层只有一个Canvas类，然后靠skia里面的 SkGlCanvas SkGlDevice 实现opengl的对接
+4.0不用skia的gpudevice，而是在java层继承Canvas类，又重写了一套jni
+(那么20120215的问题是：这套jni又是怎么跟skia的主体结构结合在一起的呢？感觉皮肉分离了)
+
+还有一个不明白：GlSurfaceView 跟opengl 相关的Canvas 怎么联系？
+
+由于4.0 普通的view wiindow都可以加速，所以view.java 定义了 HardwareCanvas mHardwareCanvas;
+    switch (mLayerType) {
+        case LAYER_TYPE_HARDWARE:
+//这个函数很怪异，有返回值却不赋值（20130508）
+//函数内部给全局变量 mHardwareLayer 赋值了
+                getHardwareLayer();
+            break;
+        case LAYER_TYPE_SOFTWARE:
+            buildDrawingCache(true);
+            break;
+    }
+
+
+20  20120215 矢量图形库的矢量体现在哪里？
+opengl加速，2.2中只重新实现 SkGlDevice.cpp 4.0中重写Canvas，我感觉此canvas跟skia系统的关系都不大了。
+实际上，opengl与skia有很多功能是重叠的，比如skia要drawpath需要大量代码实现，而在opengl中就有 glDrawArrays 轻易实现。
+矢量图形可任意缩放，是skia的核心，skia对接opengl，只在最后画阶段加速，画什么，由skia运算决定。
+
+OpenVG 模块组成：
+1. Coordinate Systems and Transformations (Image drawing uses a 3x3 perspective transformation matrix) 看来3x3 是透视图的标准
+
+22 surface里面有个canvas 但是建立GlSurfaceView 应该建立一个单独的Surface 我想应该是建立的Gl 的canvas 但是找不到依据啊
+
+23  skbitmap里面怎么分配的内存呢？
+海思在bitmap分配的时候，企图做一个硬件分配。但是这样太耗费物理连续内存了，很容易就分配不出来了！
+但是，opengl用的内存是怎么分配的呢？
+思考skbitmap的分配系统：
+SkBitmap::HeapAllocator::allocPixelRef 就是调用malloc
+
+bool SkBitmap::allocPixels(Allocator* allocator, SkColorTable* ctable) {
+    HeapAllocator stdalloc;
+
+    if (NULL == allocator) {
+        allocator = &stdalloc;
+    }
+    return allocator->allocPixelRef(this, ctable);  //默认调用 malloc
+}
+
+其实，opengl作为后端输出的时候，使用的就不是bitmap后端了吧！所以opengl输出，不用创建特殊的bitmap？!
+
+SkCanvas::createDevice的时候
+SkBitmap bitmap;
+bitmap.allocPixels();   这个就调用 malloc函数
+
+觉着，如果使用SkGlDevice 的话，没有分配bitmap的空间啊！ 奇怪了
+
+
+----------------------
+skia里面没有Surface的概念，surface是android的概念
+
+
+
+理解SkCanvas类
+A Canvas encapsulates all of the state about drawing into a device (bitmap)
+这里要注意，现在画图的时候，应该不是所有的东西都画在2个buffer中，跟之前的minigui是否有本质区别。
+This includes a reference to the device itself, and a stack of matrix/clip values.【MC栈是什么概念】
+For any given draw call (e.g. drawRect), the geometry of the object
+    being drawn is transformed by the concatenation of all the matrices in the
+    stack. The transformed geometry is clipped by the intersection of all of
+    the clips in the stack. 貌似理解了这个stack的含义，应该相当于minigui中的消息队列。
+
+
+class SkPaint
+    The SkPaint class holds the style and color information about how to draw
+    geometries, text and bitmaps.
+这个相当于DC
+
+class SkRegion
+    The SkRegion class encapsulates the geometric region used to specify
+    clipping areas for drawing.
+
+SkCanvas类 里面实现的drawRect
+
+    ITER_BEGIN(paint, SkDrawFilter::kRect_Type)
+    while (iter.next()) {
+        iter.fDevice->drawRect(iter, r, paint);
+    }
+    ITER_END
+其中 SkDrawIter          iter(this);
+class SkDrawIter : public SkDraw
+
+
+SkGLCanvas：SkCanvas 这个继承 skglcanvas 并没有什么大作为
+
+
+Canvas.cpp[ jni ] 中 
+
+java包中的 android.graphics.Canvas  The Canvas class holds the "draw" calls
+
+
+class SkBitmap 
+The SkBitmap class specifies a raster bitmap.A bitmap has an integer width and height,
+and a format (config), and a pointer to the actual pixels.
+Bitmaps can be drawn into a SkCanvas, but they are also used to specify the target
+of a SkCanvas' drawing operations.  
+Bitmaps 被画到Canvas里面？ Canvas也包含buffer吗？
+20120217 新理解：
+SkBitmap对象可以被画到SkCanvas(SkCanvas::drawBitmap方法)，也可以用来指定画操作的目标：
+SkCanvas::SkCanvas(const SkBitmap& bitmap) 用这个构造canvas类
+当然，canvas也可以不用bitmap类作为目标，比如：
+SkCanvas::SkCanvas(SkDevice* device) 用这个构造函数
+
+
+这个类里面有 setPixels（） //Use the standard HeapAllocator to create the pixelref that manages the
+        pixel memory.
+allocPixels()
+
+void* fPixels;//关键，这个就是buffer地址
+sk_malloc_throw()的实现就是 malloc()
+
+struct MipLevel {
+    void*       fPixels;
+    uint32_t    fRowBytes;
+    uint32_t    fWidth, fHeight;
+};
+//MipLevel是什么概念?看看这里的定义，宽度，高度，每行字节数，首地址
+
+/** \class Sk64
+    Sk64 is a 64-bit math package that does not require long long support from the compiler.*/
+setMul(a,b) /** Set the number to the product of the two 32 bit integers */  product 乘积之意
+
+再来看SKBitmap.cpp中的 MipMap* Alloc()
+        size.setMul(levelCount + 1, sizeof(MipLevel));
+        size.add(sizeof(MipMap));
+        size.add(pixelSize);
+
+分配的内存大小为： levelCount+1个MipLevel结构体 + MipMap结构体大小+ pixelSize
+看一下 maxLevels 和 pixelSize 是怎么算出来的吧：
+maxLevels
+
+buildMipMap()
+    // whip through our loop to compute the exact size needed
+    size_t  size = 0;
+    int     maxLevels = 0;
+    {
+        int width = this->width();
+        int height = this->height();
+        for (;;) {
+            width >>= 1;
+            height >>= 1;
+            if (0 == width || 0 == height) {
+                break;
+            }
+            size += ComputeRowBytes(config, width) * height;
+            maxLevels += 1;
+        }
+    }
+当分配一个width*height 的buffer后，还要分配他面积的1/4，1/8，1/16 ...的buffer
+但是没有任何地方调用这个函数
+
+java层，android.graphics包bitmap类 setPixels() 但是这个跟skia库里面的意义完全不同。
+
+SkWindow.cpp中
+
+skia库中也有-双buffer-  skflipPixelRef.h中
+class SkPixelRef
+This class is the smart container for pixel memory, and is used with SkBitmap.
+A pixelref is installed into a bitmap, and then the bitmap can【怎么install的？】
+access the actual pixel memory by calling lockPixels/unlockPixels.
+
+lockPixels/unlockPixels？？！！
+这是一个抽象基类，里面含有 纯虚函数，有多处继承此类。
+
+SkBitmap里面的  void* getPixels() const { return fPixels; }
+
+
+SkMallocPixelRef.h中的定义类没有单独的.cpp实现而是在SkBitmap.cpp中实现的。
+class SkMallocPixelRef : public SkPixelRef
+看到了吧，这个类 继承的是SkPixelRef但是定义到了SkBitmap.cpp中，搞笑！
+这个skia库也太夸张了，表示长宽乘积有一个64bit的表示，也没准，大厦上的巨幅广告可以分辨率打到10万
+
+SkBitmap.h 中 size_t getSize() const { return fHeight * fRowBytes; }
+
+
+----------------------
+
+----------------------------------------------------------------------------
+20120117  关于skia
+copybit只是给libagl用的，而surfaceflinger不会直接调用copybit而是通过opengl。海思又
+强制surfaceflinger使用libGLES_android.so做浏览器图形优化时，涉及到skia里软blit对接
+2D加速的方式（海思已经对接但是没有使用，靠一属性控制）那么，skia为什么没有对接硬件加
+速呢？skia的功能跟opengl提供的功能有什么区别？（ 李东辉，朱林 给skia增加blit硬加速接口 ）
+
+资料显示：froyo上的skia没有任何的加速  gl/目录下有代码但是没有执行 （gl目录生成libskiagl.so 
+并不是我想的libskia.so依赖libskiagl.so 事实正好相反libskiagl.so 依赖 libskia.so 费解！ 
+而4.0的libskiagpu.so 也是依赖libskia.so的）4.0 skia部分变化很大，好像实现了加速！
+
+可以在google group里面找到很多关于skia 用opengl硬加速的讨论：
+we are not working on this（指对接opengl硬加速） at the moment. That said, we did an 
+experiment about a year ago and you can probably find the results of that experiment in the source code of the platform. 
+
+Another approach is to use the newly-added gpu/ library.（android4.0 里面的skia确实有gpu/目录了）
+This has a subclass of canvas and device that directs all of the rendering into the current gl context.（so，期待4.0）
+
+2 skia矢量图形库与opengl的关系。
+  OpenVG是针对诸如Flash和SVG的矢量图形算法库提供底层硬件加速界面的免授权费、跨平台应用程序接口API
+  但是android中2D向量图形函数库并没有使用OpenVG，而是使用了Google在05年收购的一家公司提供的引擎叫skia
+  它可以搭配OpenGL/ES与特定的硬体特征，强化显示的效果。综上，2D图形硬件无需支持OpenVG
+  OpenGL ES 1.1强调api的硬件加速，OpenGL ES 2.0更强调3D能力。
+  OpenGL ES 1.1和OpenGL ES 2.0之间的关系并不是旧版本和新版本之间的差别，而是一个针对相对低端的应用，一个针对高级应用【很难理解！】
+  
+  2.X并不能百分百兼容1.X。Android现在支持1.X和2.X。 【言外之意，还是有部分兼容的？】 对于我们的应用来说，选择OpenGL ES 1.1已足够
+  【那什么时候需要用到2.0呢？】
+   搭配 OpenGL/ES 与特定的硬件特征，强化显示的效果：搞清楚skia到底如何搭配。而 Skia 就相当于扮演 Cairo 的角色，不过更轻量些
+   skia的文档非常少，但 Chromium 的 SVN log 与程序代码则是现在最完整的文件，以下是其特征
+     svn co http://skia.googlecode.com/svn/trunk skia-trunk可以获得skia源码库
+    最新的skia代码跟froyo中的相比，已经改了很多
+    skia生成的库为libskia.so和libskiagl.so 
+
+   Google Chrome 选择 Skia 的理由6
+
+为什么不用 OpenGL 或者 DirectX 来加速渲染？
+    * 数据从 video card 读出，然后在另一个进程中再拷贝回 video card，这种情况下不值得用硬件加速渲染；
+    * 相对而言，图形绘制只占很少时间，大部分时间是计算页面元素的位置、风格、输出文本，即使用了 3D 加速也不会有明显改善；
+看看skia/src/gl中都做了什么
+
+3 分析skia图形库
+  SkDraw.cpp 里面有画矩形的函数
+
+  SkDevice类
+  class SkGLDevice_FBO : public SkGLDevice
+  class SkGLDevice_SWLayer : public SkGLDevice 
+
+  SkDevice是个什么概念？
+
+  SkDraw类，定义了画点画矩形函数
+  SkDevice里面的drawXXX 函数都是虚函数，调用的是SkDraw类里面的实现。这里既然是虚函数，就要多态了。
+  class SkGLDevice : public SkDevice，对 drawRect 等函数进行重定义。
+
+  class SkCanvas 的概念 这个类中也定义了画点画线的函数
+  class SkGLCanvas : public SkCanvas
+  
+  SkDraw 基本上是定义了几个画点画线函数
+  class SkDrawIter : public SkDraw
+  SkDrawIter里面主要定义了一个next函数： // skip over recs with empty clips
+
+  SkCanvas.cpp里面定义了
+  #define ITER_BEGIN(paint, type) 和
+  #define ITER_END } 
+  这两个宏被Canvas里面的画点画线等函数成对调用。
+   iter.fDevice->drawRect(iter, r, paint);
+
+  SkDevice的定义，主要目的就是为了实现底层画线等函数的软硬实现的多态。
+
+  SkDraw类中包含：SkDevice*       fDevice; 就是这里实现了多态
+
+  struct DeviceCM ：  CM应该代表Clip和Matrix
+  This is the record we keep for each SkDevice that the user installs.
+  The clip/matrix/proc are fields that reflect the top of the save/restore
+  stack. Whenever the canvas changes, it marks a dirty flag, and then before
+  these are used (assuming we're not on a layer) we rebuild these cache
+  values: they reflect the top of the save stack, but translated and clipped
+  by the device's XY offset and bitmap-bounds.
+
+小议canvas的save()和 restore()
+save()的描述是：Saves the current matrix and clip onto a private stack，意思是保存
+当前的矩阵到私有的堆栈。保存canvas经过一系列的旋转，平移，缩放等操作后的状态 
+
+restore()的描述是：This call balances a previous call to save(), and is used to
+ remove all modifications to the matrix/clip state since the last save call. 
+意思是恢复到canvas的矩阵变化前的状态，也就是调用save()之前的canvas的矩阵状态。
+
+http://codereview.appspot.com/176050 在skia的log里面看到了这个地址，能打开
+  
+#ifdef SK_GL_DEVICE_FBO
+    #define USE_FBO_DEVICE
+    #include "SkGLDevice_FBO.h"
+#else
+    #define USE_SWLAYER_DEVICE
+    #include "SkGLDevice_SWLayer.h"
+#endif
+  这里是二选一的 ，并且走的是else部分
+  FBO  代表framebuffer
+  在x86上 opengl 是基于sdl的好像
+
+---------------------
+Does Skia support HW acceleration?
+There are two ways Skia can take advantage of HW.
+
+1. Subclass SkCanvas
+
+Since all drawing calls go through SkCanvas, those calls can be redirected to a 
+different graphics API. SkGLCanvas has been written to direct its drawing calls 
+to OpenGL. See src/gl/
+
+2. Custom bottleneck routines
+
+There are sets of bottleneck routines inside the blits of Skia that can be replace 
+on a platform in order to take advantage of specific CPU features. One such example 
+is the NEON SIMD instructions on v7 devices. See src/opts/
+
+-----------------------------
+
+   Skia的模块化做的比较好，你可以一个一个模块的加入。我们的第一步先移植core模块，这个
+模块是必须移植的。我们从哪里下手呢？我们先浏览一下core模块的头文件，看看有没有config
+之类的文件，在include/core/目录下面，发现 SkPreConfig.h，SkUserConfig.h，SkPostConfig.h
+三个config文件，根据经验这三个文件肯定要先被配置。先打开这个三个文件，看看文件注释里面
+有没有有用的信息。很幸运，在SkUserConfig.h文件头部有如下注释：
+
+/*  SkTypes.h, the root of the public header files, does the following trick:
+
+    #include "SkPreConfig.h"
+    #include "SkUserConfig.h"
+    #include "SkPostConfig.h"
+
+    SkPreConfig.h runs first, and it is responsible for initializing certain
+    skia defines.
+
+    SkPostConfig.h runs last, and its job is to just check that the final
+    defines are consistent (i.e. that we don't have mutually conflicting
+    defines).
+
+    SkUserConfig.h (this file) runs in the middle. It gets to change or augment
+    the list of flags initially set in preconfig, and then postconfig checks
+    that everything still makes sense.
+
+    Below are optional defines that add, subtract, or change default behavior
+    in Skia. Your port can locally edit this file to enable/disable flags as
+    you choose, or these can be delared on your command line (i.e. -Dfoo).
+
+    By default, this include file will always default to having all of the flags
+    commented out, so including it will have no effect.
+*/
+
+     通过上面注释我们知道这三个配置文件被SkTypes.h包含，包含顺序是先SkPreConfig.h，
+其次是SkUserConfig.h，最后是 SkPostConfig.h。我们知道了包含顺序，我们就按这个顺序来
+一个一个配置文件看。
+    SkPreConfig.h的开头就是OS的配置，可以根据自己的目标平台选择打开那个选项。代码如下：
+
+#if !defined(SK_BUILD_FOR_PALM) && !defined(SK_BUILD_FOR_WINCE) && !defined(SK_BUILD_FOR_WIN32) 
+&& !defined(SK_BUILD_FOR_SYMBIAN) && !defined(SK_BUILD_FOR_UNIX) && !defined(SK_BUILD_FOR_MAC) 
+&& !defined(SK_BUILD_FOR_SDL)
+
+    #if defined(PALMOS_SDK_VERSION)
+        #define SK_BUILD_FOR_PALM
+    #elif defined(UNDER_CE)
+        #define SK_BUILD_FOR_WINCE
+    #elif defined(WIN32)
+        #define SK_BUILD_FOR_WIN32
+    #elif defined(__SYMBIAN32__)
+        #define SK_BUILD_FOR_WIN32
+    #elif defined(linux)
+        #define SK_BUILD_FOR_UNIX
+    #else
+        #define SK_BUILD_FOR_MAC
+    #endif
+
+#endif
+
+
+
+--------------题外---------------
+1 Failed to find cpu subsys
+
+libcutils 目录 sched_policy.c 中 getSchedulerGroup 函数
+
+/*
+ * Try to get the scheduler group.
+ *
+ * The data from /proc/<pid>/cgroup looks (something) like:
+ *  2:cpu:/bg_non_interactive
+ *  1:cpuacct:/
+ *
+ * We return the part after the "/", which will be an empty string for
+ * the default cgroup.  If the string is longer than "bufLen", the string
+ * will be truncated.
+ */
+
+get_sched_policy
+
+typedef enum {
+    SP_BACKGROUND = 0,
+    SP_FOREGROUND = 1,
+} SchedPolicy;
+
+
+SharedBufferStack
+waitForCondition(DequeueCondition) timed out (identity=1, status=0). CPU may be pegged. trying again
+
+
+2 android 的 ps 命令可以加 -P -p -x 参数
+ -P 可以显示一个进程是 fg 还是 bg。比如开始 setting进程为bg。打开 Setting 再执行ps -P 就显示 fg
+退出又变为 bg 
+
+这里FBO中的FB并不是kernel里的Frame Buffer，而是Opengl里的FrameBuffer
+
+Android系统对2D和3D加速的需求分析
+
+2D加速
+Android2.1版本及以上，800x480分辨率的LCD，在没有2D加速情况下，界面显示速度不可接受，拖动界面反应迟钝。
+分析原因，主界面由RGB背景和RGBA前景图标组成，一幅800x480的RGBA图形要占用1500KB内存，RGB则是 750KB，
+如果完全由CPU进行RGBA和RBA的merge操作，将会消耗大量时间（每个点都要计算）。
+在系统中使用2D加速引擎后，可以大幅提高系统界面流畅性，某些2D测试程序成绩显著提升，并可有效降低界面操作的CPU占用率。
+总结：Android2.1系统中推荐使用2D加速。
+
+3D加速
+Android2.1系统以后很多地方提供了标准和高级两种方案，比如主界面提供Launcher和 Launcer2两个选择。其中Launcher
+即为以前版本的主界面，Launcher2则第一次出现在Google Nexus One手机中，需要3D硬件支持，否则无法运行。
+此外还有替代Gallery的Gallery3D应用程序，可以以3D效果显示图片，我尝试编译进系统，可以运行该程序，但是在显示3D图
+片时调用OpenGL的API报错。
+“I/RenderView( 249): Texture creation fail, glError 128”
+大部分Liverwallpaper也需要3D支持才可以正常显示。
+总结：如果需要更好的效果，推荐使用3D加速。
+
+2D加速实现方案
+当前HTC手机采用的高通msm7k和msm8k的方案，是采用 copybit模块实现2D加速，因为msm系列处理器的2D和3D加速单元是分开的。
+然而采用TI3430方案的摩托罗拉Milestone并没有采用Copybit模块对2D进行特殊处理。
+为什么TI没有使用copybit呢，因为copybit的上层封装实际就是Opengl es的API（GLdrawTexi等），TI的2D/3D加速引擎使
+用的是POWERVR SGX™，这个引擎是完整OpenGL ES支持的，也就是实现了所有（至少是所有必须的）的OpenGL ES API，并没有
+特意去区分2D和3D加速。
+
+总结：Copybit现在是什么东西？现在的Copybit是封装在Android系统opengl软件实现（libagl）库的一部分，仅对
+openGL ES 2D API进行封装，实现openGL ES 2D API到硬件的加速功能。如果处理器的GPU较为统一，可以完全替代libagl，
+那么可以丢开copybit，自己去实现openGL ES 2D API的加速功能。
+如果你的处理器只有2D加速，没有3D，那么可以去实现copybit，因为相对3D API来说，这个模块的封装google基本是做好的，
+只要去实现一个HAL即可。
+
+Android的体系架构中已经考虑到了硬件加速的问题，并在整个架构中有所体现。但是这方面的文档并不多见，几乎没有。
+在项目最初的时候确定方案是最头疼的事情。如何集成硬件加速器到Android系统中？
+经过多方打听，据说Android本身并不完善，所以有的公司使用DirectFB作为中介来做集成。首先将DirectFB porting 
+到 Android中，再在DirectFB中使用硬件加速。这个方法有个优点：对将来Android版本的升级没有太大的依赖性，而
+且DirectFB已经很成熟，即使没有硬件加速器，也能达到一定的加速目的。但是在公司现有的人力和时间的状况下，没有
+办法达成预期。所以公司有计划购买其他公司 DirectFB到Android的集成方案。
+经过代码分析，通过了解Android的绘图系统SGL，包括Skia（着色系统）和SurfaceFlinger（Surface控制系统），
+我们发现，Android的SGL中已经考虑到了硬件加速的问题，并为之提供了接口。这一点相当重要。所以我们需要做的工作
+量就相当少。硬件加速可以分为两个部分。一个是位图的copy部分，也就是通常所说的blit；另一个是绘图部分。Android 
+为用户提供的仅仅是第一个部分的接口。这个原因，在做Qtopia平台时候就已经分析过了。目前我们已经完成了第一部分的集成工作。
+具体来看，做blit操作，主要集中内存搬移上，首先要考虑的就是内存的分配，使用和释放。这一点Android做得比Qtopia
+细心多了。 Android提供了pmem驱动来作为内存管理的接口。这样能够保证，Android绘图系统获得的地址全部是物理连续的。
+对硬件加速的驱动控制非常有帮助。当然pmem的内容很多包括，Android其实只使用了其中的最基本的分配部分:在Android启动
+的时候，分配8M的空间给SGL使用。至于这8M空间怎么使用，是SGL来处理的，处理的方式和pmem的方式有点类似，但增加更多的
+参数，方便使用者。这种方式有点类似于“在应用层写驱动”的做法，可以避免linux的GPL原则，从而有机会达到一定的商业某的。
+(Android有一部份代码是没有开源的)。
+内存的问题解决了，下面就是代码的书写。Android提供了bilt的相关头文件，只要实现对应的函数就好了，相对来说，不是特别复杂。
+我们的2D驱动是沿用的Qtopia上2D加速驱动。改动不大。主要实现了blit相关的函数内容实现。
+
+实现后，有发现一个问题，这个问题看上去是个老问题：小线段问题。
+小线段问题分两类。
+刚开始遇到的是所有的画面都会出现小线段。这个问题分析之后，有解决掉，几乎看不到小线段了。
+后来发现 status bar中，如果时间更新，或者拖动status bar会出现不明状况的小线段。这些小线段有时候有，有时候没有，
+很随机。考虑是多线程的问题。后来经过调试，发现并不是这么一回事。现在已经找到了解决方案，可以保证小线段不出现。目前还
+不清楚确切的原因。
+
+S3C6410的双Framebuffer于Android系统中存在的问题
+
+在为S3C6410移植Android系统过程中，发现在拖动任务栏，软键盘输入信息等情况下，屏幕会出现闪烁现象，类似刷新率不足情况。
+一直认为原因是自己porting的系统没有实现copybit等2D加速功能，导致填充速度不够快。昨天在调试双Framebuffer时发现，
+问题可能出在双 Framebuffer上的交换上。Android使用双Framebuffer机制，front显示，back填充，前后交互显得特别重要。
+打开三星驱动debug宏，可以发现系统（Android 1.5）在EGL初始化后不断调用显示驱动以下几个函数，实现buffer交换：
+s3cfb_check_var()
+s3cfb_activate_var()
+pan_display()
+打开debug的printk信息后，我发现一件很有意思的情况，原来所谓的闪烁现象，现在都不见了，至少基本看不出了。Printk会降低
+驱动调用速度，会不会问题出在显示驱动？文章Patch Framebuffer Driver with Double-Buffering to Support Android's
+ Page-Flipping中也提到双buffer驱动导致不断开关LCD。于是查到s3cfb_activate_var()函数，这个函数重写了 LCD的寄存器。
+应该是短时间重写该寄存器导致出现问题。临时的解决方法是在这个函数后添加mdelay(5)延时,但会导致效率降低,更好的解决方法应该修
+改驱动或者Android中间层调用代码，这个需要跟踪下Android的UI相关代码，待续。
+
+Android2.0/2.1系统中，S3C6410双 Framebuffer显示问题的解决方法
+
+前文Problems with S3C6410 double framebuffer in Android找到了Android系统处理三星S3C6410处理器的双
+Framebuffer驱动时出现的屏闪问题。这两天分析了三星原厂提供的cupcake代码后，终于找到解决方法。
+
+Android2.0之后，Google把和Framebuffer打交道的EGL显示部分也抽象为一个HAL模块——Gralloc
+
+cupcake中用于swapbuffer也被移到了Gralloc下的Framebuffer.cpp文件中，具体函数变为fb_post：
+
+static int fb_post(struct framebuffer_device_t* dev, buffer_handle_t buffer)
+{
+    if (private_handle_t::validate(buffer) < 0)
+        return -EINVAL;
+
+    fb_context_t* ctx = (fb_context_t*)dev;
+
+    private_handle_t const* hnd = reinterpret_cast<private_handle_t const*>(buffer);
+    private_module_t* m = reinterpret_cast<private_module_t*>(dev->common.module);
+    
+    if (m->currentBuffer) {
+        m->base.unlock(&m->base, m->currentBuffer);
+        m->currentBuffer = 0;
+    }
+
+    if (hnd->flags & private_handle_t::PRIV_FLAGS_FRAMEBUFFER) {
+
+        m->base.lock(&m->base, buffer, 
+                private_module_t::PRIV_USAGE_LOCKED_FOR_POST, 
+                0, 0, m->info.xres, m->info.yres, NULL);
+
+        const size_t offset = hnd->base - m->framebuffer->base;
+        m->info.activate = FB_ACTIVATE_VBL;
+        m->info.yoffset = offset / m->finfo.line_length;
+        if (ioctl(m->framebuffer->fd, FBIOPUT_VSCREENINFO, &m->info) == -1) {
+            LOGE("FBIOPUT_VSCREENINFO failed");
+            m->base.unlock(&m->base, buffer); 
+            return -errno;
+        }
+        m->currentBuffer = buffer;
+        
+    } else {
+        // If we can't do the page_flip, just copy the buffer to the front 
+        // FIXME: use copybit HAL instead of memcpy
+        
+        void* fb_vaddr;
+        void* buffer_vaddr;
+        
+        m->base.lock(&m->base, m->framebuffer, 
+                GRALLOC_USAGE_SW_WRITE_RARELY, 
+                0, 0, m->info.xres, m->info.yres,
+                &fb_vaddr);
+
+        m->base.lock(&m->base, buffer, 
+                GRALLOC_USAGE_SW_READ_RARELY, 
+                0, 0, m->info.xres, m->info.yres,
+                &buffer_vaddr);
+
+        memcpy(fb_vaddr, buffer_vaddr, m->finfo.line_length * m->info.yres);
+        
+        m->base.unlock(&m->base, buffer); 
+        m->base.unlock(&m->base, m->framebuffer); 
+    }
+    
+    return 0;
+}
+
+=======================================================================
+函数名称变了，应该是实现方法有所改变，不是直接贴swap，而是采用时间间隔来post。
+
+但最底层的处理方法不会变，还是用FBIOPUT_VSCREENINFO。
+
+同样，用PAN_DISPLAY修改即可。
+
+if (ioctl(m->framebuffer->fd, FBIOPAN_DISPLAY, &m->info) < 0)
+{
+   LOGE("%s::FBIOPAN_DISPLAY fail(%s)", __func__, strerror(errno)); 
+   return 0; 
+}
+
+unsigned int crtc = 0;
+
+if(ioctl(m->framebuffer->fd, FBIO_WAITFORVSYNC, &crtc) < 0) {
+//s3cfb_wait_for_vsync->wait_event_interruptible_timeout
+   LOGE("%s::FBIO_WAITFORVSYNC fail(%s)", __func__, strerror(errno)); 
+   return 0; 
+}
+
+
+/*   if (ioctl(m->framebuffer->fd, FBIOPUT_VSCREENINFO, &m->info) == -1) 
+{
+            LOGE("FBIOPUT_VSCREENINFO failed");
+            m->base.unlock(&m->base, buffer); 
+            return -errno;
+        }
+*/
+========================================================================
+
+
+
+
+
+

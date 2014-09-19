@@ -1,0 +1,279 @@
+1 http progressive stream
+
+
+PC也可以直接html5 视频，progressive streaming
+
+android官方支持的网络流协议3种：
+RTSP (RTP, SDP)
+HTTP/HTTPS progressive streaming
+HTTP/HTTPS live streaming draft protocol
+
+wowza不支持progressive streaming
+dlna默认只支持progressive streaming
+
+腾讯视频地址是mp4的
+http://124.193.165.203/vlive.qqvideo.tc.qq.com/r0012dhf0vn.p202.1.mp4?vkey=F7F1A
+E8D272A2260E615614483DB318B6398E3FE03BC6D2F97126935268F1326D866CF28128DE056&sha=
+&level=3&br=200&fmt=hd&sdtfrom=v3000&platform=10403
+
+这个地址粘在chrome浏览器，页面右击保存，可以下载mp4文件。
+
+
+
+
+wiki 保存修改后弹出 “Your edit was saved” 小标签如何做到
+
+sessions and cookies
+
+使用浏览器下载apache服务器192.168.7.32/upgrade.json  wireshark抓包，有时显示200 ok
+有时显示 304 not modified （表示服务器上这个文件没有修改）
+浏览器有缓存后，向服务器发送的请求应该有所不同。
+
+
+http方式下载mp4视频
+分析腾讯视频 pc打开http://mp.weixin.qq.com/里面的视频是mp4，播放器是flash
+手机打开这个链接情况可能不同
+
+
+
+===
+360浏览器url打开mp4链接默认行为是下载
+IE 下载
+
+firefox 播放。自动生成一个网页，里面有video标签。但是winxp安装firefox就不行了，还是下载
+调查发现ubuntu里，firefox设置 mp4 使用quicktime插件播放mp4，而winxp版本的没有这个插件
+
+
+iphone safari url mp4 直接播放
+
+
+
+通过 hub + 无线路由  考察平板电脑的网络客户端实现方式
+
+捕捉 192.168.1.52  打开 腾讯视频几乎显示的都是TCP 协议
+
+通过http 传输xml  显示 HTTP/XML
+
+请求的是 mobile.video.qq.com   163.177.65.158
+
+
+User-Agent: Mozilla/5.0 (iPad; CPU OS 6_1 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10B141 Safari/8536.25
+
+
+打开 app store 也有： GET /bag.xml?os=6&ix=2&locale=zh_CN HTTP/1.1     通过HTTP协议 Get 一个xml文件
+
+TLSv1 
+TLSv1.2
+SSL
+
+
+SSL(Secure Sockets Layer 安全套接层),及其继任者传输层安全（Transport Layer Security，TLS）是为网络通信提供安全及数据完整性的一种安全协议。TLS与SSL在传输层对网络连接进行加密。 建立在TCP之上。
+
+
+HTTPS使用端口443，而不是象HTTP那样使用端口80来和TCP/IP进行通信。
+
+Please start Chromium as a normal user. To run as root, you must specify an alternate --user-data-dir for storage of profile information.
+解决办法：hexedit /usr/lib/chromium-browser/chromium-browser 把 geteuid 改为 getppid
+
+通过http协议下载一个图片的包结构：
+一个包分为2部分：Frame 1340 byte   Reassembled TCP 23540 bytes
+图片信息在Reassembled TCP里面，分段传输 每个段 1460字节
+
+
+MSS：Maximum Segment Size 最大报文段长度
+
+wireshark中 [ ] 中的字段是为了便于分析额外加的数据，不在当前数据包中。
+
+视频流  就是显示为一个一个的 TCP 包，使用80（http）端口
+
+一般情况下有多少个
+219.238.10.45	192.168.1.52	TCP	1514	[TCP segment of a reassembled PDU]
+就有多少
+192.168.1.52	219.238.10.45	TCP	66	26643 > http [ACK] Seq=254 Ack=11644817 Win=65160 Len=0 TSval=2654348 TSecr=3841082993
+
+
+
+以太网上这个值一般设置成1460，因为1460Byte净荷+20Byte TCP头+20Byte IP头 ＝ 1500字节，正好符合链路层最大报文的要求。
+
+
+TCP三次握手
+
+每条记录都有个帧号，此号好象是wireshark给编的 不是网络数据里面的。
+
+
+搜狐客户端获取海报图片流程：
+
+下载视频跟下载图片的流程是一模一样的  下载图片的时候 wireshark会把图片数据重新组合，便于分析
+显示为：
+118.244.253.88	192.168.1.52	HTTP	1514	[TCP Out-Of-Order] HTTP/1.1 200 OK  (JPEG JFIF image)
+
+
+
+
+192.168.1.52	118.244.253.88	HTTP	169	GET /20130131/2d27_77883c71_9ad0_9a99_816e_6df9906aab61_1.jpg HTTP/1.1 
+
+
+协议数据单元PDU（Protocol Data Unit）是指对等层次之间传递的数据单位。 协议数据单元(Protocol Data Unit )物理层的 PDU是数据位（bit），数据链路层的 PDU是数据帧（frame），网络层的PDU是数据包（packet），传输层的 PDU是数据段（segment），其他更高层次的PDU是数据（data）。
+
+
+TCP segment of a reassembled PDU”是什么意思，其实主机响应一个查询或者命令时如果要回应很多数据（信息）而这些数据超出了TCP的最大MSS时，主机会通过发送多个数据包来传送 这些数据（注意：这些包并未被分片）。对wireshark来说这些对相应同一个查询命令的数据包被标记了“TCP segment of a reassembled PDU”
+
+问题，wireshark如何识别多个数据包是对同一个查询数据包的响应? wireshark是根据sequence number来识别，这些数据包ACK number是相同的，当然number的数值与查询数据包中的next sequence number也是一样的。
+
+看直播的时候，服务器给终端回的信息包含：
+Media Type: application/vnd.apple.mpegurl (198 bytes)
+
+直播的ts流数据就在 
+192.168.7.52	192.168.1.52	TCP	1514	[TCP segment of a reassembled PDU]  数据包里面，并且每个TCP包并没有 188字节 TS 包对齐。
+192.168.7.52	192.168.1.52	HTTP	1514	Continuation or non-HTTP traffic    这个数据包里也是TS 包，奇怪了！为什么有的显示TCP 有的显示HTTP呢
+copy -> offset hex text 得到
+
+0000   48 54 54 50 2f 31 2e 31 20 32 30 30 20 4f 4b 0d  HTTP/1.1 200 OK.
+0010   0a 44 61 74 65 3a 20 46 72 69 2c 20 32 32 20 46  .Date: Fri, 22 F
+0020   65 62 20 32 30 31 33 20 30 36 3a 30 35 3a 31 35  eb 2013 06:05:15
+0030   20 47 4d 54 0d 0a 43 6f 6e 74 65 6e 74 2d 54 79   GMT..Content-Ty
+0040   70 65 3a 20 76 69 64 65 6f 2f 6d 70 65 67 74 73  pe: video/mpegts
+0050   0d 0a 45 78 70 69 72 65 73 3a 20 4d 6f 6e 2c 20  ..Expires: Mon, 
+0060   32 36 20 4a 75 6c 20 31 39 39 37 20 30 35 3a 30  26 Jul 1997 05:0
+0070   30 3a 30 30 20 47 4d 54 0d 0a 53 65 72 76 65 72  0:00 GMT..Server
+0080   3a 20 54 56 69 65 20 54 53 53 2f 76 32 2e 30 2e  : TVie TSS/v2.0.
+0090   30 2e 30 20 28 75 62 75 6e 74 75 29 0d 0a 4c 61  0.0 (ubuntu)..La
+00a0   73 74 2d 4d 6f 64 69 66 69 65 64 3a 20 46 72 69  st-Modified: Fri
+00b0   2c 20 32 32 20 46 65 62 20 32 30 31 33 20 30 36  , 22 Feb 2013 06
+00c0   3a 30 35 3a 31 35 20 47 4d 54 0d 0a 43 6f 6e 6e  :05:15 GMT..Conn
+00d0   65 63 74 69 6f 6e 3a 20 63 6c 6f 73 65 0d 0a 54  ection: close..T
+00e0   72 61 6e 73 66 65 72 2d 45 6e 63 6f 64 69 6e 67  ransfer-Encoding
+00f0   3a 20 63 68 75 6e 6b 65 64 0d 0a 50 72 61 67 6d  : chunked..Pragm
+0100   61 3a 20 6e 6f 2d 63 61 63 68 65 0d 0a 43 61 63  a: no-cache..Cac
+0110   68 65 2d 43 6f 6e 74 72 6f 6c 3a 20 6e 6f 2d 63  he-Control: no-c
+0120   61 63 68 65 2c 20 6e 6f 2d 73 74 6f 72 65 2c 20  ache, no-store, 
+0130   6d 75 73 74 2d 72 65 76 61 6c 69 64 61 74 65 0d  must-revalidate.
+0140   0a 0d 0a 35 35 66 37 63 0d 0a [47] 40 00 19 00 00  ...55f7c..G@....
+0150   b0 0d 00 01 c1 00 00 00 01 ef ff 36 90 e2 3d ff  ...........6..=.
+0160   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+0170   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+0180   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+0190   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+01a0   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+01b0   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+01c0   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+01d0   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+01e0   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+01f0   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+0200   ff ff ff ff ff ff [47] 4f ff 19 00 02 b0 17 00 01  ......GO........
+0210   c1 00 00 e1 00 f0 00 1b e1 00 f0 00 0f e1 01 f0  ................
+0220   00 2f 44 b9 9b ff ff ff ff ff ff ff ff ff ff ff  ./D.............
+0230   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+0240   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+0250   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+0260   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+0270   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+0280   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+0290   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+02a0   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+02b0   ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff  ................
+02c0   ff ff [47] 41 00 12 00 00 01 e0 75 65 80 c0 0a 31  ..GA......ue...1
+02d0   b5 e5 fd 79 11 b5 e5 e1 59 00 00 00 01 09 f0 00  ...y....Y.......
+02e0   00 00 01 06 00 05 91 94 00 00 10 80 00 00 01 06  ................
+02f0   01 03 0f a0 50 80 00 00 00 01 67 64 00 1e ac d1  ....P.....gd....
+0300   00 b4 3d a1 00 00 03 00 01 00 00 03 00 32 e0 20  ..=..........2. 
+0310   00 26 25 80 01 e8 4a 0b 30 07 8b 16 89 00 00 00  .&%...J.0.......
+0320   01 68 eb cc 4c 84 c0 00 00 01 65 88 84 00 42 52  .h..L.....e...BR
+0330   ff fc 0d 40 0a 18 70 29 a9 5f 8a ce b2 59 00 00  ...@..p)._...Y..
+0340   03 00 00 03 00 00 03 00 e5 a0 04 07 e9 bf f1 fe  ................
+0350   7a 6b 83 d6 88 d8 9b 54 e5 a3 ea 52 a9 99 55 22  zk.....T...R..U"
+0360   1f 47 cd 30 6d 27 a0 6c 37 cb b8 59 fc de 8f f4  .G.0m'.l7..Y....
+0370   17 aa 58 48 b1 22 0e 6c b6 06 42 d0 13 70 [47] 01  ..XH.".l..B..pG.
+0380   00 13 ad 4e 79 44 78 24 fa 1d 6c bf 4b a7 c2 16  ...NyDx$..l.K...
+
+
+HTTP/1.1 200 OK.
+Date: Fri, 22 Feb 2013 06:05:15GMT
+Content-Type: video/mpegts
+Expires: Mon, 26 Jul 1997 05:00:00 GMT
+Server: TVie TSS/v2.0.0.0 (ubuntu)
+Last-Modified: Fri, 22 Feb 2013 06:05:15 GMT
+Connection: close
+Transfer-Encoding: chunked
+Pragma: no-cache
+Cache-Control: no-cache, no-store, must-revalidate
+
+
+TCP建立连接的3次握手
+192.168.1.52	192.168.7.52	TCP	74	26917 > http [SYN] 
+192.168.7.52	192.168.1.52	TCP	74	http > 26917 [SYN, ACK] 
+192.168.1.52	192.168.7.52	TCP	66	26917 > http [ACK] 
+
+跟踪nexus 7 搜狐视频客户端
+
+192.168.1.52 118.244.253.88 HTTP 305 GET /teleplay/category.json?api_key=9854b2afa779e1a6bff1962447a09dbd&plat=6&sver=2.7&partner=2 HTTP/1.1 
+打开这个json :
+{"status":200,"data":{"categorys":[{"cateValues":["全部","偶像","伦理","历史","谍战"],"defaultKeys":"",
+"cateAlias":"cat","searchKeys":["","偶像剧","........."statusText":"OK"}
+
+再下载一个 album.json 包含了所有缩略图的地址，摘抄：
+[{"cup":"","ver_small_pic":"xxx14.jpg","tv_desc":"埃琳娜转化为吸血鬼的过程是漫长的...","tip":"更新至15集"
+
+[ 从chome的 chrome web store中安装jsonview插件 ]
+seek的时候：
+192.168.1.52	192.168.7.53	HTTP	449	GET /vod_storage/vol1/2013/01/17/50f7a93262be0/142.50f7a9325a70d.1200k.1024x576.mp4
+GET 是HTTP协议里面的关键词：请求服务器的文档
+靠里面的： Range: bytes=851902464-9473884150020  字段决定，注意，这个是终端发给服务端的。 
+
+
+HTTP1.1 是目前的HTTP版本。
+
+那么 视频数据包有的显示TCP 有的显示HTTP  是不是说，视频数据包的第一个字节 赶上能按照http协议头解析的就显示HTTP 不能的就显示TCP 呢？
+分析发现，两种显示，payload数据都是普通ts 或者 mp4 文件。
+
+                                
+红色条目  背景红色  Len = 0 表示空包
+
+腾讯视频直播节目使用 MSNMS协议 传输ts流文件，且出现 m3u8-proxy字样。
+
+-------------------
+EGreat 视频源
+
+
+
+chromium-browser -user-data-dir=/opt/tools -user-agent="Mozilla/5.0 (iPad; U; CPU OS 4_3_3 like Mac OS X; en-us) AppleWebKit/533.17.9 (KHTML, like Gecko) Version/5.0.2 Mobile/8J2 Safari/6533.18.5"
+http://v.youku.com/player/getM3U8/vid/120925712/type/mp4/ts/1354607403/v.m3u8
+m3u8文件地址
+m3u8文件，ubuntu识别为  http live stream playlist
+
+
+
+
+大麦盒子蓝光极清专区：
+
+{
+ "code":"N000000",
+ "longTime":1393826508960,
+ "stringTime":"2014-03-03 14:01:48.96",
+ "message":null,
+ "result":
+ [
+  {
+   "video_id":26,
+   "video_type":16,
+   "vid":6,
+   "m3u8":"http://124.207.119.74/data/video/2014/134/index.m3u8",
+   "mp4":"http://124.207.119.74/data/video/2014/2014/134/index.m3u8", 
+   "start_time":"",
+   "end_time":"",
+   "cp":0,
+   "cp_source_id":""
+  }
+ ] ,
+ "cached":true,
+ "cachedTime":300
+} 
+-----
+"mp4":"http://124.207.119.74/data/video/2014/2014/134/index.m3u8", 这个地址打不开
+
+
+
+iqiyi.com 爱奇异 网页视频 中的广告和视频是一个url（调试airplay的时候，打印信息发现的）
+在服务器端把2个流合成一个流。
+
+

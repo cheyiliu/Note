@@ -1,0 +1,806 @@
+uboot以及启动技术
+
+1 开始
+	1) Uboot(Universal Boot Loader)由德国DENX软件工程中心开发，支持powerpc, arm, mips, x86等架构。
+	DENX还开发了比较有名的denx linux和ELDK(Embedded Linux Development Kit )。
+	uboot下载地址：http://ftp.denx.de/pub/u-boot/ 在1.3.4版(2008/08/12)后用日期表示版本。
+	帮助文档: http://www.denx.de/wiki/view/DULG/Manual
+
+	2) doc目录以README.xx形式描述各模块
+
+2 编译
+	1) clean:删除一般性中间文件
+	   clobber: clean 和 .map .hex等更进一步的文件
+	   mrproper或distclean: clobber unconfig
+	   unconfig: 删除config.h等
+
+
+3 Make系统与配置
+
+1 20140718 
+uboot执行 defenv 可以恢复默认配置
+
+需要加入ir的支持，替代recovery按键。
+
+
+mkimage 制作uImage (Uboot Image 在zImage前面加上64字节头)
+
+把没用的cpu结构删除掉。
+post目录编译了 net目录编译  libfdt里面生成了一个.a
+
+
+---Hisi---
+
+整理一个u-boot 以及参数传递的专题
+
+7 u-boot 里面的 bootargs 与kernel里面的cmd_line 的关系是怎样的？   还有，我一直没有搞明白 kernel去哪里找到的bootargs  
+
+8 使用u-boot里面的启动参数，我在海思平台看到这个用法，回头看nxp平台已经这样用了。
+bootargs=noinitrd console=ttyS1,115200n8 mtdparts=nx_sfc:1536k@0k(boot),-(sfc-extra);nx_2017:5m@0k(kernel),100m@5m(rootfs),200m@105(system),100m@305m(data),-(extra) root=/dev/nfs nfsroot=192.168.10.55:/home/gu/android_fs ip=192.168.10.229:192.168.10.1::255.255.255.0::eth0:off rw
+
+从kernel源码，逻辑是这样的：
+	/* Retreive command line */
+	p = of_get_flat_dt_prop(node, "bootargs", &l);
+	if (p != NULL && l > 0)
+		strlcpy(cmd_line, p, min((int)l, COMMAND_LINE_SIZE));
+
+#ifdef CONFIG_CMDLINE
+#ifndef CONFIG_CMDLINE_FORCE
+	if (p == NULL || l == 0 || (l == 1 && (*p) == 0))
+#endif
+		strlcpy(cmd_line, CONFIG_CMDLINE, COMMAND_LINE_SIZE);
+#endif /* CONFIG_CMDLINE */
+
+如果不 CMDLINE_FORCE 则u-boot里面有bootargs就用，没有就用kernel里面写死的
+
+注意区分bootcmd 参数  
+bootcmd=tftp vmlinux.bin;go 8000
+
+ mtdparts参数的支持依赖于 Device Drivers  ---> Memory Technology Device (MTD) support  ---> Command line partition table parsing  （你说记住这些有意义吗？就想葛UU说的，买个xbox游戏机，没事就下载游戏补丁，也不玩，就是觉得高兴。我就是这样，知道了这些就是高兴）
+
+并且海思的fastboot 控制台命令行可以编辑。nxp的就不行，这个是u-boot里面的一个配置选项。
+
+ATAG 标签（刚刚指导的新解释 Arm TAG ）
+我的印象中，cmd_line 只是启动参数中的一个 还包括 mem=
+
+
+那么 ATAG_CMDLINE 标签与 环境变量 bootargs 又是如何联系起来的呢？
+
+#define ATAG_CMDLINE	0x54410009 在u-boot 和 kernel 里面都有同样的定义 ，并且在arm特有目录
+
+tag 是有一个结构体的（都是在arm目录，难道其他结构不是这样做的吗？）
+
+
+struct tag_header {
+	u32 size;
+	u32 tag;
+};
+
+struct tag {
+	struct tag_header hdr;
+	union {
+		struct tag_core		core;
+		struct tag_mem32	mem;
+		struct tag_videotext	videotext;
+		struct tag_ramdisk	ramdisk;
+		struct tag_initrd	initrd;
+		struct tag_serialnr	serialnr;
+		struct tag_revision	revision;
+		struct tag_videolfb	videolfb;
+		struct tag_cmdline	cmdline;   //cmdline在这里，就是u-boot的bootargs
+
+		/*
+		 * Acorn specific
+		 */
+		struct tag_acorn	acorn;
+
+		/*
+		 * DC21285 specific
+		 */
+		struct tag_memclk	memclk;
+	} u;
+};
+
+
+原来nxp上我用的  tftp ；go 8000 的方式，应该是不能解析 bootargs的  必须使用bootm 命令才可以
+
+正常的情况应该是像上面那样，但是nxp的u-boot做了修改 do_go 函数里面也强制去使用了patch过的ataglist
+
+海思的是常规方法，nxp走了偏锋。他的go命令只能运行kernel，并且 go addr  地址随便写都是
+是不是u-boot原始默认是不能用 go命令启动kernle的？
+
+正常的内核从来都不是用go命令来启动的。内核镜像的启动需要bootm来设置ATAGS以及传递正确的machine ID
+是啊
+所以我直接在go命令下加了一个tag 结构体的代码 （所以我明白为什么nxp的能go启动，和为什么nxp要这样改了）
+
+编译最后：
+
+  SYSMAP  System.map
+  OBJCOPY arch/arm/boot/Image
+  Kernel: arch/arm/boot/Image is ready
+  AS      arch/arm/boot/compressed/head.o
+  GZIP    arch/arm/boot/compressed/piggy.gzip
+  CC      arch/arm/boot/compressed/misc.o
+  CC      arch/arm/boot/compressed/decompress.o
+  SHIPPED arch/arm/boot/compressed/lib1funcs.S
+  AS      arch/arm/boot/compressed/lib1funcs.o
+  AS      arch/arm/boot/compressed/piggy.gzip.o
+  LD      arch/arm/boot/compressed/vmlinux
+  OBJCOPY arch/arm/boot/zImage
+  Kernel: arch/arm/boot/zImage is ready
+  UIMAGE  arch/arm/boot/uImage
+Image Name:   Linux-2.6.35.7_hi3716c
+Created:      Sat Nov 26 19:18:51 2011
+Image Type:   ARM Linux Kernel Image (uncompressed)
+Data Size:    1947664 Bytes = 1902.02 kB = 1.86 MB
+Load Address: 80800000
+Entry Point:  80800000
+  Image arch/arm/boot/uImage is ready
+mkbootimg.........
+make update.zip.........
+  adding: boot.img (deflated 0%)
+  adding: META-INF/ (stored 0%)
+  adding: META-INF/com/ (stored 0%)
+  adding: META-INF/com/google/ (stored 0%)
+  adding: META-INF/com/google/android/ (stored 0%)
+  adding: META-INF/com/google/android/update-binary (deflated 39%)
+  adding: META-INF/com/google/android/updater-script (deflated 66%)
+  adding: system.img (deflated 46%)
+  adding: userdata.img (deflated 68%)
+please wait ...........
+ OK !
+
+20111128 
+make uImage CONFIG_INITRAMFS_SOURCE=..  可以把rootfs编译到kernel里面，从2.6.22 开始支持这种特性。
+
+8 海思的fastboot 不是原生android的fastboot ，原生的是支持usb操作的。海思的是用u-boot修改出来的。
+
+
+
+
+
+
+等待按键进入命令行的时间：
+并不是按任意键进入，有的是空格，a20是s，实际可以任意设定
+
+2 uboot 专门有一个参数区域用来存储参数。 参数存储的格式为：
+
+
+3 spi把一个bin文件写到spi flash里的方法，前提是spi里面事先有uboot，只是更新。如果什么
+都没有，只能做sd card的启动盘。这种升级方式，cpu把sdcard当成raw设备，不识别任何文件系统。
+1). sf erase 0 400000  //串行flash擦除4M Usage: sf erase offset len ，默认十六进制 
+2). usb reset  //(Re)start USB...  触发u盘识别。默认插上u盘不自动识别的。
+3). fatload usb 0:1 82000000 spi.bin   // spi.bin放到u盘根目录，拷贝到82000000 地址内存
+                                      //打印：reading spi.bin   ...............
+4). sf write 82000000 0 400000    //写串行flash
+完成！
+
+4 参数区写在单独的flash分区，一个一个的字符串。
+
+5 uboot参数区域修改后，应该是把整个参数区读出，擦除再写入
+
+
+
+
+u-boot的修改于维护
+
+u-boot 一开始总感觉有些大，总想改小一些。实际上完全没有必要，不要去动已经很稳定的东西。现在不会在乎100多k的u-boot空间
+一下是一些修改的地方：
+
+1 编译： 打开根目录下的Makefile 找到 mips 结构的位置 添加下面一行 设置编译器
+CROSS_COMPILE =/home/gaojie/EMMA3SLP/host-cross/mips-wrs-linux-gnu/bin/mips-wrs-linux-gnu-mips_softfp-glibc_small- 
+
+2 20100520  串口0 串口1 的修改  include/configs/et61326.h, 修改寄存器定义
+  #define CONFIG_SYS_NS16550_COM1       0xb0102000  //原来是b0101000 是串口0
+注意，u-boot里面的串口是com1 com2 com3 com4 排列的。
+修改了地址，u-boot的com1 就由板子的fuart0 变到fuart1 了。
+
+这个文件里面有 主频设置 324000000 等
+
+flash_init这个函数要注空 直接返回 因为串行Flash不能获得大小 会死到这里。
+
+CONFIG_NAND_BOOT 这个宏没有地方定义，需要nand启动的话，需要手动定义这个。
+
+3 原来的boot 要用nand Flash 就必须设置成nand启动。
+不要尝试去大改u-boot，这样的选择绝对是对的。
+
+4 修改成串行Flash启动的方法： 20100525
+
+
+include 目录下生成的config.h 和config.mk
+
+    $ cd u-boot
+    $ make clean    CROSS_COMPILE="mips-linux-gnu-"
+    $ make mrproper CROSS_COMPILE="mips-linux-gnu-"
+    $ make et61326_config
+    $ make -s CROSS_COMPILE="mips-linux-gnu-"
+
+et61326_config 是Makefile里面的一个目标。
+
+这里面  还可以选择
+3198 et61326_config \  nor Flash
+3199 et61326_small_config \  编译出来的113k  nor small
+3200 et61326_nand_config \   编译出来的  200k
+3201 et61326_nand_small_config:  这种情况下
+
+后面几种配置，是nandboot  但是我现在不是用nandboot  而是串行boot 但是用到nand。
+nand boot 为什么TEXT BASE 是 0xa2000000 呢？ 而nor 和 串行 都是bfc00000 的。
+
+但是没有做 spi+nand 的配置 需要自己来完成。
+第二步再去做 单片nand的方案
+好下面做一个spi+nand的 启动方式。
+
+原来的配置，必须是nand启动才可以打开nand Flash的各种功能
+
+u-boot里面的没用文件太多了，删除一些，以前做过这个工作
+board目录里面用的是哪个目录呢？ 只有board/nec/61326有用 其他的都可以删除。
+include目录 asm是一个链接  链到 asm-mips 其他的都没有用（指asm开头的）
+cpu目录 只留一个mips目录即可
+糟了，删多了。
+
+有的东西吧，是没有用，但是他要编译，但是最后可能不去链接 比如 fpga这个目录
+vxworks.h 头文件虽然没有用但是不能删除。
+还有一个关于串口的头文件，实际上是没有用。
+include/configs/目录下只留一个et61326.h即可
+
+POST  Power-On-Self-Test 
+
+post应该没有用 可以在 跟Makefile 中把 LIBS += post/libpost.a去掉 
+因为最终不会去链接这个库 但是却要把这个库编译出来。
+
+drivers目录里面的fpga 也没有用 pci没有用（会不会跟3slp的usb和net有关系？实践证明毫无关系）
+
+u-boot也是一个手写的makefile 形式类似于 busybox和内核 也是 obj-y的形式。
+每个makefile都包含一个 include $(SRCTREE)/rules.mk
+
+drivers下面删除了不少东西  drivers目录下的serial目录 应该不能全部删除吧，先删除试试
+果然不行， 因为其他地方用到了 串口 但是这个目录下还有很多其他平台的串口驱动，显然是没有用的。
+board.c里面要调用 serial_init 函数 通过编译发现，只编译了 ns16550.c 和 serial.c 所以其他的都可以删除了。
+NeC的是符合16550规范的。
+
+
+Linux-USB Gadget 驱动框架(以下简称 Gadget )实现了 USB 协议定义的设备端的软件功能。相对于 Linux USB 主机端( Host ) 驱动而言， Gadget 驱动出现较晚，它出现在 2.4.23 以后
+
+drivers/usb/host里面 可以删除 at91   sl811之类的东东
+usb里面只编译了 ohci-emma.c  和 ohci-hcd.c
+
+我靠：rtc目录需要 删除会提示 to_tm 函数找不到，晕死！
+这个函数存在于这个目录的data.c里面 所以只保留这个即可
+
+drivers/block可以完全删除
+
+Y:\Boot_Project\u-boot-spi+nand\drivers\mtd\nand里面可以删除跟emma无关的nand文件 比如davinci
+
+drivers\net里面可以删除很多不相关的文件  只留nec_candy.c 即可  sk98lin这个目录整个没用
+
+文件系统那里 reiserfs 应该没用
+include 目录的头文件一般不能删除 比如ata.h竟然都回用到
+
+
+我不明白 为什么nand启动的时候 程序编译地址在a2000000  难道不能像串行Flash一样映射到bfc00000 吗？
+===========================================================================
+先考虑spi+nand 20100521 今天上午完成！
+
+选择 et61326_small_config后  u-boot会由200k编程100k
+
+./board/nec/et61326/et61326.c:#ifndef CONFIG_SMALL
+./include/configs/et61326.h:#ifndef CONFIG_SMALL
+./include/configs/et61326.h:#ifndef CONFIG_SMALL
+./include/configs/et61326.h:#ifndef CONFIG_SMALL
+./include/config.h:#define CONFIG_SMALL 
+这几处定义。
+small后，网络，文件系统 usb等都被关闭了。
+
+注意了：从u-boot中看，使用nandFlash启动的时候，Nand使用的竟然是 CS1  而不是CS0  这跟上面的a2000000编译地址吻合了
+
+nand_spl
+支持从nand flash启动，但支持的cpu的种类也不是很多
+
+onenand_ipl    
+支持从onenand(三星公司开发的结合了nand和nor技术的flash)启动的代码
+
+tools       
+制作S-Record(motorola 制定的一种烧写格式，很简单)，u-boot镜像等的工具
+
+example 
+一些可以在u-boot上运行的小示例程序
+
+api
+一些扩展应用的独立的api
+api_example
+api的示例程序
+
+
+
+但是，当我选择nandFlash启动  make et61326_config_nand  并没有编译任何nand_spl目录下面的东西。
+
+
+20100525  include/config.h中  /* Automatically generated - do not edit */ 这个是哪里打印出来的？
+根目录下有一个 mkconfig 文件 
+
+#ifdef CONFIG_NAND_BOOT
+        /* Alternate0 set USB, UART0, NAND */
+        REGWR   t0 0x0028 0x8780
+        j       MEM_INIT_END  如果是nand Flash启动 就不在u-boot里面初始化内存？ 这时什么原因？
+        nop
+#endif
+
+u-boot对错误的检测非常严格
+Console port 1 defined but not configured
+"drivers/serial/serial.c"这个文件中
+
+
+20100525 19:02
+u-boot串行启动 串口1打印改好了 总结如下：
+1 串口1 本身默认就是打开的，不必特意打开。 设置成串行Flash启动后，alternate响应位已经打开，但是注意在打开alternate其他位的时候
+在lowlevel_init.S 中没有使用与或操作，所以注意设置别的位的时候别把serial位关闭。
+2 ROM_MODE寄存器不用设置，因为串行启动后，默认就是4M cs0为串行Flash
+3 使用串口1，只需把串口地址由0xb0100100 改为 0xb0000200 
+
+ping的时候提示mac地址不对
+NEC给的u-boot修改之前是没有mac地址的，需要自己定义
+
+
+
+1 u-boot不支持SPI启动然后去Nand里面读取数据。
+  linux内核使用bin格式。那么从NandFlash里面拷贝到内存的操作u-boot里面完成了吗？
+  在nand上面简历romfs
+
+  u-boot自己有写nandFlash的功能。
+  关键点：拷贝操作可以直接写到 bootcmd 命令行里面，强！  别想那么多，先向前走着，否则我一直处于混乱状态。
+
+  第一步先SPI+nand，别想单Nand了。
+  先对Nand有一定了解后再说！ 要做的还太多。
+
+  环境变量保存在SPIFlash里面。
+
+  挂载 romfs 然后把 mnt 挂载到服务器上 参数保存在spi Flash里面。
+  或者现在先不挂载到 romfs 而是挂载到nfs上。先挂载到nfs上吧。
+
+cp命令 在cmd_mem.c中
+
+flash_info_t 是只有在CFI Flash才有效的，Nand 不用的。 cp命令好像不能用到nand Flash中。
+
+bootargs 是传递给内核的参数。  root=/dev/mtdblock2   root=/dev/ram rw  ？？还可以这样？
+bootcmd是自动启动时默认执行的一些命令
+
+甚至你也可以不设置 bootargs,而直接将其写到内核中去
+
+root=/dev/nfs
+在文件系统为基于nfs的文件系统的时候使用。当然指定root=/dev/nfs之后，还需要指定nfsroot=serverip:nfs_dir，
+即指明文件系统存在那个主机的那个目录下面。
+
+启动的时候调用 do_bootm_linux    lib_mips中的bootm.c
+  
+根据传参规范，三个变量分别用r0,r1,r2传给内核，这样就巧妙地利用了函数指针进行了参数传递，实在是精妙！
+  
+注意这个函数   do_bootm_linux  
+theKernel = (void (*)(int, char **, char **, int *))images->ep;
+theKernel (linux_argc, linux_argv, linux_env, 0);
+
+linux_params_init 这个函数初始化参数
+
+  
+
+20100603 nand 启动方式 在山西板子上测试
+
+设置成Nand启动，但是启动后alternate的nand位没有默认置上。
+不明白的是，怎么练内存都不去配置了你？配置成nand启动的时候。
+
+系统改成nand启动，就写不进去nand 在读状态(70h)的时候得不到 NAND_STATUS_READY 状态
+也就是说一直busy状态
+
+nand Flash启动的情况到底要把nand接到cs0还是cs1？ 
+手册和u-boot里面的对应不上。
+我在接到cs1的情况下，基地址尝试很多情况都无法访问nandFlash。
+用slinshort调试的。
+
+朱林也说：cp命令不支持nand Flash
+
+如果S3C2410被配置成从Nand Flash启动，S3C2410的Nand Flash控制器有一个特殊的功能,在S3C2410上电后,
+Nand Flash控制器会自动的把Nand Flash上的前4K数据搬移到4K内部RAM中,并把0x00000000设置内部RAM的
+起始地址,CPU从内部RAM的0x00000000位置开始启动。这个过程不需要程序干涉。
+
+nand启动失败
+
+
+
+u-boot里面的nand_emma.c和内核里面的一摸一样。
+还有nand_base.c 也都一样。
+
+现在u-boot里面写nand还有一个页对齐的限制。不知道是u-boot的限制还是nec写的限制
+
+CONFIG_SKIP_LOWLEVEL_INIT  同时改 link地址 就可以再ram里面启动了，朱林查到的，官方网上也有说。
+
+同样可以用高速下载线下载调试。
+loadb 命令可以用kermit方式发送数据 试验证明是错误的数据。
+再测试一下s-recored     命令loads  选择发送文件 好像是行 但是超级慢 好像没有达到115200的速度啊。
+
+支持这种格式  nfs /home/zhulin/nfsroot/u-boot.bin  回车 但是也会有不稳定的问题 连着大网就不稳定的问题
+
+开始读不到bad table  我把u-boot编程内存运行 用nfs /home/gaojie/rootfs/u-boot.bin下载
+go 82000000 就可以找到坏块表了，这是怎么回事？
+
+nand 读写命令  
+
+4. nand read
+功能：?取nand flash信息到SDRAM。
+函?調用關係如下(按先後順序)：
+int nand_rw (struct nand_chip* nand, int cmd,size_t start, size_t len, size_t * retlen, u_char * buf);
+static int nand_read_ecc(struct nand_chip *nand, size_t start, size_t len,
+size_t * retlen, u_char *buf, u_char *ecc_code);
+static void NanD_ReadBuf (struct nand_chip *nand, u_char * data_buf, int cntr);
+READ_NAND(adr);
+
+nand read  memAddress NandAddress size
+nand write memAddress NandAddress size 
+
+返回错误 -77 
+  
+
+现在一开机显示全部是坏块，下载到内存在运行就显示正常了。
+
+u-boot版本: 
+version命令： U-Boot 2009.06-emma3slp-01 (Jun 03 2010 - 20:04:41)
+Makefile中有： 
+VERSION = 2009
+PATCHLEVEL = 06
+SUBLEVEL =
+EXTRAVERSION = -emma3slp-01
+
+关闭串行Flash后 help死机 下载到82000000的help 就不死机
+
+
+下载了一个2009.06的标准版本，跟nec的比较后发现common目录几乎没有改动。
+基本上改动不大。
+
+到了201003 的版本 写nand Flash也需要page对齐操作。
+
+20100603 22:05遇到一个怪异的问题！！！！！ 回家 明天早点来
+help 打印的问题 貌似make clean 再make 就好了
+改配置后，有时候需要make clean 后才能编译过去。
+
+现在第一次运行找不到坏块表  第二次运行（nfs下载 go 82000000） 就可以找到了
+
+
+再考察一下nand Flash的驱动流程：20100604
+
+/* bbt is stored per chip on multichip devices */
+#define NAND_BBT_PERCHIP	0x00000080
+在系统中有多个nand 芯片的时候 每个芯片上都存一份坏块表。
+bbm.h中定义  bbm代表 bad block management  bbt 代表bad block table
+
+nand_emma.c中定义的 static struct nand_bbt_descr emma_bbt_main_descr_lp
+应该是在 nand_bbt.c中定义的。
+
+bbt_td 
+bbt_md  类型 nand_bbt_descr 坏块表描述
+那么td 和md 是什么意思？
+ * @bbt_td:		[REPLACEABLE] bad block table descriptor for flash lookup
+ * @bbt_md:		[REPLACEABLE] bad block table mirror descriptor   意思是坏块表的备份？
+
+
+
+/**
+ * struct nand_bbt_descr - bad block table descriptor
+ * @param options	options for this descriptor
+ * @param pages		the page(s) where we find the bbt, used with
+ *			option BBT_ABSPAGE when bbt is searched,
+ *			then we store the found bbts pages here.
+ *			Its an array and supports up to 8 chips now
+ * @param offs		offset of the pattern in the oob area of the page
+ * @param veroffs	offset of the bbt version counter in the oob are of the page
+ * @param version	version read from the bbt page during scan
+ * @param len		length of the pattern, if 0 no pattern check is performed
+ * @param maxblocks	maximum number of blocks to search for a bbt. This number of
+ *			blocks is reserved at the end of the device
+ *			where the tables are written.
+ * @param reserved_block_code	if non-0, this pattern denotes a reserved
+ *			(rather than bad) block in the stored bbt
+ * @param pattern	pattern to identify bad block table or factory marked
+ *			good / bad blocks, can be NULL, if len = 0
+ *
+ * Descriptor for the bad block table marker and the descriptor for the
+ * pattern which identifies good and bad blocks. The assumption is made
+ * that the pattern and the version count are always located in the oob area
+ * of the first block.
+ */
+struct nand_bbt_descr {
+	int options;
+	int pages[CONFIG_SYS_NAND_MAX_CHIPS];
+	int offs;
+	int veroffs;
+	uint8_t version[CONFIG_SYS_NAND_MAX_CHIPS];
+	int len;
+	int maxblocks;
+	int reserved_block_code;
+	uint8_t *pattern;
+};
+
+nand_chip结构体
+
+/**
+ * struct nand_chip - NAND Private Flash Chip Data
+ * @IO_ADDR_R:		[BOARDSPECIFIC] address to read the 8 I/O lines of the flash device
+ * @IO_ADDR_W:		[BOARDSPECIFIC] address to write the 8 I/O lines of the flash device
+ * @read_byte:		[REPLACEABLE] read one byte from the chip
+ * @read_word:		[REPLACEABLE] read one word from the chip
+ * @write_buf:		[REPLACEABLE] write data from the buffer to the chip
+ * @read_buf:		[REPLACEABLE] read data from the chip into the buffer
+ * @verify_buf:		[REPLACEABLE] verify buffer contents against the chip data
+ * @select_chip:	[REPLACEABLE] select chip nr
+ * @block_bad:		[REPLACEABLE] check, if the block is bad
+ * @block_markbad:	[REPLACEABLE] mark the block bad
+ * @cmd_ctrl:		[BOARDSPECIFIC] hardwarespecific funtion for controlling
+ *			ALE/CLE/nCE. Also used to write command and address
+ * @dev_ready:		[BOARDSPECIFIC] hardwarespecific function for accesing device ready/busy line
+ *			If set to NULL no access to ready/busy is available and the ready/busy information
+ *			is read from the chip status register
+ * @cmdfunc:		[REPLACEABLE] hardwarespecific function for writing commands to the chip
+ * @waitfunc:		[REPLACEABLE] hardwarespecific function for wait on ready
+ * @ecc:		[BOARDSPECIFIC] ecc control ctructure
+ * @buffers:		buffer structure for read/write
+ * @hwcontrol:		platform-specific hardware control structure
+ * @ops:		oob operation operands
+ * @erase_cmd:		[INTERN] erase command write function, selectable due to AND support
+ * @scan_bbt:		[REPLACEABLE] function to scan bad block table
+ * @chip_delay:		[BOARDSPECIFIC] chip dependent delay for transfering data from array to read regs (tR)
+ * @wq:			[INTERN] wait queue to sleep on if a NAND operation is in progress
+ * @state:		[INTERN] the current state of the NAND device
+ * @oob_poi:		poison value buffer
+ * @page_shift:		[INTERN] number of address bits in a page (column address bits)
+ * @phys_erase_shift:	[INTERN] number of address bits in a physical eraseblock
+ * @bbt_erase_shift:	[INTERN] number of address bits in a bbt entry
+ * @chip_shift:		[INTERN] number of address bits in one chip
+ * @datbuf:		[INTERN] internal buffer for one page + oob
+ * @oobbuf:		[INTERN] oob buffer for one eraseblock
+ * @oobdirty:		[INTERN] indicates that oob_buf must be reinitialized
+ * @data_poi:		[INTERN] pointer to a data buffer
+ * @options:		[BOARDSPECIFIC] various chip options. They can partly be set to inform nand_scan about
+ *			special functionality. See the defines for further explanation
+ * @badblockpos:	[INTERN] position of the bad block marker in the oob area
+ * @cellinfo:		[INTERN] MLC/multichip data from chip ident
+ * @numchips:		[INTERN] number of physical chips
+ * @chipsize:		[INTERN] the size of one chip for multichip arrays
+ * @pagemask:		[INTERN] page number mask = number of (pages / chip) - 1
+ * @pagebuf:		[INTERN] holds the pagenumber which is currently in data_buf
+ * @subpagesize:	[INTERN] holds the subpagesize
+ * @ecclayout:		[REPLACEABLE] the default ecc placement scheme
+ * @bbt:		[INTERN] bad block table pointer
+ * @bbt_td:		[REPLACEABLE] bad block table descriptor for flash lookup
+ * @bbt_md:		[REPLACEABLE] bad block table mirror descriptor
+ * @badblock_pattern:	[REPLACEABLE] bad block scan pattern used for initial bad block scan
+ * @controller:		[REPLACEABLE] a pointer to a hardware controller structure
+ *			which is shared among multiple independend devices
+ * @priv:		[OPTIONAL] pointer to private chip date
+ * @errstat:		[OPTIONAL] hardware specific function to perform additional error status checks
+ *			(determine if errors are correctable)
+ * @write_page:		[REPLACEABLE] High-level page write function
+ */
+
+
+u-boot 系统支持多片nand Flash
+
+/* Use a flash based bad block table. This option is passed to the
+ * default bad block table function. */
+#define NAND_USE_FLASH_BBT	0x00010000
+
+
+----------------------
+linux 下更新uboot环境变量
+代码分析：
+
+README：
+This is a demo implementation of a Linux command line tool to access
+the U-Boot's environment variables.
+
+For the run-time utiltity configuration uncomment the line
+#define CONFIG_FILE  "/etc/fw_env.config"
+in fw_env.h.
+
+
+----
+andriod中 fw_env.config 
+# Configuration file for fw_(printenv/saveenv) utility.
+
+
+编译fw_printenv工具
+在uboot目录执行：
+make env 可以编译tools/env下的代码，编译出的fw_printenv具有读写uboot环境变量区的能力
+这个工具需要一个配置文件，以获取uboot的env区域的位置信息。将fw_env.config 文件拷贝到/etc目录下，然后根据uboot中定义的env区，和mtd分区情况修改。
+
+m3 uboot是压缩的
+Systemp Started
+Boot From SPI0x12345678
+ucl decompress
+decompress finished
+
+
+====
+每个参数区开头都有4字节，并且不同，比如：
+a3 2a 38 76
+fb 44 1c 95
+b3 50 51 51等等，什么含义呢？
+
+
+----
+e3slp uboot跳转内核入口后串口1无启动信息，串口0有
+修改内核源码目录文件arch\mips\emma\nec-emma3slx\setup.c
+在函数emma3slx_sio_setup() 增加代码如下：
+	up.line		= 1;
+	up.mapbase		= EMMA_PUART1_BASE + 3;
+	up.membase		= ioremap_nocache(up.mapbase, 0x40 << up.regshift);
+	up.irq			= EMMA_IRQ_PUART1;
+	up.private_data	= (void *)(up.membase + (0x1F << up.regshift));
+	early_serial_setup(&up);
+	修改内核参数 COMMAND_LINE 中 “console=ttyS1 ...”
+-----
+
+3 uboot支持压缩内核，先把内核vmlinux（elf格式）转换成bin格式，再压缩
+4 u-boot本身是可以不依赖Glibc,字符处理等C语言的库函数自己实现
+
+u10.04 apt-get install uboot-mkimage
+u14.04 apt-get install u-boot-tools 提供fw_printenv fw_setenv mkimage 3个工具
+
+由u-boot/tools编译而成
+
+--nxp平台--
+12 新板写uldr.bin的方法
+   cat uldr.bin /dev/zero | dd bs=1 count=64k > uldr_padded_64k.bin
+   将uldr.bin后面填充0，扩展到64k。用ymodem下载 uldr_padded_64k.bin和uboot.bin(nxp特制的能在
+   RAM里面运行的uboot)。然后用tftp下载自己的uldr.bin uboot.bin vmlinux.bin rootfs.arm.jffs2
+   appfs.arm.jffs2 等
+   自己编译的uldr.bin 和u-boot.bin 分别写到Nor Flash 的地址0x00000000 和 0x00100000(1M位置)
+   erase 0 100000  起始地址+结束地址
+   dhcp
+
+	tftp uldr.bin(try this first to make sure TFTP is working)
+	nor erase 0x0 0x100000
+
+	tftp uldr.bin
+	nor write 0x0 0x100000
+
+	nor erase 0x100000 0x80000
+
+	tftp u-boot.bin
+	nor write 0x100000 0x80000
+
+	tftp vmlinux.bin
+	nor write kernel
+
+	tftp rootfs.arm.jffs2
+	nor write root
+
+	tftp appfs.jffs2
+	nor write appfs
+
+   uldr.bin最大64K，怎么留了1M空间呢？ 可能128M Flash 是1M的扇区吧。
+   (20101127补充)cpu内部最高地址位置有64k SRAM空间。插跳线启动系统打印CC，这应该是内部ROM中的程序。这时通过y-modem
+   将uldr.bin下载到内部64k ram区域，这个uldr.bin 不是在sdk里面编译的，而是nxp提供的bin文件，通过特殊处理正好64k
+   下载完成后，uldr自动运行,uldr中对ddr进行初始化,(不论ddr是256M还是512M,都可以用同一个uldr.bin,所以512M开始可能被
+   初始化成256M),再通过y-modem下载u-boot到外部DDR中,自动运行.然后就是上面的过程了.
+13 内核编译make vmlinux 转换成bin文件 
+   创建一个.sh文件：
+   arm-none-linux-gnueabi-objcopy -O binary -R .note.gnu.build-id ./vmlinux  ~/tftpboot/vmlinux.bin
+-----
+
+
+uboot里面的bootargs 参数 最终会转换成  ATAG_CMDLINE
+
+
+u-boot可以启动 linux/vxworkx/netbsd等，可以在cmd_bootm.c中看出。所以mkimage 需要指定arch/os等参数。
+
+“本节介绍了U-boot使用go或bootm启动linux内核的方法”  看来还是可以用go启动的。
+
+
+
+内核编译（make）之后会生成两个文件，一个Image，一个zImage，其中Image为内核映像文件，而zImage为内核的一种映像压缩文件，Image大约为4M，而zImage不
+到2M。(也就是说我在nxp上 编译生成vmlinux elfm文件之后)
+
+#####海思平台 重大发现 强化记忆 以免以后又忘记了
+在arch/arm/boot 里面有
+.Image.cmd
+arm-eabi-objcopy -O binary -R .note -R .note.gnu.build-id -R .comment -S  vmlinux arch/arm/boot/Image
+这就是我在nxp平台上经常用的 elf转 bin的方法，可以用go命令启动的
+
+.zImage.cmd
+arm-eabi-objcopy -O binary -R .note -R .note.gnu.build-id -R .comment -S  arch/arm/boot/compressed/vmlinux arch/arm/boot/zImage
+
+命令一样，只是使用的elf文件不同，一个压缩的一个不压缩的。
+
+.uImage.cmd
+/bin/bash /home/gaojie/Work/Hisi/software/trunk/froyo/kernel/scripts/mkuboot.sh -A arm -O linux -T kernel -C none -a 0x80800000 -e 0x80800000 -n 'Linux-2.6.35.7_hi3716c' -d arch/arm/boot/zImage arch/arm/boot/uImage
+
+uImage一定要用zImage做吗？不就是加个头嘛，也可以用Image做吧
+
+Trident平台对u-boot做了修改，在bootm.c中增加了 patch_ataglist()  专门处理uloader的的补丁patch
+借助u-boot里面的环境变量 uboot_cmdline
+
+u-boot的正常逻辑是只要设置了 bootargs 就会作为kernle的 cmd_line 而nxp修改成了 uboot_cmdline 设置为1 才能如此。
+好像是他的patch 有若干cmd line 参数，再把u-boot里面设置的
+
+
+clobber
+
+
+
+
+a20：
+boot-v1.0 目录下有个uboot
+brandy下还有一个
+最终使用的是brandy/u-boot-2011.09 
+编译器用的是brandy/gcc-linaro目录
+
+HELLO! BOOT0 is starting!
+
+配置文件在：
+./buildroot/configs/sun7i_defconfig
+
+
+
+
+a20启动
+
+写一个mbr进去
+image开头：IMAGEWTY
+
+sd卡的 0x3400000(52MByte) 位置开始写入img 二进制数据
+前边应该分区表
+
+img大小：11de57ff
+0x3400000 到  3400000+11de57ff 为img 那么52M之前的部分写的什么内容呢？
+
+分区表 0x55 0xaa 结束 winhex 分区表模板中显示为：Signature
+
+此卡分区表中有1个分区
+Sectors preceding partition 1：692012 （337M）
+Sectors in partition 1：14584019
+
+0x1c00 (7k)位置有 PHOENIX_CARD_IMG开头的标识
+
+可以用Create Disk Image保存前52M数据  不行，这样应该是压缩的数据
+
+应该在Tools里选择磁盘克隆，指定起始扇区和扇区数
+
+
+With this evaluation version you cannot save files that are larger than 200KB
+
+结构：
+第1个扇区  mbr
+第14个扇区：PHOENIX_CARD_IMG 标示 + 几十字节数据
+第16-63扇区：48个扇区 24k boot0 实际只有18k+ 后12个扇区填充ff补齐
+
+
+在 38192 扇区开始位置 （19554304）位置开始  到 20158200  是uboot？？到20209663之间是什么？不是uboot参数区,而是sys_config.fex，但是能找到字段，找不到值。
+这个区间，使用虚拟机xp，就没写进去 （0x3400000开始的img文件写进去了，奇怪）
+保存扇区数106496
+
+
+uboot 大小 655359
+654207
+
+
+测试发现，需要把img文件拷贝到虚拟机自己的目录才行，在共享目录不行。winrar解压程序也是这样
+以后注意。但是其他部分烧写进去了，这很奇怪啊。也许是virtualbox 或者usb插件的bug
+
+在sun7i img的139264字节处是uboot， 到743152 结束，后面ff补齐，然后是
+查看这个img是怎么生成的。
+
+
+A20支持从NAND Flash、SPI NOR Flash、SD card和USB启动
+上电后先检测Boot Select Pin（BSP）管脚，若低电平，直接USB启动，否则依次尝试从MMC0，NAND，MMC2，SPI NOR，USB启动。
+
+系统从MMC0启动时，先从SD卡8KB开始读取24KB到内部SRAM的0地址处，并校验，然后从地址0开始执行，第一条是跳转指令:bc 00 00 ea 也就是ea 00 00 bc(大端) 这个文件在lichee/tools/pack/chips/sun7i/bin/boot0_sdcard_sun7i.bin
+
+所以完全可以用dd的方式。这个操作要特别小心，如果误操作了硬盘就完了。
+
+
+
+
+注：
+ 
+开始sd卡有 /dev/sdb  /dev/sdb1  说明有1个分区，执行
+sudo dd if=/dev/zero count=1  of=/dev/sdb后，就只有/dev/sdb了，说明分区表没有了
+
+
+
