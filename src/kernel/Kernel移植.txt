@@ -1,0 +1,793 @@
+参照OMAP移植-精品笔记
+
+O2.6.29 -- OMAP2.6.29 Android
+A2.6.29 -- android网站的 2.6.29 android内核
+S2.6.29 -- kernel.org的标准2.6.29 内核
+
+1 关于 ARCH_HAS_FLUSH_KERNEL_DCACHE_PAGE的定义
+  在arch/arm/include/asm/cacheflush.h中，目的在于定义一个函数：
+  flush_kernel_dcache_page()
+  在 ./include/linux/highmem.h 中有：
+  #ifndef ARCH_HAS_FLUSH_KERNEL_DCACHE_PAGE
+  static inline void flush_kernel_dcache_page(struct page *page)
+  { }
+  #endif
+  这个逻辑为：在highmem.h中，如果没有定义这个宏，就把函数 flush_kernel_dcache_page
+  定义为空。否则就是在arch/arm/include/asm/cacheflush.h中定义这个宏同时定义这个函数
+  static inline void flush_kernel_dcache_page(struct page *page)
+  { 
+	/* highmem pages are always flushed upon kunmap already */ 
+	if ((cache_is_vivt() || cache_is_vipt_aliasing()) && !PageHighMem(page))
+		__cpuc_flush_dcache_page(page_address(page));
+  }
+  看来这个宏是跟highmem相关的
+  
+  对比发现，这一段是A2.6.29 在S2.6.29上加的 但是OMAP embinux Team 没有加这段
+  我想，当内存没有超过896M的时候，这个应该是没有用的
+
+2 arch/arm/mm/ 下面的cachexx.S只编译了 cache-v7.S   cache-v6.S 有修改但是没有编译
+   并且cache-v7.S 所有版本都没有做修改
+
+3 关于arm/include/asm/cache.h 
+  A2.6.29 对 S2.6.29 
+  1 #define L1_CACHE_SHIFT 5 改成  #define L1_CACHE_SHIFT CONFIG_ARM_L1_CACHE_SHIFT
+    (这个是android加的) 
+    但是CONFIG_ARM_L1_CACHE_SHIFT还是配置成了5 相当于没有改
+    同时,android对应的在 arch/arm/mm/Kconfig 增加
+    config ARM_L1_CACHE_SHIFT
+	int
+	default 6 if ARCH_OMAP3  （注意 ompa3 的时候 是6 但是embinux 的kernel还是5啊）
+	default 5
+
+  2 对于下面这段 
+   /*
+   * With EABI on ARMv5 and above we must have 64-bit aligned slab pointers.
+   */
+   #if defined(CONFIG_AEABI) && (__LINUX_ARM_ARCH__ >= 5)
+   #define ARCH_SLAB_MINALIGN 8
+   #endif
+   S2.6.29 在 arch/arm/include/asm/page.h中 A2.6.29 改移到了arm/include/asm/cache.h
+   O2.6.29 没有改这里，仍然在page.h中。 android移动这个不是吃饱撑的！
+ 
+  3 下面这段 是A2.6.29加的 S2.6.29 没有
+/*
+ * Memory returned by kmalloc() may be used for DMA, so we must make
+ * sure that all such allocations are cache aligned. Otherwise,
+ * unrelated code may cause parts of the buffer to be read into the
+ * cache before the transfer is done, causing old data to be seen by
+ * the CPU.
+ */
+#define ARCH_KMALLOC_MINALIGN	L1_CACHE_BYTES （cache line 的长度）
+------------------------------------------
+  在mm/slab.c (slab 片)有注释：
+#ifndef ARCH_KMALLOC_MINALIGN
+/*
+ * Enforce a minimum alignment for the kmalloc caches.
+ * Usually, the kmalloc caches are cache_line_size() aligned, except when
+ * DEBUG and FORCED_DEBUG are enabled, then they are BYTES_PER_WORD aligned.
+ * Some archs want to perform DMA into kmalloc caches and need a guaranteed
+ * alignment larger than the alignment of a 64-bit integer.
+ * ARCH_KMALLOC_MINALIGN allows that.
+ * Note that increasing this value may disable some debug features.
+ */
+#define ARCH_KMALLOC_MINALIGN __alignof__(unsigned long long) （这是8个字节吗？）
+#endif
+
+
+4 L1_CACHE_SHIFT 和 L1_CACHE_BYTES 是什么意思？
+  CONFIG_ARM_L1_CACHE_SHIFT=5  (这表示cache line 为32字节)
+  【知识】关于cache line
+   The basic unit of storage in a cache. It is always a power of two words in size(
+    usually fore or eight words),and is required to be aligned to a suitable memory boundary
+
+5 关于N2.6.28.10 增加 CONFIG_CPU_NO_CACHE_BCAST 定义
+  这个跟smp有关系  所以N2.6.28.10 对比 S2.6.28.10 在arch/arm/kernel/smp.c中增加了几处
+  CONFIG_CPU_NO_CACHE_BCAST的处理
+  但是NXP平台并没有打开这个宏 这个宏在nxp平台的逻辑是：
+  config CPU_NO_CACHE_BCAST
+        bool
+        depends on SMP
+        default y if CPU_V6
+  也就是说，跟armv6 的smp有关系，跟armv7无关！
+  arm-linux 官方的2.6.33 都没有定义这个宏！
+  从网上找到一个git的commit注释：
+  Broadcast the DMA cache operations on ARMv6 SMP hardware
+  nxp这段程序也是从arm-linux网站合里的应该，我猜测！
+
+
+6 关于 CONFIG_CPU_CACHE_VIPT
+  nxp平台 CONFIG_CPU_CACHE_VIPT=y  OMAP3530 也是y
+  跟这个相关的在cacheflush.h 中有两个函数 flush_cache_vmap和flush_cache_vunmap
+  N2.6.28.10相对S2.6.28.10 关于这2个函数的修改，其实S2.6.29已经改了，一模一样的
+  【知识】cache的 VIVT VIPT PIPT
+
+7 关于elf.h里面增加的几个定义
+  #define R_ARM_V4BX	40
+  #define R_ARM_PREL31 42
+  #define R_ARM_MOVW_ABS_NC	43
+  #define R_ARM_MOVT_ABS 44 
+  （1）A2.6.29 在 S2.6.29基础上增加了这几个定义
+   (2) N2.6.18.10在S2.6.28.10基础上也增加了这个定义
+   （3）但是O2.6.29并没有增加这几行
+   （4）ARM-linux官方 2.6.33 也有这个定义
+  这些定义只在arch/arm/kernel/module.c中的 apply_relocate函数中使用
+  而这个module.c 只有menuconfig时候的  Enable loadable module support选上之后
+  设置了CONFIG_MODULES 才会被编译。而这一组宏，跟模块（共享库）的重定位（relocation）有关
+  这一组宏叫做重定位码 relocation code
+  The code which is stored in the ELF32_R_TYPE component of the r_info field.
+  R_ARM_ABS32: 使用32bit绝对地址重定位引用
+  R_ARM_PC24 ：使用24bit的PC相对地址重定位引用
+  R_ARM_V4BX： v4bx 代表armv4t BX指令
+【知识】MOV MOVT 配合 可以把一个32位数放到一个寄存器中，其实这个功能MIPS早就有
+
+8 关于 ptrace.c 
+  ptrace代表progress trace 进程跟踪 系统中有/kernel/ptrace.c 和 各个arch下有相应的ptrace.c
+  man ptrace 的结果：
+  The  ptrace()  system call provides a means by which a parent process may observe and 
+  control the execution of another process, and examine and change its core image
+  and registers.  It is primarily used to implement breakpoint debugging and system call tracing.
+  
+  arch/arm/kernel/ptrace.c 就是增加了VFP的支持 S2.6.29到A2.6.29  S2.6.28.10 到 N2.6.28.10做了同样修改
+  也就是说S2.6.29 都没有加这些修改。
+  主要增加了ptrace_getvfpregs和ptrace_setvfpregs两个函数
+  同时在ptrace.h里面增加
+  #define PTRACE_GETVFPREGS	27
+  #define PTRACE_SETVFPREGS	28
+
+9 关于signal.c  包含在/kernel/signal.c  arch/xx/kernel/signal.c 
+  arch/arm/kernel/signal.c中，android做了修改：
+  1 restart_syscall 增加几行
+  2 do_signal 中增加一行regs->ARM_r0 = -EAGAIN;
+  OMAP2.6.29 的signal.c跟Android的一模一样
+
+  nxp对arch/arm/kernel/signal.c也有修改但是跟android改的地方不同
+  1 setup_return函数增加了
+   #if __LINUX_ARM_ARCH__ >= 7
+     /* clear the If-Then Thumb-2 execution state */
+     cpsr &= ~PSR_IT_MASK;
+   #endif 这里N2.6.28.10增加的 arm-linux官方2.6.33 也增加了这几行
+   O2.6.29 S2.6.29 A2.6.29 都没有这几行。应该增加！
+   内核虽然没有编译成thumb2模式，但是应用程序是有thumb2指令的！
+  2 do_signal函数的no_signal:处
+    #if defined(CONFIG_AEABI) && !defined(CONFIG_OABI_COMPAT)
+       regs->ARM_r7 = __NR_restart_syscall;
+       regs->ARM_pc -= 4;
+   #else
+        ...
+        这里有不同
+        ...
+    定义了AEABI但是没有定义OABI的情况下执行的代码一样。如果没有定义EABI或者要兼容OABI就走#else
+    而一般情况下是定义OABI兼容的（beagleboard定义了兼容） #else处的代码：
+    S2.6.28.10 S2.6.29 A2.6.29 Omap2.6.29 都一样，N2.6.28.10给改了，arm-linux2.6.33也改了
+    
+    N2.6.28.10 在signal.h里面多定义了一个宏 KERN_RESTART_CODE 配合signal.c里面的修改
+
+    ++关于是否要OABI兼容++
+    在make menuconfig中得到的信息：
+    Allow old ABI binaries to run with this kernel
+    If you know you'll be using only pure EABI user space then you can say N here
+    If this option is not selected and you attempt to execute a legacy ABI binary 
+    then the result will be UNPREDICTABLE（不可预测的）
+    而android程序绝对是 pure EABI，所以不要兼容，那么下面讨论的内容，改与不改没有区别了
+-------------------------------------------------
+    【知识】signal.h里面原来有：
+     #define KERN_SIGRETURN_CODE	(CONFIG_VECTORS_BASE + 0x00000500)
+     而CONFIG_VECTORS_BASE 在.config文件中是 0xffff0000
+     这个宏在arch/arm/Kconfig中定义：
+    config VECTORS_BASE
+        hex
+        default 0xffff0000 if MMU || CPU_HIGH_VECTOR
+        default DRAM_BASE if REMAP_VECTORS_TO_RAM
+        default 0x00000000
+        help
+          The base address of exception vectors.
+--------------------------------------------------
+    N2.6.28.10的修改能在网上的git中找到，并不是nxp自己改的。比如http://android.git.kernel.org/中就有
+    【当然，这个也是来自git.kernel.org】
+    关于这个的修改记录，跟nxp的修改一模一样。是Russell King 在2009-10-25日提交的，提交注释为：
+    ARM: Fix signal restart issues with NX and OABI compat
+
+    The signal restarting code was placed on the user stack when OABI
+    compatibility is enabled.  Unfortunately, with an EABI NX executable,
+    this results in an attempt to run code from the non-executable stack,
+    which segfaults the application.
+
+    Fix this by placing the code in the vectors page, along side the
+    signal return code, and directing the application to that code.
+    （segfaults意思是段错误，显然是一个缩写不是一个单词）
+    奇怪的是，在2.6.29和 2.6.33 的代码中怎么没有合这些程序呢？
+    我知道了：这个提交是2009-10-25，而S2.6.29发布日期是2009-3-23 肯定是没有了。
+    从git信息中可以看到，这个代码是在 2.6.32-rc5之后的2009-10-25由russell King 合并到stable版本的
+    下面是具体的修改记录git地址：
+    http://git.kernel.org/?p=linux/kernel/git/torvalds/linux-2.6.git;a=commitdiff;h=ab72b00734ae4d0b5ff273a0f6c7abeaa3713c76
+    修改了3个文件：signal.c  signal.h traps.c
+    从网址中可以看到 linux/kernel/git/torvalds/linux-2.6.git 而正式发布的kernel来之 linux/kernel/git/stable/linux-2.6.git
+
+    在ompa平台上把OABI关闭，实验证明，android仍然可以运行
+
+10 关于HAS_TLS_REG TLS寄存器 跟它对应的还有 TLS_REG_EMUL
+   1 N2.6.28.10 A2.6.29 arm-linux2.6.33 都是 y 。kconfig逻辑为：
+     config HAS_TLS_REG
+	bool
+	depends on !TLS_REG_EMUL
+	default y if SMP || CPU_32v7
+      也就是说，armv7的时候，为y
+      但是ompa默认是n，他把kconfig改成了：
+     config HAS_TLS_REG
+	bool
+	depends on !TLS_REG_EMUL
+	default n（这里！） if SMP || CPU_32v7
+    我把OMAP的改成HAS_TLS_REG=y
+
+
+================================
+20101017 19:00  NXP平台移植android2.6.32
+作为git的message 好主意
+
+1 合并arch/arm 目录 这里面很多修改都是跟平台无关的 不知道nxp为什么要乱改(参照ARM官网针对versatile的修改)
+  提交的时候，输入这个目录的都加上 ARCH/ARM: 前缀
+  关键点要以NXP2.6.28为基准，因为这个是真正能运行的版本
+  1 boot 目录不合 是自启动(即生成zImage)时候用的。以后用到再说
+  2 common 目录不合 只编译了gic.c S2.6.28.10到N2.6.28.10无改动
+  3 config 目录不合
+  4 include/asm目录  
+	hardware目录只合cache-l2x0.h 关于二级缓冲控制器，N的改动原因不明
+	mach目录合并 增加了 几个#ifdef #define #endif 标准kernel就不用加吗？
+	assembler.h 不同但是不用合
+	atomic.h 区别太大，N有改动 先不合
+	cacheflush.h
+
+  5 Makefile只加一行 mach-apollo 其他不合
+  6 Kconfig 合mach-apollo ERRATA部分 针对V7、VFPv3和CACHE_L2X0的部分 
+	ARM_ERRATA_364296/ARM_ERRATA_351422是针对V6的不合
+	ARM_ERRATA_484863 针对 CACHE_L2X0 要合 ARM官方也合了
+	ARM_ERRATA_430973 都有 但是nxp加了 default n 没有合
+	ARM_ERRATUM_451034 是nxp加的 S2.6.32 Arm官方2.6.33都没有 针对A8的VFPv3，没有选，不合
+	SMP的部分 合并  LOCAL_TIMERS部分 合并 select HAVE_ARM_TWD if (ARCH_REALVIEW || ARCH_OMAP4)什么意思？
+	TIME_DOCTOR 不合 是Nxp测试用的代码
+	source "drivers/nx_dmac/Kconfig" 应该合 但是menu "Device Drivers"不在这里了
+  7 Kconfig.debug不需要合
+  8 vfp目录 这里的修改不是nxp修改，而是其他组织针对armv7的修改 nxp收集的
+	"ite	cc\n\t"不知道干什么用的先不合 vfphw.S:last_VFP_context_address:不用合，两种写法含义一样 ^_^
+	即vfphw文件不合  vfpmodule.c:vfp_notifier函数不合 nxp的修改在网上也能查到，但是没有收进官方S33打S35有另外的该法
+	vfp_raise_exceptions合并，此处在S2.6.33修改了
+  9 mm目录 alignment.c 不用合 nxp改的S32都有 S32还有其他修改
+	*cache-l2x0.c： L210/L220 cache controller support  =============重点关注
+	改动很大 修改来自于 http://www.spinics.net网站 保持nxp原样 各个版本均不同	
+	*cache-v7.S 合并nxp  但是ENDPROC(v7_flush_dcache_all)不知道nxp从哪里搞来的
+	*context.c 全部合并N2.6.28.10之===============重点关注
+	N28.10做的修改S32没有 有些修改与Arm官方A2.6.33之于S2.6.33相同 看来修改的来源相同 但是细节略有不同 如果编译不过要参照后者
+	*copypage-v6.c 不合
+	*
+===============================================
+2010-10-17 开始升级2.6.32.9  2010-10-20 11:28暂停 决定暂时还是维护2.6.28.10
+升级过程太繁琐了，存在风险
+===============================================		
+
+
+
+===韩国版本对比研究==
+1 我在android目录下建立一个测试程序 打印一个字符串 在棒子kernel里面运行打印Illegal instruction  
+在我自己编译的kernel上运行打印：Segmentation fault
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+重大发现：
+我在调试init错误的时候，在内核里加打印 发现错误的时候，do_exit(arg) arg传进来的参数是11,就是SIGSEGV
+我如果进入我的busybox 再运行init程序 打印 Segmantation fault
+可见，开始init打印 Attempted kill the init  跟后来运行打印Segmentation fault本质上是一个错误。
+我用gdb调试android编译出来的程序，会打印
+Child terminated with signal = b
+Chile terminated 
+
+用gdb调试一下
+
+网上有几个贴子说是因为内核没有打开 eabi选项，
+可是我打开了，并且busybox 用 objdump -s 来看也是aeabi 7-a
+但是有有些不同
+
+Contents of section .ARM.attributes:
+ 0000 41300000 00616561 62690001 26000000  A0...aeabi..&...
+ 0010 05372d41 00060a07 41080109 020a030c  .7-A....A.......
+ 0020 01120414 01150117 03180119 011a021b  ................
+ 0030 03  
+
+Contents of section .ARM.attributes:
+ 0000 41280000 00616561 62690001 1e000000  A(...aeabi......
+ 0010 05372d41 00060a07 41080112 04140115  .7-A....A.......
+ 0020 01170318 0119011a 02                 .........  
+
+
+
+能运行的
+Attribute Section: aeabi
+File Attributes
+  Tag_CPU_name: "7-A"
+  Tag_CPU_arch: v7
+  Tag_CPU_arch_profile: Application
+  Tag_ARM_ISA_use: Yes
+  Tag_ABI_PCS_wchar_t: 4
+  Tag_ABI_FP_denormal: Needed
+  Tag_ABI_FP_exceptions: Needed
+  Tag_ABI_FP_number_model: IEEE 754
+  Tag_ABI_align8_needed: Yes
+  Tag_ABI_align8_preserved: Yes, except leaf SP
+  Tag_ABI_enum_size: int
+
+kernel
+Attribute Section: aeabi
+File Attributes
+  Tag_CPU_name: "7-A"
+  Tag_CPU_arch: v7
+  Tag_CPU_arch_profile: Application
+  Tag_ARM_ISA_use: Yes
+  Tag_VFP_arch: VFPv2
+  Tag_ABI_PCS_wchar_t: 4
+  Tag_ABI_FP_denormal: Needed
+  Tag_ABI_FP_exceptions: Needed
+  Tag_ABI_FP_number_model: IEEE 754
+  Tag_ABI_align8_needed: Yes
+  Tag_ABI_align8_preserved: Yes, except leaf SP
+  Tag_ABI_enum_size: int
+
+不能运行
+Attribute Section: aeabi
+File Attributes
+  Tag_CPU_name: "7-A"
+  Tag_CPU_arch: v7
+  Tag_CPU_arch_profile: Application
+  Tag_ARM_ISA_use: Yes
+  Tag_THUMB_ISA_use: Thumb-2
+  Tag_VFP_arch: VFPv3-D16
+  Tag_ABI_PCS_wchar_t: 4
+  Tag_ABI_FP_denormal: Needed
+  Tag_ABI_FP_exceptions: Needed
+  Tag_ABI_FP_number_model: IEEE 754
+  Tag_ABI_align8_needed: Yes
+  Tag_ABI_align8_preserved: Yes, except leaf SP
+  Tag_ABI_enum_size: int
+  Tag_ABI_HardFP_use: SP and DP
+  Tag_ABI_optimization_goals: Aggressive Size
+
+内核中只有一处
+
+./arch/arm/kernel/setup.c:#ifdef CONFIG_THUMB2_KERNEL
+
+内核改变后thumb2 支持后 有两处更改
+CONFIG_ARM_ASM_UNIFIED 和   CONFIG_THUMB2_KERNEL
+
+====================
+init不起动问题
+1 kernel/exit.c 
+find_new_reaper函数打印的这个提示
+
+2 内核跟踪方法！
+
+3 用arm-linux-gcc 4.00以上的编译器做出都 文件系统老是报这个错 ，
+而用rm-linux-gcc 3.xx 版本都都不会，看来一下内核的配置
+原来问题在这里
+
+Kernel Features  --->
+            [*] Use the ARM EABI to compile the kernel                  
+            [*]   Allow old ABI binaries to run with this kernel (EXPERIMENTA)
+把这个选上就可以了 
+
+出错的时候，do_exit(code) 传进如的参数是11
+ 
+core/combo/arch/arm/armv7-a.mk" [noeol] 22L, 674C 
+
+
+======================
+1 20100711
+On Android project page the source code of the kernel is available
+Android project page 就是 http://code.google.com/p/android/downloads/list
+
+developer.android.com被封锁的解决方法
+可以访问 http://androidappdocs.appspot.com/index.html 替代网站
+
+repo sync  可以同步源码
+
+mkdir mydroid
+cd mydroid
+repo init -u git://android.git.kernel.org/platform/manifest.git
+repo sync
+==========================
+
+2）获取repo:
+$curl http://android.git.kernel.org/repo >~/repo
+
+3）下载源码:
+$repo init -u git://git.android-x86.org/platform/manifest.git -b donut-x86  【指定一个分支】
+$repo sync 
+===================================
+
+直接在根目录下执行 make 
+出现错误
+
+JDK 5.0, update 12 or higher.Java 6 is not supported, because of incompatibilities with @Override
+但是ubuntu只有java6可以选择  java5 找不到阿
+早在ubuntu 9.10中，ubuntu就已经去除了对sun-java5-jdk的支持，但是为了进行android的开发，又必须安装sun-java5-jdk
+那么在享受 ubuntu 10.04好处的同时，如何来进行sun-java5-jdk的安装那
+解决方法： 【源没配好,去搜合适的源】
+解决方案一：安装 jdk 1.5。
+    方法1：从官方网站上下载 jdk 1.5，安装。
+    方法2：在 /etc/apt/sources.list 中添加 9.04 的源：
+【
+#cp /etc/apt/sources.list /etc/apt/sources.list_original
+#vi /etc/apt/sources.list_original    对原来的sources.list做一个备份
+】
+          deb http://mirrors.163.com/ubuntu/ jaunty main restricted universe multiverse
+          deb http://mirrors.163.com/ubuntu/ jaunty-updates main restricted universe multiverse 
+【9.04是这个源？？怎么还163.com啊 】
+不过方法2还真行  
+
+解决方案二：如果您已经安装了 jdk 1.6, 请修改 <src_home>/build/core/make.mk。(注，如果是 2.0 版本的源码，请修改 <src_home>/build/core/main.mk)
+    在文件中搜索并分别把：         
+源码打印？
+
+   1. java_version := $(shell java -version 2>&1 | head -n 1 | grep '[ "]1\.5[\. "$$]')<br>javac_version := $(shell javac -version 2>&1 | head -n 1 | grep '[ "]1\.5[\. "$$]')  
+
+java_version := $(shell java -version 2>&1 | head -n 1 | grep '[ "]1\.5[\. "$$]')
+javac_version := $(shell javac -version 2>&1 | head -n 1 | grep '[ "]1\.5[\. "$$]')
+    两行改成：         
+源码打印？
+   1. java_version := $(shell java -version 2>&1 | head -n 1 | grep '[ "]1\.6[\. "$$]')<br>javac_version := $(shell javac -version 2>&1 | head -n 1 | grep '[ "]1\.6[\. "$$]')  
+
+java_version := $(shell java -version 2>&1 | head -n 1 | grep '[ "]1\.6[\. "$$]')
+javac_version := $(shell javac -version 2>&1 | head -n 1 | grep '[ "]1\.6[\. "$$]')
+
+    即可。    
+如果你有其它的开发要使用 jdk 1.6 的话，采用解决方案二是一种不错的选择，它可以避免你在两个 jdk 之间切换
+==========================================================================================================
+
+#make
+export enviroment variables
+#export ANDROID_JAVA_HOME=$JAVA_HOME
+#export PATH=$PATH:/home/wenxy/src/android/out/host/linux-x86/bin
+#export ANDROID_PRODUCT_OUT=/home/wenxy/src/android/out/target/product/generic
+#emulator
+or
+#emulator -skin QVGA-L
+Yeah, we can see a android emulator windows, congratulations.
+
+
+但是后来又
+java.library.path = out/host/linux-x86/lib
+make: *** [out/target/common/docs/api-stubs-timestamp] 错误 45
+
+还是java6引起的问题，我看还是搞2.1 eclair吧
+2.0/2.1 (Eclair): Based on Linux Kernel 2.6.29 跟 nxp内核版本最接近啊
+
+
+
+“言归正传，你的OS是x86，为什么会遇到__x86_64__呢？从源码入可以找到答案，查看platform/external /clearsilver.git 上的一个修改：Fix 64-bit clearsilver shared library issue：http://android.git.kernel.org/?p=platform/external /clearsilver.git;a=commit;h=d36910a8110d8377b22301274d2b5131a732a72b”
+啊  一个修改都可以查到！！！！
+
+
+到M5-r14 release 为止，Android的Kernel是基于Linux2.6.23的内核开发的
+
+1.5 (Cupcake): Based on Linux Kernel 2.6.27
+1.6 (Donut): Based on Linux Kernel 2.6.29
+2.0/2.1 (Eclair): Based on Linux Kernel 2.6.29
+2.2 (Froyo): Based on Linux Kernel 2.6.32
+Gingerbread: Based on Linux Kernel 2.6.33 or 34. Tentatively scheduled for Q4 2010.
+根据HTC 官方的消息，最新的Gingerbread （Android 3.0 ）有可能将在2011年一季度与大家见面
+
+
+先安装一个模拟器SDK玩玩吧
+http://androidappdocs.appspot.com/sdk/index.html  developer的替代网站
+
+需要先安装 eclips   到
+http://www.eclipse.org/downloads/ 下载
+
+    * Eclipse Helios (3.6) Jun '10
+    * Eclipse Galileo (3.5)
+    * Eclipse Ganymede (3.4)
+
+
+AOSP (Android Open Source Project)
+
+
+eclipse-java-helios-linux-gtk.tar.gz解压缩后直接可以运行！
+
+sdk终于可以用了！
+
+现在也下载好了eclair版本。又需要 java1.5了
+
+android 的 kernel 需要单独配置和编译，编译过程和通常的linux内核相同
+
+  
+gaojie@gaojie:~/mydroid/common/.git$ git branch -a
+* android-2.6.27
+  remotes/origin/HEAD -> origin/android-2.6.27
+  remotes/origin/android-2.6.25
+  remotes/origin/android-2.6.27
+  remotes/origin/android-2.6.29
+  remotes/origin/android-2.6.32
+  remotes/origin/android-2.6.35-rc3
+  remotes/origin/android-goldfish-2.6.27
+  remotes/origin/android-goldfish-2.6.29
+
+
+============================================
+关于kernel版本
+
+Linux 内核 2.6.28 在 2008 年 12 月 24 日发布(2009 年 2 月已经是第 5 个发布版)
+2.6.28 第一个的发布版包括大量更改，以至于它自身的更改日志文件大小已接近 6MB。
+最新的这个发布版很稳定，被用作 Ubuntu 9.04 Jaunty Jackalope 的内核。
+
+2.6.28 的一些有用的新特性在 2.6.29 中得到了进一步改善。
+
+Linus 今早放出最新稳定版内核2.6.29,距离上一个版本2008-12-25的2.6.28过了将近3月(基本3个月一个新版本),经过8个 RC版
+
+Linux Kernel 2.6.29 稳定分支的第一个更新版本 2.6.29.1 已经发布。本次发布带来了大量的 bug 修正，特别解决了网络方面的问题。推荐升级。
+
+Linus Torvalds 已于今日（2009-01-11）发布了 Linux Kernel 2.6.29 的首个 RC 版本（rc1）。该版本加入了 Kernel mode-setting 支持（目前仅支持 Intel 硬件）、Btrfs 文件系统和 Squashfs 文件系统。另外，Linux Kernel 2.6.29 RC 1 还增加了一些新的驱动程序。
+
+注意2.6.28.10 在2.6.29 之后才发布的
+2.6.28.10：2009.05.02
+2.6.29：2009.03.23
+2.6.28：2008.12.24
+
+关于ChangeLog-2.6.29 的内容：
+这个文件的 122334行 是2.6.28 的那次之后的第一次提交
+提交号：44b56cc69a5b017f396ed1daeaef6a63e086656
+这次提交的后面的东西不必关注 不知道是什么 也不知道干什么用的
+这个点之后的东西有点对不上，不明白是什么意思
+
+2.6.29 是从2.6.28经过
+
+2.6.28那个tags之前的东西可以跟webgit上的内容对上。 之后还有很多，搞不懂了！！！
+所以这个changelog 就是把commit的信息保存到这个文件中
+
+
+===================================
+init问题参数跟踪
+
+1 
+kernel .S 文件
+
+arm-linux-uclibcgnueabi-gcc -Wp,-MD, -nostdinc -isystem  -D__KERNEL__ -mlittle-endian  -D__ASSEMBLY__ -mabi=aapcs-linux -mno-thumb-interwork -funwind-tables -D__LINUX_ARM_ARCH__=7 -march=armv7-a -include asm/unified.h -msoft-float
+
+kernel .c 文件
+
+arm-linux-uclibcgnueabi-gcc -Wp,-MD  -nostdinc -isystem -D__KERNEL__ -mlittle-endian -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -O2 -marm -mabi=aapcs-linux -mno-thumb-interwork -funwind-tables -D__LINUX_ARM_ARCH__=7 -march=armv7-a -msoft-float -Uarm -Wframe-larger-than=1024 -fno-stack-protector -fomit-frame-pointer -Wdeclaration-after-statement -Wno-pointer-sign -fwrapv -fno-dwarf2-cfi-asm  -D"KBUILD_STR(s)=#s" -D"KBUILD_BASENAME=KBUILD_STR(version)"  -D"KBUILD_MODNAME=KBUILD_STR(version)"
+
+
+
+
+nxp平台
+
+./target/src/sd/video/drivers/comps/tmvipSupport/makefile:LOCAL_CFLAGS += -mfpu=vfpv3-d16 -mfloat-abi=softfp
+./target/src/project/project_include.mk:_SDE_PROC_DEFINES = -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp
+./target/src/project/project_include.mk:_SDE_EXTRA_CFLAGS += -DCPU=CORTEX_A9 -D__LINUX_ARM_ARCH__=7 -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp
+
+在 ./target/output/objs/summit-singlehd_license_free-gnu-4.4.0-linux-retail/comps/uLoader/下能找到
+target/output/objs/summit-singlehd_license_free-gnu-4.4.0-linux-retail/comps/uLoader/tmp/armgnu_nullos_el_cortex-a9_flo_linux_mp_/src/
+
+vi .miic.o.cmd  后看到
+
+简化以后：
+arm-linux-uclibcgnueabi-gcc -DCPU=CORTEX_A9 -D__LINUX_ARM_ARCH__=7 -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp -DBSP_LITTLE_ENDIAN=1 -DCONFIG=APOLLO_VPE -DCUSTOMER=CNXT -DRVERSION=Development -DARM_TOOLKIT=GNUGCC -DARM_VERSION=411 -DRTOS=LINUX -DCHIP_NAME=APOLLO -DIMAGE_TYPE=GENERIC -DSWCONFIG_INCL=1 -DMODULE -Wall -Wcomment -mno-sched-prolog -fno-common -fno-builtin -fdollars-in-identifiers -D_Bool=int -DTMFL_REL=0x00000000 -DNDEBUG -DNDEBUG -Wall -Wshadow -Wpointer-arith -Wconversion -Winline -Wundef -Wstrict-prototypes -DUNDER_TM_pSOS -DTM_CPU -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp -MD
+
+这个是依赖文件，主要包含 -I 注意其他的参数  这里的参数跟编译busybox的不同啊
+
+多了-mcpu=cortex-a9  
+
+./core/combo/arch/arm/armv7-a.mk:ARCH_ARM_HAVE_THUMB_SUPPORT     := true
+这里应该是false！！！
+
+
+kernel里面
+ifeq ($(CONFIG_AEABI),y)
+CFLAGS_ABI      :=-mabi=aapcs-linux -mno-thumb-interwork
+else
+难道AEABI 跟thumb 是冲突的？
+
+
+busybox的编译选项里没有 armv7-a 但是objdump 最终的busybox 还是armv7  奇怪了
+
+
+
+调整make  menuconfig  thumb2选项影响
+
+ # CONFIG_PREEMPT is not set
+ CONFIG_HZ=100
+-CONFIG_THUMB2_KERNEL=y
+-CONFIG_ARM_ASM_UNIFIED=y
++# CONFIG_THUMB2_KERNEL is not set
++# CONFIG_ARM_ASM_UNIFIED is not set
+ CONFIG_AEABI=y
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+make  showcommands
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+target(gao) thumb C: libc_common <= bionic/libc/stdio/stdio.c
+arm-eabi-gcc
+
+-fno-exceptions 
+-Wno-multichar 
+-msoft-float 
+-fpic 
+-ffunction-sections 
+-funwind-tables 
+-fstack-protector 
+-fno-short-enums 
+-march=armv7-a 
+-mfloat-abi=softfp 
+-mfpu=neon 
+-mthumb-interwork 
+-DANDROID 
+-fmessage-length=0 
+-W 
+-Wall 
+-Wno-unused 
+-Winit-self 
+-Wpointer-arith 
+-Werror=return-type 
+-Werror=non-virtual-dtor 
+-Werror=address 
+-Werror=sequence-point 
+-DSK_RELEASE -DNDEBUG 
+-g 
+-Wstrict-aliasing=2 
+-finline-functions 
+-fno-inline-functions-called-once 
+-fgcse-after-reload 
+-frerun-cse-after-loop 
+-frename-registers 
+-DNDEBUG 
+-UDEBUG 
+-mthumb 
+-Os 
+-fomit-frame-pointer 
+-fno-strict-aliasing 
+-finline-limit=64  
+-DWITH_ERRLIST -DANDROID_CHANGES 
+-DUSE_LOCKS 
+-DREALLOC_ZERO_BYTES_FREES 
+-D_LIBC=1 
+-DSOFTFLOAT 
+-DFLOATING_POINT 
+-DNEED_PSELECT=1 
+-DINET6 
+-DUSE_DL_PREFIX 
+-fstrict-aliasing    
+-MD
+
+
+
+target(gao) thumb C++: libicuuc <= external/icu4c/common/rbbi.cpp
+arm-eabi-g++
+-fno-exceptions 
+-Wno-multichar 
+-msoft-float 
+-fpic 
+-ffunction-sections 
+-funwind-tables 
+-fstack-protector 
+-fno-short-enums 
+-march=armv7-a 
+-mfloat-abi=softfp 
+-mfpu=neon   
+-mthumb-interwork 
+-DANDROID 
+-fmessage-length=0 
+-W 
+-Wall 
+-Wno-unused 
+-Winit-self 
+-Wpointer-arith 
+-Werror=return-type 
+-Werror=non-virtual-dtor 
+-Werror=address 
+-Werror=sequence-point 
+-DSK_RELEASE -DNDEBUG 
+-g 
+-Wstrict-aliasing=2 
+-finline-functions 
+-fno-inline-functions-called-once 
+-fgcse-after-reload 
+-frerun-cse-after-loop 
+-frename-registers 
+-DNDEBUG 
+-UDEBUG 
+-fvisibility-inlines-hidden 
+-DANDROID 
+-fmessage-length=0 
+-W 
+-Wall 
+-Wno-unused 
+-Winit-self 
+-Wpointer-arith 
+-Wsign-promo 
+-Werror=return-type 
+-Werror=non-virtual-dtor 
+-Werror=address 
+-Werror=sequence-point 
+-DNDEBUG 
+-UDEBUG 
+-mthumb 
+-Os 
+-fomit-frame-pointer 
+-fno-strict-aliasing 
+-finline-limit=64  
+-fno-rtti  
+-D_REENTRANT 
+-DPIC 
+-DU_COMMON_IMPLEMENTATION 
+-fPIC  
+-O3 
+-DARM_FLAG   
+-MD
+
+
+【Android 的 编译参数】
+
+arm-eabi-gcc       
+
+-fno-exceptions 
+-Wno-multichar 
+-msoft-float 
+-fpic 
+-ffunction-sections 
+-funwind-tables 
+-fstack-protector 
+-fno-short-enums 
+-march=armv7-a 
+-mfloat-abi=softfp 
+-mfpu=neon  
+-mthumb-interwork 
+-DANDROID 
+-fmessage-length=0 
+-W 
+-Wall 
+-Wno-unused 
+-Winit-self 
+-Wpointer-arith 
+-Werror=return-type 
+-Werror=non-virtual-dtor 
+-Werror=address 
+-Werror=sequence-point 
+-DSK_RELEASE 
+-DNDEBUG 
+-ggdb 
+-Wstrict-aliasing=2 
+-finline-functions 
+-fno-inline-functions-called-once 
+-fgcse-after-reload 
+-frerun-cse-after-loop 
+-frename-registers 
+-DNDEBUG 
+-UDEBUG 
+-mthumb 
+-Os 
+-fomit-frame-pointer 
+-fno-strict-aliasing 
+-finline-limit=64      
+-MD
+
+这个配置编译出来的elf文件
+Attribute Section: aeabi
+File Attributes
+  Tag_CPU_name: "7-A"
+  Tag_CPU_arch: v7
+  Tag_CPU_arch_profile: Application
+  Tag_ARM_ISA_use: Yes
+  Tag_THUMB_ISA_use: Thumb-2
+  Tag_VFP_arch: VFPv3-D16
+  Tag_ABI_PCS_wchar_t: 4
+  Tag_ABI_FP_denormal: Needed
+  Tag_ABI_FP_exceptions: Needed
+  Tag_ABI_FP_number_model: IEEE 754
+  Tag_ABI_align8_needed: Yes
+  Tag_ABI_align8_preserved: Yes, except leaf SP
+  Tag_ABI_enum_size: int
+  Tag_ABI_HardFP_use: SP and DP
+  Tag_ABI_optimization_goals: Aggressive Size
+
+
+
+---------------
+20121012
+android 的atrace 跟 strace好像还不同。busybox里也没有strace

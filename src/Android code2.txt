@@ -64,3 +64,81 @@ framework/base/include/ui/KeycodeLabels.h
 在这三个文件加我们需要的键值映射就行了。
 
 
+1 /dalvik/vm/Thread.c
+2 dalvik/vm/mterp/ 里面是各个平台的汇编实现  This is the source code for the Dalvik interpreter.
+
+3 java虚拟机指令集  他的指令码很搞笑，从0 ，1，2，3 一直排到 0xC9  这可到省空间啊
+比如：
+x4c astore_1  将栈顶引用型数值存入第二个本地变量
+0x4d astore_2 将栈顶引用型数值存入第三个本地变量
+0x4e astore_3 将栈顶引用型数值存入第四个本地变量
+
+dalvik好像没有使用java字节码而是自己又定义了一套指令集
+
+　6：所有的Android应用的线程都对应一个Linux线程，虚拟机因而可以更多的依赖操作系统的线程调度和管理机制
+确定
+
+
+system/core/libcutils/klog.c
+
+
+void klog_init(void)
+{
+    static const char *name = "/dev/__kmsg__";
+    if (mknod(name, S_IFCHR | 0600, (1 << 8) | 11) == 0) {  //  1,11 是/dev/kmsg  这样做是多此一举？！
+        klog_fd = open(name, O_WRONLY);
+        fcntl(klog_fd, F_SETFD, FD_CLOEXEC);  // 意思是fork可以访问这个fd，但是执行了exec 就不可以用这个fd了
+        unlink(name); //删除了这个文件 !
+    }
+}
+
+#define LOG_BUF_MAX 512
+
+void klog_write(int level, const char *fmt, ...)
+{
+    char buf[LOG_BUF_MAX];
+    va_list ap;
+
+    if (level > klog_level) return;
+    if (klog_fd < 0) return;
+
+    va_start(ap, fmt);
+    vsnprintf(buf, LOG_BUF_MAX, fmt, ap);
+    buf[LOG_BUF_MAX - 1] = 0;
+    va_end(ap);
+    write(klog_fd, buf, strlen(buf));  // klog_fd 文件都 unlink 了，怎么还能写呢？  什么意思？！
+}
+
+
+C++ 版本
+
+Looper.h :
+
+/* Looper 消息处理器接口 */
+class MessageHandler : public virtual RefBase {
+handleMessage(...) = 0 ;// 仅定义一个函数
+}
+
+/* 监控文件描述符事件,可以绑定一个线程，但不是必须的 */
+class Looper : public ALooper, public RefBase {
+sendMessage( sp<MessageHandler>& handler,  Message& message);
+// 把指定looper绑定到调用此函数的线程。
+// 用 pthread_setspecific 实现
+static void setForThread(const sp<Looper>& looper);
+}
+
+/* Looper可以监控的Fd */
+enum {
+    ALOOPER_EVENT_INPUT = 1 << 0,
+    ALOOPER_EVENT_OUTPUT = 1 << 1,
+    ALOOPER_EVENT_ERROR = 1 << 2,
+    ALOOPER_EVENT_HANGUP = 1 << 3,
+    ALOOPER_EVENT_INVALID = 1 << 4,
+};
+
+Java 版本
+android 线程 （暂放此处）
+
+IPCThreadState::self() 到底啥意思
+
+

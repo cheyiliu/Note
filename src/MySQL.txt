@@ -33,3 +33,11 @@ then enter your password, then,
 root密码忘记是可以修复了
 在/etc/xx 加skip_grants_xx
 进入监控模式
+
+数据库都支持UUID（CMS系统每个影片都需要一个id标识，接口定义时要用到。）
+
+网上普遍认为Mysql  使用 UUID 主键性能低下，甚至建议用 自增ID 作为主键并用 UUID作唯一
+索引的方案。但没有提供具体的数据证明使用 UUID 作为主键时性能究竟低下到何种程度。为此
+我专门做了测试。
+
+

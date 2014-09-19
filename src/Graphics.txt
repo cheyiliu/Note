@@ -4685,7 +4685,160 @@ if(ioctl(m->framebuffer->fd, FBIO_WAITFORVSYNC, &crtc) < 0) {
 ========================================================================
 
 
+开始理解Contex
 
+/**
+ * Interface to global information about an application environment.  This is
+ * an abstract class whose implementation is provided by
+ * the Android system.  It
+ * allows access to application-specific resources and classes, as well as
+ * up-calls for application-level operations such as launching activities,
+ * broadcasting and receiving intents, etc.
+ */
+
+
+
+
+
+----------------------------------------
+pvrsrvkm.ko 1.7M  这个ko 就是services4/srvkm  
+pvrnxpdc.ko 200k  由services4/3rdparty/nxp_dc 下面的
+nxp_displayclass.c  nxp_display_linux.c 组成
+
+这个nxpdc 的 ko 
+
+TMVSS_Display_Init 是初始化函数  
+
+opengl驱动里面 kerneldisplay.h中定义了
+
+JTABLE 应该是jump table 的意思
+
+typedef struct PVRSRV_DC_SRV2DISP_KMJTABLE_TAG
+{
+	IMG_UINT32				ui32TableSize;
+	PFN_OPEN_DC_DEVICE			pfnOpenDCDevice;
+	PFN_CLOSE_DC_DEVICE			pfnCloseDCDevice;
+	PFN_ENUM_DC_FORMATS			pfnEnumDCFormats;
+	PFN_ENUM_DC_DIMS			pfnEnumDCDims;
+	PFN_GET_DC_SYSTEMBUFFER		pfnGetDCSystemBuffer;
+	PFN_GET_DC_INFO			pfnGetDCInfo;
+	PFN_GET_BUFFER_ADDR			pfnGetBufferAddr;
+	PFN_CREATE_DC_SWAPCHAIN		pfnCreateDCSwapChain;
+	PFN_DESTROY_DC_SWAPCHAIN		pfnDestroyDCSwapChain;
+	PFN_SET_DC_DSTRECT			pfnSetDCDstRect;
+	PFN_SET_DC_SRCRECT			pfnSetDCSrcRect;
+	PFN_SET_DC_DSTCK			pfnSetDCDstColourKey;
+	PFN_SET_DC_SRCCK			pfnSetDCSrcColourKey;
+	PFN_GET_DC_BUFFERS			pfnGetDCBuffers;
+	PFN_SWAP_TO_DC_BUFFER		pfnSwapToDCBuffer;
+	PFN_SWAP_TO_DC_SYSTEM		pfnSwapToDCSystem;
+	PFN_SET_DC_STATE			pfnSetDCState;
+} PVRSRV_DC_SRV2DISP_KMJTABLE;
+
+其中 pfnSwapToDCSystem = SwapToDCSystem 函数 是fb flip 的功能。 调用 tmvss_dc_do_flip 调用
+
+//在kernel空间 使用 fb的flip 功能
+#ifdef PVR_TMVSS_DISPLAY_USE_LFB
+   if(page_no == 0)
+      psDevInfo->fb->var.yoffset = 0;
+   else
+      psDevInfo->fb->var.yoffset = psDevInfo->fb->var.yres;
+   psDevInfo->fb->fbops->fb_pan_display(&psDevInfo->fb->var,psDevInfo->fb);
+
+#else
+// 直接调用 cnxt_vpp_rgn_set_options 实际上fb 也是间接调用了此函数
+   /* Call DRM function to set the display page */
+   VPPRgnOptions.uDisplayPage = page_no;
+   RetStatus = cnxt_vpp_rgn_set_options(psDevInfo->hGXAMainRgn,CNXT_VPP_RGN_IMAGE_PAGE,&VPPRgnOptions);	
+
+#endif
+
+
+有这句提示：
+/* setup the DC Jtable so SRVKM can call into this driver */
+可见 pvrnxpdc.ko 是  pvrsrvkm.ko 的底层函数 
+
+/**************************************************************************
+ The 3rd party driver is a specification of an API to integrate the IMG POWERVR
+ Services driver with 3rd Party display hardware.  It is NOT a specification for
+ a display controller driver, rather a specification to extend the API for a
+ pre-existing driver for the display hardware.
+
+ The 3rd party driver interface provides IMG POWERVR client drivers (e.g. PVR2D)
+ with an API abstraction of the system underlying display hardware, allowing
+ the client drivers to indirectly control the display hardware and access its
+ associated memory.
+
+ Functions of the API include
+ - query primary surface attributes (width, height, stride, pixel format, CPU
+     physical and virtual address)
+ - swap/flip chain creation and subsequent query of surface attributes
+ - asynchronous display surface flipping, taking account of asynchronous read
+ (flip) and write (render) operations to the display surface
+
+ Note: having queried surface attributes the client drivers are able to map the
+ display memory to any IMG POWERVR Services device by calling
+ PVRSRVMapDeviceClassMemory with the display surface handle.
+
+ This code is intended to be an example of how a pre-existing display driver may
+ be extended to support the 3rd Party Display interface to POWERVR Services
+ ?IMG is not providing a display driver implementation.
+
+ Use of IMG types:
+ IMG types are used in the DDK 3rd party example implementations for ease of
+ implementation and to correctly interface with POWERVR Services functions.
+ The use of IMG types in the example code should not be interpreted as the code
+ being the responsibility of Imagination Technologies.
+ **************************************************************************/
+
+OpenServices 函数中 打开  /dev/pvrsrvkm 设备
+
+那么，谁来打开了 pvrsrvkm 设备节点呢？ 在 pvr_bridge_u.c 文件中 PVRSRVExportDeviceMem 函数。
+那么又是谁调用了 mmap 把 pvrsrvkm 映射到用户空间了呢？  
+
+就是 PVRPMapKMem 这个函数了 但是这个函数在 kernel 空间运行所以写法怪异： 没有直接在用户空间调用 mmap 系统调用 
+
+pvUserAddress = (IMG_VOID *) syscall(__NR_mmap2, NULL,
+                      sOut.ui32RealByteSize,
+                      PROT_READ | PROT_WRITE,
+                      MAP_SHARED,
+                      *(IMG_INT*)hModule,	/* PVR Device */
+                       (off_t)sOut.ui32MMapOffset);
+================================================================
+
+bridged_pvr_glue.c 和 pvr_bridge_u.c 包含在 libsrv_um.so 里面
+也只有这2个 c文件调用了 PVRPMapKMem 函数 
+
+再次分析一下 system_server 进程的 maps 文件
+
+4ea5f000-4ede3000 rwxs 21000000 00:0f 577        /dev/pvrsrvkm
+4f86e000-4fbf2000 rwxs 21384000 00:0f 577        /dev/pvrsrvkm
+
+这2个fb区域没有被映射到连续的用户空间，而是分开了
+
+ls -i pvrsrvkm  显示 pvrsrvkm的inode 就是 577
+
+4efe4000-4efe5000 rwxs 8000003b000 00:0f 577     /dev/pvrsrvkm
+这行的 offset段 8000003b000 就比较怪异了！
+
+配合 lsof  cat maps  看到
+很多进程都会打开  pvrsrvkm 这个设备。
+gralloc 里面的 的framebuffer.cpp 是干什么用的？
+  里面的fb_post函数的作用：
+这个函数里面通过打印我发现 我的framebuffer是支持 page_flip的
+
+我在fb_post 改了一个if语句使得他固定走 memcopy  结构系统起不来了， 在logo出停止不动  后来该回去，也起不来，现象一样。把data数据删除重启恢复。奇怪。
+
+
+鼠标简单移动一点，会出现很多打印，可见，鼠标移动的效率太低了。
+
+考察一下： 从鼠标点击 抽屉开始 都有什么打印
+调用fb_post 6此  在setting界面 选中条移动一次  调用fb_post 5次
+
+进一步探讨 framebuffer的结构
+内核需要 fbmem.c 这个文件  不是ko 是直接编译到内核里面了
+
+frameworks/base/cmds/ 有screencap  screenshot 2个程序
 
 
 

@@ -1,0 +1,121 @@
+frameworks/base/libs/binder 生成libbinder.so
+
+ProcessState.cpp
+static int open_driver(){
+    int fd = open("/dev/binder", O_RDWR);
+return fd;
+}
+-----
+在service manager 中的binder.c 中也有，这个是给service manager进程用的：
+struct binder_state *binder_open(unsigned mapsize)
+{
+  bs->fd = open("/dev/binder", O_RDWR);
+  bs->mapped = mmap(NULL, mapsize, PROT_READ, MAP_PRIVATE, bs->fd, 0); //注意，是私有映射
+}
+
+ProcessState::ProcessState()
+{
+mDriverFD = open_driver();
+#define BINDER_VM_SIZE ((1*1024*1024) - (4096 *2))
+mVMStart = mmap(0, BINDER_VM_SIZE, PROT_READ, MAP_PRIVATE | MAP_NORESERVE, mDriverFD, 0);
+}
+
+Binder设备最大能映射4MB的内存区域,不能映射具有写权限的内存区域等
+不同于一般的设备驱动，大多设备映射的设备内存是设备本身具有的，或者是在驱动初始化时由vmalloc或kmalloc等内核内存函数分配的
+Binder的设备内存是在mmap操作时分配的,分配的方法是：先在内核虚拟映射表上获取一个可以使用的区域，然后分配物理页，
+并把物理页映射到获取的虚拟空间上。由于设备内存是在mmap操作中实现的，因此每个进程/线程只能执行一次映射操作，其后的操作都会返回错误
+
+//判断是否已经mmap过
+if (proc->buffer) {
+ ret = -EBUSY;
+ failure_string = "already mapped";
+ goto err_already_mapped;
+}
+
+//申请虚拟空间  
+area = get_vm_area(vma->vm_end - vma->vm_start, VM_IOREMAP);
+
+//分配物理内存
+binder_update_page_range(proc, 1, proc->buffer, proc->buffer + PAGE_SIZE, vma))
+主要动作：
+alloc_page    分配页面
+map_vm_area   为分配的内存做映射关系
+vm_insert_page   把分配的物理页插入到用户VMA区域
+
+binder_insert_free_buffer 作用是？！把此进程的buffer插入到进程信息中。
+
+还实现了
+static struct vm_operations_struct binder_vm_ops = {
+	.open = binder_vma_open,
+	.close = binder_vma_close,
+};
+在mmap中：
+vma->vm_ops = &binder_vm_ops; 一般都不用实现这个
+
+binder_proc的成员node是binder_node的根节点，这是一棵红黑树（一种平衡二叉树）
+该函数首先根据规则找到第一个叶节点作为新插入的节点的父节点，然后创建binder_node节点并插入。这里需要说明一下，
+rb_link_node和rb_insert_color都是内核红黑树函数
+
+
+
+binder_ioctl 的实现：
+到这里进入Binder最核心的部分了，Binder的功能就是通过ioctl命令来实现的。Binder的ioctl命令共有7个。
+BINDER_WRITE_READ  //所有Binder的基础
+BINDER_SET_IDLE_TIMEOUT //未实现
+BINDER_SET_MAX_THREADS //设置最大线程数目
+BINDER_SET_IDLE_PRIORITY //未实现
+BINDER_SET_CONTEXT_MGR //被Service Manager用于设置自己作为context manager节点，凡是为0的handle都是指这个master节点
+BINDER_THREAD_EXIT //用于删除线程信息
+BINDER_VERSION
+
+2 binder驱动，使用了非常类似 vmalloc 函数的实现方法做了mmap
+使用了： get_vm_area map_vm_area
+proc->pages = kzalloc(sizeof(proc->pages[0]) * ((vma->vm_end - vma->vm_start) / PAGE_SIZE), GFP_KERNEL); 相当于 vmalloc 里面的
+而2.6.35内核vmalloc.c 里面的实现 ：  array_size = (nr_pages * sizeof(struct page *)); （明明有mem_map 为什么还要分配这个）
+binder用到了 vm_insert_page （insert single page into user vma 这是binder mmap的关键所在）
+vmalloc.c 中的 remap_vmalloc_range（把vmalloc区域映射到用户空间） 也调用了这个函数，所以binder的mmap基本是把vmalloc.c变相实现了一遍！
+
+为什么要分配proc->pages 这个呢？
+
+BINDER_WRITE_READ
+该命令才是Binder最核心的部分，Binder的IPC机制就是通过这个接口来实现的：
+
+在Android的设计中，每个Activity都是一个独立的进程（每个Activityt?!），每个Service也是一个独立的进程
+Binder 驱动在前面已经介绍了，它用于实现Binder的设备驱动，主要负责组织Binder的服务节点
+
+
+/**
+ * Base class and low-level protocol for a remotable object.
+ * You can derive from this class to create an object for which other
+ * processes can hold references to it.  Communication between processes
+ * (method calls, property get and set) is down through a low-level
+ * protocol implemented on top of the transact() API.
+ */
+class IBinder : public virtual RefBase //这是一个抽象基类
+
+
+系统里面充斥着这样的调用：
+mRemote.transact() // java 程序
+remote()->transact // C++ 程序  remote（）函数返回一个 mRemote指针
+
+4 在binder驱动中，首先看一个最简单最基础的结构体 binder_work
+
+binder 的类型分为：
+本地对象：BINDER_TYPE_BINDRE  BINDER_TYPE_WEAK_BINDER
+远程对象：BINDER_TYPE_HANDLE  BINDER_TYPE_WEAK_HANDLE
+文件类型：BINDER_TYPE_FD
+
+进程之间传递的数据称之为 binder对象：结构体 flat_binder_object 
+
+poll 函数是非阻塞型IO的内核驱动实现，所有支持非阻塞IO操作的设备驱动都需要实现pool函数。
+
+每个进程只有一个ProcessState对象，每一个线程有一个 IPCThreadState对象，主要负责binder数据读取，写入
+
+
+每个进程有一个 ProcessState对象
+每个线程有一个 IPCThreadState对象
+
+
+
+
+

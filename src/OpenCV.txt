@@ -1,0 +1,40 @@
+
+/usr/local/lib/libavcodec.a recompile with -fPIC  加-fPIC 重新编译ffmpeg
+在configure中 --enable-pic  --enable-shared
+
+
+
+建立 release目录 进入并执行  cmake ..  
+然后执行 make -j8
+
+执行python命令时候，提示
+import cv2.cv as cv
+ImportError: No module named cv2.cv
+
+OpenCV对于图像处理已经十分强大，对于一些常见的应用仅用短短几行代码即可实现。官方释放
+的Python语言接口有两个cv2.cv和cv2，cv2加载的图像数据类型是Numpy类型，可以直接用Numpy
+处理，而cv2.cv的数据类型是OpenCV类型的。第三方的pyopencv也不错。
+
+
+numpy 是一个python数学库
+sudo apt-get install python-numpy python-scipy python-matplotlib等。
+在ubuntu11.10 上没有执行成功。
+
+NumPy is the fundamental package for scientific computing with Python. It contains among other things:
+
+哈哈，好了！
+--   Python:
+--     Interpreter:                 /usr/bin/python2.7 (ver 2.7.2)
+--     Libraries:                   /usr/lib/libpython2.7.so
+--     numpy:                       /usr/lib/pymodules/python2.7/numpy/core/include (ver 1.5.1)
+--     packages path:               lib/python2.7/dist-packages
+
+
+系统需要先安装好 python-opencv 库  但是在ubuntu11.10上 通过apt-get没有正常安装
+没有关系，通过google下载相应库，以及依赖的库（deb形式） 用dpkg -i 命令安装，有时候安装错误
+按照提示，用apt-get install -f 卸载。
+
+20140516  后来发现 ubuntu11.10上不需要python-opencv 
+我执行  dpkg -r python-opencv python依然能正常执行。
+
+

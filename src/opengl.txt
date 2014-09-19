@@ -1,0 +1,425 @@
+1 glBindTexture- bind a named texture to a texturing target
+  C Specification
+  void glBindTexture(GLenum  target, GLuint  texture);
+  Parameters
+
+target
+  Specifies the target to which the texture is bound.Must be either
+                        GL_TEXTURE_1D,
+                        GL_TEXTURE_2D,
+                        GL_TEXTURE_3D, or
+                        GL_TEXTURE_CUBE_MAP.
+                    
+texture  Specifies the name of a texture.
+                    
+android 鼠标移动的时候调用了这个函数  参数是 GL_TEXTURE_2D
+注意 bind 是绑定 不是blend 混合
+
+2 glBlendFunc — specify pixel arithmetic 指定像素算法
+ C Specification
+  void glBlendFunc( GLenum sfactor, GLenum dfactor );
+
+Description
+
+            In RGBA mode, pixels can be drawn using a function that blends
+            the incoming (source) RGBA values with the RGBA values
+            that are already in the frame buffer (the destination values).
+            Blending is initially disabled.
+            Use glEnable and glDisable with argument GL_BLEND
+            to enable and disable blending.
+
+/* BlendingFactorDest */
+#define GL_ZERO                           0
+#define GL_ONE                            1
+#define GL_SRC_COLOR                      0x0300
+#define GL_ONE_MINUS_SRC_COLOR            0x0301
+#define GL_SRC_ALPHA                      0x0302
+#define GL_ONE_MINUS_SRC_ALPHA            0x0303
+#define GL_DST_ALPHA                      0x0304
+#define GL_ONE_MINUS_DST_ALPHA            0x0305
+
+/* BlendingFactorSrc */
+/*      GL_ZERO */
+/*      GL_ONE */
+#define GL_DST_COLOR                      0x0306
+#define GL_ONE_MINUS_DST_COLOR            0x0307
+#define GL_SRC_ALPHA_SATURATE             0x0308
+/*      GL_SRC_ALPHA */
+/*      GL_ONE_MINUS_SRC_ALPHA */
+/*      GL_DST_ALPHA */
+/*      GL_ONE_MINUS_DST_ALPHA */
+
+android 里面 多数参数都是 1, 303  源是GL_ONE，目的是 GL_ONE_MINUS_SRC_ALPHA
+
+
+通过函数glTexImage2D()制定一个二维纹理
+
+好像没有用到 copybit啊默认
+
+
+
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
+源的每一个像素的alpha都等于自己的alpha 目标的每一个像素的alpha等于1减去该位置源像素的alpha
+因此不论叠加多少次，亮度是不变的 ？？？ 为什么亮度不变？  1-xx 目的何在呢？
+
+要使用OpenGL的混合功能，只需要调用：glEnable(GL_BLEND);即可。
+要关闭OpenGL的混合功能，只需要调用：glDisable(GL_BLEND);即可。
+
+前面我们已经提到，混合需要把原来的颜色和将要画上去的颜色找出来，经过某种方式处理后得到一种新的颜色
+这里把将要画上去的颜色称为“源颜色”，把原来的颜色称为“目标颜色”。
+OpenGL 会把源颜色和目标颜色各自取出，并乘以一个系数（源颜色乘以的系数称为“源因子”，目标颜色乘以的系数称为“目标因子”）
+然后相加，这样就得到了新的颜 色
+（也可以不是相加，新版本的OpenGL可以设置运算方式，包括加、减、取两者中较大的、取两者中较小的、
+逻辑运算等，但我们这里为了简单起见，不讨 论这个了）
+
+下面用数学公式来表达一下这个运算方式。假设源颜色的四个分量（指红色，绿色，蓝色，alpha值）是 (Rs, Gs, Bs, As)，
+目标颜色的四个分量是(Rd, Gd, Bd, Ad)，又设源因子为(Sr, Sg, Sb, Sa)，目标因子为 (Dr, Dg, Db, Da)。则混合
+产生的新颜色可以表示为：(Rs*Sr+Rd*Dr, Gs*Sg+Gd*Dg, Bs*Sb+Bd*Db, As*Sa+Ad*Da)
+
+源因子和目标因子是可以通过glBlendFunc函数来进行设置的
+glBlendFunc有两个参数，前者表示源因子，后者表示目标因子。这两个参数可以是多种值，下面介绍比较常用的几种。
+
+GL_ZERO：     表示使用0.0作为因子，实际上相当于不使用这种颜色参与混合运算。
+GL_ONE：      表示使用1.0作为因子，实际上相当于完全的使用了这种颜色参与混合运算。
+GL_SRC_ALPHA：表示使用源颜色的alpha值来作为因子。
+GL_DST_ALPHA：表示使用目标颜色的alpha值来作为因子。
+
+GL_ONE_MINUS_SRC_ALPHA：表示用1.0减去源颜色的alpha值来作为因子。
+GL_ONE_MINUS_DST_ALPHA：表示用1.0减去目标颜色的alpha值来作为因子。
+
+如果设置了glBlendFunc(GL_ONE, GL_ZERO);，则表示完全使用源颜色，完全不使用目标颜色，
+因此画面效果和不使用混合的时候一致（当然效率可能会低一点点）
+如果没有设置源因子和目标因子，则默认情况就是这样的设置。
+
+如果设置了glBlendFunc(GL_ZERO, GL_ONE);，则表示完全不使用源颜色，因此无论你想画什么，
+最后都不会被画上去了。（但这并不是说这样设置就没有用，有些时候可能有特殊用途）
+如 果设置了glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);，则表示源颜色乘以
+自身的alpha 值，目标颜色乘以1.0减去源颜色的alpha值，这样一来，源颜色的alpha值越大，则产
+生的新颜色中源颜色所占比例就越大，而目标颜色所占比例则减 小。这种情况下，我们可以简单的将源
+颜色的alpha值理解为“不透明度”。这也是混合时最常用的方式。
+
+如果设置了glBlendFunc(GL_ONE, GL_ONE);，则表示完全使用源颜色和目标颜色，最终的颜色实
+际上就是两种颜色的简单相加。例如红色(1, 0, 0)和绿色(0, 1, 0)相加得到(1, 1, 0)，结果为黄色。
+
+
+One of the things selecting ordered composite should do is help when rendering transparent surfaces. Unfortunatly, when this option is on, the colors are wrong.
+
+The problem is that ordered compositing does alpha blending of images (generally good for compositing transparent items), but the alpha values in the color buffer are wrong.
+
+The problem is that the blending mode is set to glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA). Although many people think this is appropriate for the Porter & Duff OVER operation, it is not (it gets the color right but the alpha wrong).
+
+There are two ways to get the OVER operation right. The first involves using a special blending mode available in OpenGL 1.3. Unfortunatly, many cheaper implementations still do not support this.
+
+The other way involves setting the blend function to glBlendFunc(GL_ONE,GL_ONE_MINUS_SRC_ALPHA) AND premultiplying the polygon colors by their alpha. For example, the RGBA value of a full intensity red with half opacity is (0.5, 0, 0, 0.5) instead of (1, 0, 0, 0.5) (i.e., the RGB values are "premuliplied" by the alpha). 
+
+I was trying to fix depth peeling to make it work with an vtkImageActor having a texture with an alpha component. This class is also used internally by vtkTextActor3D.
+
+The first bug I saw was with the vtkTextActor3D itself. Regular alpha blending gives a nice result but switching to depth peeling gave me a really fuzzy result, the text was thicker.
+
+The second bug, just with a vtkImageActor, using a yellow image with a alpha ramp (VTkData/Data/alphachannel.png) gave me the expected result with regular alpha blending but a complete yellow
+image with depth peeling on, except on the lower-right corner where the alpha is really low (this part was just transparent and discarded by the alpha test (not alpha blending) in vtkOpenGLImageActor)
+
+
+There is an error in the depth peeling implementation. It is compositing the peels (second stage of the algorithm) with glBlendFunc(GL_ONE,GL_ONE_MINUS_SRC_ALPHA) but when the textured quad
+of the image actor is rendered in some peel (first stage of the algorithm), blending is disable. The peel contains the RGBA components of the texture but not alpha-premultiplied because the texture does not
+have premultiplied alpha.
+
+I fixed that (on my working directory) by changing the compositing stage to use the "standard" glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA). vtkImageActor renderered correctly then with or without depth peeling.
+After this change all the other geometry became darker (with depth peeling only). For good reason: vtkScalarsToColors premultiplied material properties by alpha. With the standard function, there is
+now a square alpha so I removed the premultiplication on vtkScalarsToColors and it fixed everything, with or without depth peeling.
+
+Before committing my changes I saw the log about the premultiplied changed and ask Utkarsh if the reason was because of the previous wrong behavior of depth peeling but he told me the premultiplied computation was to fix an issue when compositing in IceT because the alpha was wrong on the final framebuffer (if this one has an alpha channel)
+
+He pointed me to this bug (2347).
+
+It means that right now, rendering of vtkImageActor is wrong anyway without depth peeling because it renders it with a square alpha in the framebuffer. So it should look darker with compositing.
+
+
+To finally fix everything at the same time, I'd like to use the following function as much as possible
+vtkgl::BlendEquationSeparate(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA, // RGB
+GL_ONE,GL_ONE_MINUS_SRC_ALPHA) // A
+
+
+The idea is to:
+
+
+1. initialize the vtkgl::BlendEquationSeparate function pointer in the renderwindow with this:
+
+vtkOpenGLExtensionManager *extensions=vtkOpenGLExtensionManager::New();
+extensions->SetRenderWindow(this);
+if(extensions->ExtensionSupported("GL_VERSION_1_4"))
+{
+extensions->LoadExtension("GL_VERSION_1_4");
+}
+else
+{
+ if(extensions->ExtensionSupported("GL_EXT_blend_func_separate"))
+ {
+  extensions->LoadCorePromotedExtension("GL_EXT_blend_func_separate"); // see Appendix G of the OpengGL spec.
+ }
+}
+extensions->Delete();
+
+2. Set the default blending function to be
+vtkgl::BlendEquationSeparate(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA, // RGB
+GL_ONE,GL_ONE_MINUS_SRC_ALPHA) // A
+
+if vtkgl::BlendEquationSeparate exists or glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA) if it does not.
+
+
+2. In OpenGLScalarsToColor, test if the function exists or not
+
+if(vtkgl::BlendEquationSeparate)
+ {
+  render not premultiplied material
+ }
+else
+{
+GLint alphaBits;
+glGetIntegerv(GL_ALPHA_BITS, &alphaBits);
+ if(alphaBits>0) // framebuffer has some alpha
+  {
+   render premultiplied material, as it is always the case right now (internal switch to glBlendFunc(GL_ONE,GL_ONE_MINUS_SRC_ALPHA)).
+  }
+ else // no alpha in framebuffer, don't bother
+  {
+   render not premultiplied material
+  }
+}
+
+
+Recent OpenGL implementations (Mesa or recent graphic cards) will have the correct result without depth peeling with material or textures because they have vtkgl::BlendEquationSeparate.
+Older OpenGL implementation will have correct material alpha but wrong texture alpha in the final framebuffer (*as it is right now* )
+
+I'll add (OpenGL>=1.4 or GL_EXT_blend_func_separate) as a new required extension for depth peeling. Not a big deal as it already requires more advanced feature like GLSL.
+
+It means when depth peeling is on and used, it will not use premultiplied material but the final framebuffer will have the correct premultiplied color with the correct alpha.
+
+Finally, it will require to go through other mappers code like vtkProjectedTetra to make sure, when it switch to its own blending mode, at the end it will switch back to the
+default blending mode (vtkgl::BlendEquationSeparate if it exists), probably not by calling glBlendFunc or vtkgl::BlendEquationSeparate but using:
+
+glPushAttrib(GL_COLOR_BUFFER_BIT);
+// algorithm here
+glPopAttrib();
+
+
+PS: About the attrib flag to use in glPushAttrib(), the way to find this out is to go read the OpenGL spec and go to the state tables, find the line having BLEND_SRC_ALPHA (for instance), the last column "Attribute"
+gives you "color-buffer", then you go back to the "Attribute groups" table and you see that "color-buffer" matches COLOR_BUFFER_BIT.
+In addition, glPush/PopAttrib can be faster than reading/writing the state with glGetInteger()/glBlendFunc() because it does not require to send the state value back to the CPU. 
+
+
+
+
+
+---------------------------------------------------------------------------
+20120115 sun 15:18
+查看android里opengl测试程序 gl2_basic.cpp
+
+opengl函数调用流程
+
+main()
+
+EGLint majorVersion;
+EGLint minorVersion;
+
+EGLDisplay dpy;
+/*
+typedef void *EGLDisplay;
+*/
+
+dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+
+/*
+eglGetDisplay - return an EGL display connection
+*/
+
+/*
+Use eglInitialize to initialize the display connection.
+eglInitialize - initialize an EGL display connection
+ 
+EGLBoolean eglInitialize(EGLDisplay display, EGLint * major, EGLint * minor)
+majorVersion minorVersion 只是用来得到egl的版本，没有其他用处
+*/
+
+returnValue = eglInitialize(dpy, &majorVersion, &minorVersion);
+
+/*
+这个函数在libui.so 中的 framebufferNativeWindow.cpp中实现
+
+EGLNativeWindowType android_createDisplaySurface(void)
+{
+    FramebufferNativeWindow* w;
+    w = new FramebufferNativeWindow();
+    return (EGLNativeWindowType)w;
+}
+理解一下 FramebufferNativeWindow 类！ 构造函数主要是打开 gralloc 模块
+
+看看她的注释吧，说得很清楚
+/*
+ * This implements the (main) framebuffer management. This class is used
+ * mostly by SurfaceFlinger, but also by command line GL application.【现在就是 command line gl app】
+ * 
+ * In fact this is an implementation of android_native_window_t on top of
+ * the framebuffer.
+ * 
+ * Currently it is pretty simple, it manages only two buffers (the front and 
+ * back buffer).
+ * 
+ */
+
+*/
+EGLNativeWindowType window = android_createDisplaySurface();
+
+/* EGLUtils 是libui.so里面的类  可以这样调用说明是一个static 函数*/
+
+    EGLint s_configAttribs[] = {
+            EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+            EGL_NONE };
+
+/* dpy 是上面 eglGetDisplay 得到的 */
+returnValue = EGLUtils::selectConfigForNativeWindow(dpy, s_configAttribs, window, &myConfig);
+/*这个时候就把opengl跟 framebuffer联系到一起了吗？*/
+
+/*
+eglCreateWindowSurface - create a new EGL window surface
+返回一个surface
+*/
+EGLSurface surface;
+surface = eglCreateWindowSurface(dpy, myConfig, window, NULL);
+
+/*
+eglCreateContext — create a new EGL rendering context
+*/
+EGLint context_attribs[] = { EGL_CONTEXT_CLIENT_VERSION, 2, EGL_NONE };
+EGLContext context;
+context = eglCreateContext(dpy, myConfig, EGL_NO_CONTEXT, context_attribs);
+
+/*
+eglMakeCurrent - attach an EGL rendering context to EGL surfaces
+
+EGLBoolean eglMakeCurrent(EGLDisplay display,
+    EGLSurface draw,
+    EGLSurface read,
+    EGLContext context)
+
+
+*/
+returnValue = eglMakeCurrent(dpy, surface, surface, context);
+
+/* eglQuerySurface - return EGL surface information */
+
+eglQuerySurface(dpy, surface, EGL_WIDTH, &w);
+eglQuerySurface(dpy, surface, EGL_HEIGHT, &h);
+
+/*
+EGL 就是用来opengl 对接本地图形窗口系统的
+下面就可以开始调用 glxxx函数画图了
+*/
+
+/* 
+glCreateShader — Creates a shader object
+类型可以是：
+GL_VERTEX_SHADER      向量图
+GL_FRAGMENT_SHADER    pixel图
+ */
+GLuint shader = glCreateShader(shaderType);
+
+
+
+######
+在C++中，定义一个 struct 跟定义一个class 有同样的效果的，如：
+typedef struct android_native_window_t 
+{
+    int     (*setSwapInterval)(struct android_native_window_t* window,
+                int interval);
+}
+
+android_native_window_t::setSwapInterval = setSwapInterval; 这样访问
+
+
+######
+
+--------------------------------------------
+/*
+eglGetConfigs 这个函数有点意思
+return a list of all EGL frame buffer configurations for a display
+
+EGLBoolean eglGetConfigs(EGLDisplay display, EGLConfig * configs, EGLint config_size, EGLint * num_config)
+
+configs does not return values, if it is specified as NULL. This is useful for querying just the number of all frame buffer configurations.
+
+*/
+
+int printEGLConfigurations(EGLDisplay dpy) {
+    EGLint numConfig = 0;
+    EGLint returnVal = eglGetConfigs(dpy, NULL, 0, &numConfig);  //这次调用只为活得个数
+
+    EGLConfig* configs = (EGLConfig*) malloc(sizeof(EGLConfig) * numConfig);
+
+    returnVal = eglGetConfigs(dpy, configs, numConfig, &numConfig); //这时候，最后一个参数应该是无效的
+
+    for(int i = 0; i < numConfig; i++) {
+        printf("Configuration %d\n", i);
+        printEGLConfiguration(dpy, configs[i]);
+    }
+}
+
+
+
+
+
+=====================================================================================
+来自 http://www.khronos.org/
+
+OpenGL ES - The Standard for Embedded 3D Graphics
+OpenGL® ES is a royalty-free, cross-platform API for full-function 2D and 3D graphics on embedded systems - including consoles, phones, appliances and vehicles. It consists of well-defined subsets of desktop OpenGL, creating a flexible and powerful low-level interface between software and graphics acceleration. OpenGL ES includes profiles for floating-point and fixed-point systems and the EGL™ specification for portably binding to native windowing systems. OpenGL ES 1.X is for fixed function hardware and offers acceleration, image quality and performance. OpenGL ES 2.X enables full programmable 3D graphics. OpenGL SC is tuned for the safety critical market.
+
+=========================================================================================
+
+
+关于 GL_TRIANGLE_FAN   GL_TRIANGLE_STRIP
+
+多边形需要由三角面片来组合成 GL_TRIANGLE_FAN 和 GL_TRIANGLE_STRIP 就决定了不同得顶点组织方式
+
+
+
+20121010 17:23---开始研究opengl的应用中的使用------------------
+
+在Home和Gallery 里面只有极其简单的应用
+
+
+
+
+20121011
+
+图片浏览器里的编辑功能 Sharpen 通过Filter Effect 系统，最终通过 Render Script 用opengl实现，系统中并没有单独的filter程序 
+
+
+
+
+\frameworks\base\opengl\tests 有一个angeles目录，San angeles是OpenGL ES 2005编程挑战赛的一个项目，
+它是一个OpenGL ES的自运行演示程序，包含超过60000 render faces，Google port这个项目来做测试。
+mmm frameworks/base/opengl/tests/angeles/
+拷贝out/target/product/generic/system/bin/gpustate angeles 到平台 ，测试结果是可以运行的。
+但是测试发现，只有1280x720 单buffer情况下 才可以正常运行  双buffer的时候，提示错误。
+
+
+在app-linux.c中加入：
+printf("GL_VENDOR:\t%s\n", glGetString(GL_VENDOR));
+printf("GL_RENDERER:\t%s\n", glGetString(GL_RENDERER));
+printf("GL_VERSION:\t%s\n", glGetString(GL_VERSION));
+printf("GL_EXTENSIONS:\t%s\n", glGetString(GL_EXTENSIONS));
+打印：
+GL_VENDOR:      Google Inc.
+GL_RENDERER:    Android PixelFlinger 1.0
+GL_VERSION:     OpenGL ES-CM 1.0
+GL_EXTENSIONS:  GL_OES_byte_coordinates GL_OES_fixed_point GL_OES_single_precisi
+on GL_OES_read_format GL_OES_compressed_paletted_texture GL_OES_draw_texture GL_
+OES_matrix_get GL_OES_query_matrix GL_ARB_texture_compression GL_ARB_texture_non
+_power_of_two GL_ANDROID_direct_texture GL_ANDROID_user_clip_plane GL_ANDROID_ve
+rtex_buffer_object GL_ANDROID_generate_mipmap
+
+opengl目录下还有很多测试程序
+
+
