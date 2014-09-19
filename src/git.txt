@@ -1,6 +1,6 @@
 1 基本命令 
 	1) pull
-		pull = fetch + merge
+		pull = fetch + merge/rebase 给pull的参数一部分是给merge的一部分是给fetch的
 		pull不看同名看track，“当前分支”有track关系时，git pull做合并操作。
 		当前不在这个分支时，这个分支虽然有track关系，也只是fetch不merge
 		另一种执行方式为：git pull origin newbox
@@ -15,6 +15,8 @@
 
 git config --list  检查已有配置项
 git config user.name 检查特定配置项的值
+git clone --mirror
+
 
 个性化git例如
 　　[user]
@@ -37,9 +39,7 @@ git config user.name 检查特定配置项的值
   merge = refs/heads/xxx
 只要是同名分支，都会被跟踪track，git push 无参数都可以push。
 
-
- 1 当前分支无跟踪分支时，执行git pull提示：
-
+1 无跟踪分支时执行git pull提示：
 You asked me to pull without telling me which branch you
 want to merge with, and 'branch.newbox.merge' in
 your configuration file does not tell me, either. Please
@@ -59,8 +59,6 @@ use something like the following in your configuration file:
     fetch = <refspec>
 
 See git-config(1) for details.
-
-
 
 2 git config
 
@@ -197,64 +195,9 @@ git pack-refs refs/heads下面的本地分支就都消失了，进入packed-refs
    可以确定的是mirror 只把ref/heads里面的分支提交上去，远程的其他分支会被删除，并且在本地执行了push --mirror后
    本地仓库立刻变成远程仓库的样子【可怕】。因为本地分支没有提交到远程，所以每个人的本地目录的本地分支都不同。
 
-
 15 猜测：git的服务端应该没有 ref/heads目录吧，因为他不需要本地分支。也可能有，因为如果把本地分支提交上去
    需要确认：本地分支能push上去吗？
-
-16  git clone --mirror
-17  ~/.gitconfig
-    
-
-19 *网络上的一段讨论*
-Git: how to unpack packed-refs?
-Hi.
-I cloned a project from github with git clone --mirror. That left me with a repository 
-with a packed-refs file, a .pack and an .idx file. For developement purposes I want 
-to look at the loose objects, so I unpacked the objects with git unpack-objects
- < <pack file> which worked fine (I unpacked the pack file into a new repo if 
-you're wondering). Only thing is that refs/heads/ is still empty, all the refs 
-are still only in packed-refs but I need them in refs/heads/. I wasn't able to 
-find a command that would extract or unpack those references and I can somehow
- not believe that I would have to do this by hand (or via pipes).
-
-So actually I have two questions:
-
-   1. Is there an easy way to "restore" refs from packed-refs?
-   2. If not, why isn't there? If there's a command for unpacking objects, what 
-is the reasoning behind not providing the same for refs (don't forget that there's 
-even a command git pack-refs...)
-
-Thanks for any tips and ideas.
-
-The short answer is "no" - there is no "easy way" to unpack the refs the way you're 
-asking.
-The reason the packed refs exist is to speed up access in a repo with zillions of 
-refs - it's easier to look at a single file with many lines than to hit the file 
-system once for every single ref. Anything in git which needs to know about refs 
-goes through code which can read both the refs directory and the packed refs file. 
-Unpacking it would defeat its purpose. If you want to access refs, use the plumbing 
-commands (e.g. show-ref, for-each-ref, update-ref...). I can't really think of any 
-kind of access which would be faster and easier with the directory structure than 
-with the plumbing commands (especially with for-each-ref available).
-And yes, packed objects are (like packed refs) created for improved performance, 
-but there's a huge difference. A packed refs file is just a bunch of independent 
-lines. You can, essentially for free, add to or remove from it. There's no need 
-to unpack it in order to modify it. Packed objects, on the other hand, are 
-delta-compressed, so the objects inside depend on each other. They greatly reduce
- disk usage, and objects can be read from them at reasonable cost, but attempting 
-to modify the set of objects in the pack is much more expensive than modifying 
-loose objects, so it's only done periodically by git repack (called by git gc),
- though I don't believe git repack actually unpacks the objects - it just reads
- them from the packfile, packs them with the loose ones, and makes a new pack.
-However, when a pack is transferred from a remote, it's unpacked on the local 
-side. I see a call to an unpack method in the git receive-pack source, and the
- pack-objects manpage says:
-    The git unpack-objects command can read the packed archive and expand the 
-objects contained in the pack into "one-file one-object" format; this is typically
- done by the smart-pull commands when a pack is created on-the-fly for efficient
- network transport by their peers.
-
-
+ 
 21 git push [--all | --mirror | --tags]
    --all 是把refs/heads/里面的分支全部push上去
    --tags 是把refs/tags全部push上去，当然可以同时--tags --all ，
@@ -1338,74 +1281,9 @@ git status 还是显示
 执行git fetch --all  不用加远程仓库地址  就可以更新push的内容
 
 fetch      Download objects and refs from another repository
-
-
-rebase：
-                     A---B---C topic
-                    /
-               D---E---F---G master
-
-       From this point, the result of either of the following commands:
-
-           git rebase master
-           git rebase master topic
-
-       would be:
-
-                             A'--B'--C' topic
-                            /
-               D---E---F---G master
-
 git-fetch - Download objects and refs from another repository
 git-pull - Fetch from and merge with another repository or a local branch
 本地的分支也可以pull？
-
-objects 和 refs 是两个目录 里面包含很多东西
-那么 fetch 和 pull 有什么区别 呢？
-
-git pull 的description
-Runs git fetch with the given parameters, and calls git merge to merge the retrieved
-head(s) into the current branch. With --rebase, calls git rebase instead of git merge.
-也就是说 git pull 是git fetch+git merge或者git rebase
-
-       Note that you can use . (current directory) as the <repository> to pull from the local
-       repository — this is useful when merging local branches into the current branch.
-
-       Also note that options meant for git pull itself and underlying git merge must be given
-       before the options meant for git fetch.
-
-       Warning: Running git pull (actually, the underlying git merge) with uncommitted changes
-       is discouraged: while possible, it leaves you in a state that is hard to back out of in
-       the case of a conflict.
-
-
-OPTIONS
-   Options related to merging   注意了：这里传给pull的选项，实际上是传给merge的参数
-       --commit, --no-commit
-           Perform the merge and commit the result. This option can be used to override
-           --no-commit.
-
-           With --no-commit perform the merge but pretend the merge failed and do not
-           autocommit, to give the user a chance to inspect and further tweak the merge result
-           before committing.
-
-       --ff, --no-ff
-           Do not generate a merge commit if the merge resolved as a fast-forward, only update
-           the branch pointer. This is the default behavior of git-merge.
-
-           With --no-ff Generate a merge commit even if the merge resolved as a fast-forward.
-
-       --log, --no-log
-           In addition to branch names, populate the log message with one-line descriptions from
-           the actual commits that are being merged.
-
-           With --no-log do not list one-line descriptions from the actual commits being merged.
-
-也就是说 执行fetch 不产生合并
-
-Options related to fetching  传递给fetch 的选项
-       --all
-           Fetch all remotes.
 
 checkout 到 origin/master
 $ git checkout origin/master 
@@ -1442,25 +1320,11 @@ $ git fetch  本地的origin/master 跟新到最头处。
 
 git-push - Update remote refs along with associated objects  更新refs 和 objects
 
-       <repository>
-           The "remote" repository that is destination of a push operation.
-           This parameter can be either a URL (see the section GIT URLS below)
-           or the name of a remote (see the section REMOTES below).
-
 搞明白了 fast-forward的用处了：
 2个人使用一个仓库，有时候会出现 fetch 后 origin/master 比本地master 靠前的情况，这个时候只需要这行 git merge  origin/master
 就是把本地master  fast-forsard 到origin/master 处
 
-
-FAST-FORWARD MERGE
-       Often the current branch head is an ancestor of the named commit. This is the most common
-       case especially when invoked from git pull: you are tracking an upstream repository, you have
-       committed no local changes, and now you want to update to a newer upstream revision. In this
-       case, a new commit is not needed to store the combined history; instead, the HEAD (along with
-       the index) is updated to point at the named commit, without creating an extra merge commit.
-
 git pull 会在本地做一次merge 这个已经确定
-
 
 想搞一个时间不安顺序排列的情况：gitg 上显示的时间是本地提交的时间。注意，一条线上的点，肯定是按照时间排序的
 
@@ -1617,4 +1481,6 @@ sudo apt-get dist-upgrade
 ------
 android大仓库中切换版本：
 repo forall -c git checkou xxtag
+
+
 

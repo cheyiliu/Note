@@ -1,0 +1,5 @@
+github同步代码，需：
+autoconf automake libtool 执行 bootstrap.sh
+
+ocaml 正常不需要
+

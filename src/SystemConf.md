@@ -18,6 +18,8 @@
 * python-markdown 用Python实现的Markdown(轻文本标记语言，把简单文本转换为HTML)
 * openssh-server 若不装，scp推送提示：ssh: connect to host x.x.x.x port 22: Connection refused
 * unrar rar 解压
+* autoconf 用于把configure.ac 变成 configure
+* libtool
 * 注：没有的命令直接执行，会给出安装包名的提示。
 
 ## APT ##

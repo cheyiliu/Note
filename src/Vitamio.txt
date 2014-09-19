@@ -147,3 +147,4 @@ vitamio 目录是个android库项目
 
 
 
+pplive手机客户端用vitamio 并且存在跟我们一样的bug
