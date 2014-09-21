@@ -1,4 +1,4 @@
-可以用命令: #dd if=/dev/zero of=/dev/fb 清空屏幕.
+#dd if=/dev/zero of=/dev/fb 清屏
 如果显示模式是 1024x768-8 位色，用命令：$ dd if=/dev/zero of=/dev/fb0 bs=1024 count=768 清空屏幕；
 用命令: #dd if=/dev/fb of=fbfile 可以将fb中的内容保存下来；
 可以重新写回屏幕: #dd if=fbfile of=/dev/fb；
@@ -10,12 +10,7 @@ fb_mem = mmap (NULL, 1024*768, PROT_READ|PROT_WRITE,MAP_SHARED,fb,0);
 memset (fb_mem, 0, 1024*768); //这个命令应该只有在root可以执行
 
 FrameBuffer 设备还提供了若干 ioctl 命令，通过这些命令，可以获得显示设备的一些固定信息（比如显示内存大小）、与显示模式相关的可变信息（比如分辨率、象素结构、每扫描线的字节宽度），以及伪彩色模式下的调色板信息等等。
-
-
-前言
-2010-11-15
-   知道framebuffer已经有几年时间了，但是直到现在才借助nxp平台理解了一些深层的东西。 
-
+ 
 1 FB的核心文件是fbmem.c
 
 2 两个重要的结构体
@@ -24,7 +19,6 @@ FrameBuffer 设备还提供了若干 ioctl 命令，通过这些命令，可以�
    unsigned long mmio_start; /* Start of Memory Mapped I/O 物理地址 nxp赋值0 没有用 */
   }
   
-  
 3 关于fb的 mmap操作
   file_operation结构体除了有read,write,ioctl等之外，还有mmap，并在fbmem.c中实现，
 检测fb_ops->fb_mmap(在vpmfb.c中实现)是否定义。
@@ -32,17 +26,10 @@ FrameBuffer 设备还提供了若干 ioctl 命令，通过这些命令，可以�
 的定义了，并最终调用remap_pfn_range(remap kernel memory to userspace)
   定义和不定义有什么区别呢？
 
-
 4 framebuffer fb.h中定义最多可以注册32个
-
-5 题外：设备节点
-  设备节点可以用mknode手动创建，也可以使用mdev(udev)自动创建
-  内核中定义struct class
-
 6 题外：在内核模块加载之后，可以通过 /proc/modules 接口查看模块的加载地址
 
-7 关于android中使用的framebuffe
-  那么，两个buffer交换有3中方法，1 FBIOPAN_DISPLAY, 2 memcpy, 3 copybit 要实验一下
+7 android fb双buffer交换有3种方法，1 FBIOPAN_DISPLAY, 2 memcpy, 3 copybit 要实验一下
 到底1，3 哪个更快
   发现一个新的问题：FBIOPAN_DISPLAY最终调用了vpmfb.c中的cnxtfb_pan_display函数，但
 仍然有闪烁。在这个函数里面加了2行printk
@@ -50,13 +37,7 @@ FrameBuffer 设备还提供了若干 ioctl 命令，通过这些命令，可以�
 memcpy也就是几个毫秒的事
   在有光标闪烁的地方，闪一次就调用一次pan_display 这样做效率也太低了吧
 
---------------
-20140721
-如何查看android平台 fb的分辨率？
-
-
+查看fb参数（包括分辨率）
 busybox里有fbset命令，什么参数也不加，可以打印当前设置。（相当于fbget，虽然没有这个命令）
-
-  
 
 

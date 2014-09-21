@@ -1,7 +1,7 @@
 线程栈在堆空间
 
 
-
+设备节点可以用mknode手动创建，也可以使用mdev(udev)自动创建内核中定义struct class
 
 1 编译
   clean           - Remove most generated files but keep the config and

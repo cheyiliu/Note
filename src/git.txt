@@ -1,3 +1,5 @@
+实验一个双仓库模式
+
 1 基本命令 
 	1) pull
 		pull = fetch + merge/rebase 给pull的参数一部分是给merge的一部分是给fetch的
