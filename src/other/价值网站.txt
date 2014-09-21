@@ -9,3 +9,6 @@ https://github.com/Videola/videola ???不知道 暂时
 http://www.sipo.gov.cn/zljs/  专利查询
 
 http://micrium.com/rtos/ucosiii/overview/  有µC/OS-III了
+
+
+http://linux-sunxi.org  Allwinner系列芯片介绍

@@ -7,7 +7,7 @@
 * svn工具:subversion subversion-tools
 * vim (系统默认的vi不好用)
 * 64位系统运行32位程序提示找不到这个文件或目录，安装ia32库 apt-get install ia32-libs
-* openjdk6:openjdk-6-jdk(ubuntu默认不包含任何jdk)
+* openjdk-6-jdk(ubuntu默认不包含任何jdk)
 * gnome桌面:gnome-session-fallback 或 gnome-panel
 * 命令行url工具:curl
 * ts分析工具:tstools
@@ -86,8 +86,7 @@
 		查看dmesg：有 vboxdrv: Unknown symbol mcount。（找不到mcount符号）
 		开始以为kernel版本问题，显示grub(见grub专题)，选择老版本kernel，还是不行
 		最后查明，编译android的时候把gcc切换到4.4了，而这里需要4.6才能成功执行 /etc/init.d/vboxdrv setup(百度 Unknown symbol mcount）
-		(都是12.04升级惹的祸，以后不要升级ubuntu，装完啥样就啥样，升级带来风险，但同时也学到了不少)
-		20140819又升级了内核，又遇到这个问题，sudo /etc/init.d/vboxdrv setup搞定。
+		(都是12.04升级惹的祸，升级带来风险)
 	6) 设置共享文件夹自动mount，文件系统类型vboxsf，默认不支持symbolic link，官网说处于安全考虑。
 		ln: creating symbolic link `xx': Read-only file system,拷贝带软链接的目录提示：Read-only file system,执行：
 		VBoxManage setextradata VM_NAME VBoxInternal2/SharedFoldersEnableSymlinksCreate/SHARE_NAME 1
@@ -173,11 +172,8 @@
 		3) http://archive.canonical.com (Apache/2.2.22 Ubuntu Server) 这个源内容很少,没有wireshark等
 		4) http://mirrors.163.com/ubuntu/   ubuntu.com的镜像站(nginx)，速度快。因为是镜像站，某文件ubuntu主站没有了他也就没有了
 
-	6) u14.04 remove openjdk-6-jre-headless 时候为啥会自动安装openjdk-7-jre-headless 也是依赖文件描述的？ 然后再remove openjdk-7-jre-headless jre才彻底删除
+	6) u14.04 remove openjdk-6-jre-headless(何时安装的？) 时候为何会自动安装openjdk-7-jre-headless(也是依赖文件描述的？) 再次remove openjdk-7-jre-headless，jre才彻底删除
 
-
-
-		
 
 ## grub ##
 	1) 单ubuntu系统不显示grub菜单,可一直按住shift键显示
@@ -476,15 +472,13 @@
 
 
 ## other ##
-	1) u12.04损坏了libncurses库，导致man xx无法使用：libncurses.so.5: No such file or directory。u10.04 在/lib下有此库64位版本，
+1. u12.04损坏了libncurses库，导致man xx无法使用：libncurses.so.5: No such file or directory。u10.04 在/lib下有此库64位版本，
 	而u12.04 /lib/x86_64-linux-gnu下只有libncursesw.so.5没有 libncurses.so.5。apt-get install 显示版本已最新，apt-get remove失败
 	下载libncursesw5_5.9-4_amd64.deb，dpkg -i安装后/lib/x86_64-linux-gnu下出现此库，解决。
 
-	2) 解决u12.04+wireshark1.6.7 卡死问题：手工下载包及多级依赖包成功降低版本至1.2.7，抓视频包不死机了但点击详情死机。
+1. 解决u12.04+wireshark1.6.7 卡死问题：手工下载包及多级依赖包成功降低版本至1.2.7，抓视频包不死机了但点击详情死机。
 	升级到u14.04用的1.10.6较难很多依赖包版本不对需重装，开始的都能装，最后所需gtk3.0与系统冲突无法安装。ubuntu版和winxp版不同，
 	前者包只有2M，许多依赖包靠系统提供，后者25M，应该包含了所需全部。u11.10之1.6.2
-	
-	3) ubuntu server12.04 apt-get install openjdk-7-jre 安装jre7成功，并自动配置了update-alternatives
 
 	
 ## gcc ##

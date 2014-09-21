@@ -1,9 +1,9 @@
 uboot以及启动技术
 
 1 开始
-	1) Uboot(Universal Boot Loader)由德国DENX软件工程中心开发，支持powerpc, arm, mips, x86等架构。
-	DENX还开发了比较有名的denx linux和ELDK(Embedded Linux Development Kit )。
-	uboot下载地址：http://ftp.denx.de/pub/u-boot/ 在1.3.4版(2008/08/12)后用日期表示版本。
+	1) Uboot(Universal Boot Loader)由德国DENX软件中心开发，支持powerpc, arm, mips, x86等架构。
+	DENX还开发了denx linux和ELDK(Embedded Linux Development Kit )。
+	下载地址：http://ftp.denx.de/pub/u-boot/  v1.3.4(2008/08/12)后用日期表示版本。
 	帮助文档: http://www.denx.de/wiki/view/DULG/Manual
 
 	2) doc目录以README.xx形式描述各模块
@@ -14,14 +14,75 @@ uboot以及启动技术
 	   mrproper或distclean: clobber unconfig
 	   unconfig: 删除config.h等
 
+	2) 应该也可以用ndk编译
+尝试用ndk9编译at91rm9200 时：
+invalid -march= option: `armv4'  编译器不支持armv4?
+
+编译sun7i的uboot：
+cc1: error: bad value (cortex-a7) for -mcpu switch
+
+arch/arm/cpu/armv7/config.mk
+allwinner自己添加：
+PLATFORM_CPPFLAGS += -mcpu=cortex-a7   编译器不认
+
+ Error: selected processor does not support ARM mode `isb'
+
+
+-mcpu
+-march
+各是什么意思？
+ndk arm-linux-androideabi-gcc  -v --help 得到
+-mcpu=   Specify the name of the target CPU
+-march=	 Specify the name of the target architecture
+
+
+改成 -mcpu=cortex-a9：
+as: unrecognized option '-mcpu=cortex-a9'  这个ndk这么熊呢，原来验证 kernel都是可以编译的阿
+
+不对，好像是删除arm-linux-androideabi 这个目录干的,拷贝回去，-mcpu=cortex-a7 还是不认
+-mcpu=cortex-a8  -mcpu=cortex-a9 都能编译
+但是最后链接的时候出错；
+/usr/lib/ndk9/bin/arm-linux-androideabi-ld: error: u-boot.lds:55:24: OVERLAY section type is unsupported
+
+结论：ndk 不能编译uboot
+
+
+编译器赋值逻辑：
+在arch/arm/config.mk中：
+CROSS_COMPILE ?= arm-linux-
+这是默认值，如果外面有人赋值，会覆盖他
+
+Makefile文件里
+# set default to nothing for native builds
+ifeq ($(HOSTARCH),$(ARCH))
+CROSS_COMPILE ?= 
+endif
+开始我以为要在这里写入交叉编译器，a20平台也是这么做的，其实这里什么都不要写，写了也没用，这个条件不满足。
+觉得这个逻辑完全多余：相等 变量设为空，不等 变量不定义也为空。
+相等的机会很少，除非在x86上编译x86版本，或者在mips上编译mips版本。
 
 3 Make系统与配置
 
-1 20140718 
-uboot执行 defenv 可以恢复默认配置
+boards.cfg
+Target ARCH CPU  Board-name  Vendor SoC Options
+
+CONFIG_  这些变量怎么定义的
+
+自动生成：
+include/config.h 
+include/config.mk
+
+./mkconfig: echo "/* Automatically generated - do not edit */" >>config.h 
+
+
+make clean    CROSS_COMPILE="mips-linux-gnu-"
+
+
+4 命令
+1) defenv 恢复默认配置
+
 
 需要加入ir的支持，替代recovery按键。
-
 
 mkimage 制作uImage (Uboot Image 在zImage前面加上64字节头)
 
@@ -30,7 +91,6 @@ post目录编译了 net目录编译  libfdt里面生成了一个.a
 
 
 ---Hisi---
-
 整理一个u-boot 以及参数传递的专题
 
 7 u-boot 里面的 bootargs 与kernel里面的cmd_line 的关系是怎样的？   还有，我一直没有搞明白 kernel去哪里找到的bootargs  
@@ -180,22 +240,14 @@ make uImage CONFIG_INITRAMFS_SOURCE=..  可以把rootfs编译到kernel里面，�
 5 uboot参数区域修改后，应该是把整个参数区读出，擦除再写入
 
 
+修改的地方：
 
+1. Makefile 找到 mips 结构的位置,设置编译器 CROSS_COMPILE =mips-wrs-linux-gnu-mips_softfp-glibc_small- 
 
-u-boot的修改于维护
-
-u-boot 一开始总感觉有些大，总想改小一些。实际上完全没有必要，不要去动已经很稳定的东西。现在不会在乎100多k的u-boot空间
-一下是一些修改的地方：
-
-1 编译： 打开根目录下的Makefile 找到 mips 结构的位置 添加下面一行 设置编译器
-CROSS_COMPILE =/home/gaojie/EMMA3SLP/host-cross/mips-wrs-linux-gnu/bin/mips-wrs-linux-gnu-mips_softfp-glibc_small- 
-
-2 20100520  串口0 串口1 的修改  include/configs/et61326.h, 修改寄存器定义
+串口0 串口1 的修改  include/configs/et61326.h, 修改寄存器定义
   #define CONFIG_SYS_NS16550_COM1       0xb0102000  //原来是b0101000 是串口0
 注意，u-boot里面的串口是com1 com2 com3 com4 排列的。
-修改了地址，u-boot的com1 就由板子的fuart0 变到fuart1 了。
-
-这个文件里面有 主频设置 324000000 等
+修改了地址，u-boot的com1 就由板子的fuart0 变到fuart1 了。这个文件里面有 主频设置 324000000 等
 
 flash_init这个函数要注空 直接返回 因为串行Flash不能获得大小 会死到这里。
 
@@ -204,31 +256,9 @@ CONFIG_NAND_BOOT 这个宏没有地方定义，需要nand启动的话，需要�
 3 原来的boot 要用nand Flash 就必须设置成nand启动。
 不要尝试去大改u-boot，这样的选择绝对是对的。
 
-4 修改成串行Flash启动的方法： 20100525
+4 修改成串行Flash启动的方法
 
-
-include 目录下生成的config.h 和config.mk
-
-    $ cd u-boot
-    $ make clean    CROSS_COMPILE="mips-linux-gnu-"
-    $ make mrproper CROSS_COMPILE="mips-linux-gnu-"
-    $ make et61326_config
-    $ make -s CROSS_COMPILE="mips-linux-gnu-"
-
-et61326_config 是Makefile里面的一个目标。
-
-这里面  还可以选择
-3198 et61326_config \  nor Flash
-3199 et61326_small_config \  编译出来的113k  nor small
-3200 et61326_nand_config \   编译出来的  200k
-3201 et61326_nand_small_config:  这种情况下
-
-后面几种配置，是nandboot  但是我现在不是用nandboot  而是串行boot 但是用到nand。
-nand boot 为什么TEXT BASE 是 0xa2000000 呢？ 而nor 和 串行 都是bfc00000 的。
-
-但是没有做 spi+nand 的配置 需要自己来完成。
-第二步再去做 单片nand的方案
-好下面做一个spi+nand的 启动方式。
+单nand方案 spi+nand的 启动方式。
 
 原来的配置，必须是nand启动才可以打开nand Flash的各种功能
 
@@ -277,11 +307,9 @@ drivers\net里面可以删除很多不相关的文件  只留nec_candy.c 即可 
 include 目录的头文件一般不能删除 比如ata.h竟然都回用到
 
 
-我不明白 为什么nand启动的时候 程序编译地址在a2000000  难道不能像串行Flash一样映射到bfc00000 吗？
-===========================================================================
-先考虑spi+nand 20100521 今天上午完成！
+为什么nand启动的时候程序编译地址在a2000000  不能像串行Flash一样映射到bfc00000 吗？
 
-选择 et61326_small_config后  u-boot会由200k编程100k
+选择 et61326_small_config后  u-boot会由200k变为100k
 
 ./board/nec/et61326/et61326.c:#ifndef CONFIG_SMALL
 ./include/configs/et61326.h:#ifndef CONFIG_SMALL
@@ -291,7 +319,7 @@ include 目录的头文件一般不能删除 比如ata.h竟然都回用到
 这几处定义。
 small后，网络，文件系统 usb等都被关闭了。
 
-注意了：从u-boot中看，使用nandFlash启动的时候，Nand使用的竟然是 CS1  而不是CS0  这跟上面的a2000000编译地址吻合了
+注意了：从u-boot中看，使用nandFlash启动的时候，Nand使用CS1而不是CS0  这与a2000000编译地址吻合
 
 nand_spl
 支持从nand flash启动，但支持的cpu的种类也不是很多
@@ -313,10 +341,6 @@ api的示例程序
 
 
 但是，当我选择nandFlash启动  make et61326_config_nand  并没有编译任何nand_spl目录下面的东西。
-
-
-20100525  include/config.h中  /* Automatically generated - do not edit */ 这个是哪里打印出来的？
-根目录下有一个 mkconfig 文件 
 
 #ifdef CONFIG_NAND_BOOT
         /* Alternate0 set USB, UART0, NAND */
@@ -720,16 +744,11 @@ u-boot的正常逻辑是只要设置了 bootargs 就会作为kernle的 cmd_line 
 好像是他的patch 有若干cmd line 参数，再把u-boot里面设置的
 
 
-clobber
-
-
-
-
 a20：
-boot-v1.0 目录下有个uboot
-brandy下还有一个
-最终使用的是brandy/u-boot-2011.09 
+boot-v1.0 目录下有uboot
+最终使用的是brandy/u-boot-2011.09 (还有201301版，没必要追求最新)
 编译器用的是brandy/gcc-linaro目录
+brandy 白兰地酒
 
 HELLO! BOOT0 is starting!
 

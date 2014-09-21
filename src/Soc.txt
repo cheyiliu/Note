@@ -1,0 +1,17 @@
+Allwinner SoC Family
+"A"-Series
+
+    Allwinner A10 (sun4i) (1 x Cortex-A8 CPU-core)
+    Allwinner A13 (sun5i) (1 x Cortex-A8 CPU-core)
+    Allwinner A10s(sun5i)(1 x Cortex-A8 CPU-core)
+    Allwinner A20 (sun7i) (2 x Cortex-A7 CPU-cores) **
+    Allwinner A23 (sun8i) (2 x Cortex-A7 CPU-cores)
+    Allwinner A31 (sun6i) (4 x Cortex-A7 CPU-cores)
+    Allwinner A31s (sun6i) (4 x Cortex-A7 CPU-cores)
+    Allwinner A33 (sun?i) (4 x Cortex-A7 CPU-cores)
+    Allwinner A80 (sun9i) (4 x Cortex-A7 CPU-cores + 4 x Cortex-A15 CPU-cores using ARM big.LITTLE heterogeneous CPU architecture)
+
+Allwinner A20 (sun7i) SoC features a Dual-Core Cortex-A7 1GHz ARM CPU, and a Mali400 MP2 GPU from ARM.
+
+CedarX is Allwinner's multimedia co-processing VPU (Video Processor Unit) technology for hardware accelerated video and image decoding, as used inside their A10, A10s, A13, A20, and A23 SoC series
+

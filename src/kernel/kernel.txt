@@ -12,7 +12,7 @@
 
 
 注：
-mrproper这个诡异的名字是什么意思呢? Wiki页 http://en.wikipedia.org/wiki/Mr._Clean提到：
+mrproper名字诡异，wikipedia Mr._Clean词条提到：
 "make mrproper" is a command in the Linux kernel build system, used to "clean up" 
 all files from past builds and restore the build directory to its original clean state. 
 The reason "make mrproper" is used instead of "make mrclean" is because Linus Torvalds, 
@@ -361,14 +361,7 @@ ${MKUIMAGE} "$@"
 分区：
 struct mtd_partition
 
-make distclean
-make clean
-
-
----
 除了拆开盒子，如何迅速查出板子内存配置
-
-
 
 fcntl.h定义了很多宏和open,fcntl函数原型  #include <unistd.h>
 　　是POSIX标准定义的unix类系统定义符号常量的头文件，包含了许多UNIX系统服务的函数原型，例如read函数、write函数和getpid函数

@@ -19,7 +19,7 @@ openjdk-6-jdk(1.6.0_31或_32 与安装时间有关)，4.0.4不可用，提示：
 
 1. sun版需oracal官网注册下载bin文件，如jdk-6u35-linux-x64.bin(jdk1.6第35个版本)
 	执行./jdk-6u35-linux-x64.bin
-	生成jdk1.6.0_35 目录，拷贝到合适位置如/usr/lib/jvm(与openjdk并列)并在~/.bashrc中添加 export PATH=$PATH:/usr/lib/jdk1.6.0_35/bin
+	生成jdk1.6.0_35 目录，拷贝到合适位置如/usr/lib/jvm(与openjdk并列)并在~/.bashrc中添加 export PATH=$PATH:/usr/lib/jdk1.6.0_35/bin(u14.04直接生效)
 
 	或使用：update-alternatives: --install <link> <name> <path> <priority>
 
@@ -153,9 +153,6 @@ host C++: llvm-rs-cc <= frameworks/compile/slang/llvm-rs-cc.cpp
 <command-line>:0:0: error: "_FORTIFY_SOURCE" redefined [-Werror]
 
 
-
-
--------------------
 需要安装的全部包：
 sudo apt-get install       zip  zlib1g-dev libc6-dev   x11proto-core-dev libx11-dev lib32readline-gplv2-dev lib32z1-dev   libgl1-mesa-dev gcc-multilib g++-multilib mingw32 tofrodos    libxml2-utils  xsltproc
 
@@ -184,15 +181,10 @@ lib32readline5-dev
 The GNU history library provides a consistent user interface for recalling lines of previously typed input. 
 
 
-------------------
-开机logo：
-RLE全称（run-length encoding），翻译为游程编码
-rle文件
-
-利用Linux的convert命令将11.jpg转化为11.raw：
-convert -depth 8 11.jpg rgb:11.raw
-
+开机logo:RLE(run-length encoding游程编码)
+convert命令将11.jpg转化为11.raw： convert -depth 8 11.jpg rgb:11.raw
 将11.raw文件转换为initlogo.rle。在raw图片文件所在目录下执行：/out/host/linux-x86/bin/rgb2565 -rle <11.raw> initlogo.rle
+
 
 在device/.../f16ref.mk中：
 PRODUCT_COPY_FILES += \
@@ -553,15 +545,12 @@ Galaxy NEXUS用户无法加旧版本或者新版本Flash Player到Andr​​oid 
 
 要尽最大努力不修改framework里面的代码，而是按照android的规则在外部修改。先以遥控器处理为例。
 
-TF101 平板升级到4.1.1 可以在settting 开发者选项 中打开adb调试，可以 adb shell
-不过这时候进入的是 shell 用户，权限很低。
 
 打开 “终端模拟器” 程序 ps 发现
 user：
 
 shell     4666  1     4480   208   ffffffff 00000000 R /sbin/adbd           父进程 init
 shell     4672  4666  852    476   c004938c 40012500 S /system/bin/sh       父进程 adbd
-
 u0_a37    4789  106   479568 30260 ffffffff 00000000 S jackpal.androidterm  父进程 zygoze
 u0_a37    4803  4789  848    460   ffffffff 00000000 S /system/bin/sh       父进程 jackpal.androidterm
 
@@ -569,7 +558,7 @@ u0_a37    4803  4789  848    460   ffffffff 00000000 S /system/bin/sh       父�
 
 root      4818  4803  848    464   ffffffff 00000000 S sh                   父进程/system/bin/sh
 以后就用这个进程执行， 执行sleep 200  ps发现：
-root      4905  4818  1044   364   ffffffff 00000000 S sleep                父进程 4818 可以证明  
+root      4905  4818  1044   364   ffffffff 00000000 S sleep                父进程 4818 可以证明
 
 开发terminal程序多个窗口：
 
@@ -658,9 +647,6 @@ KBUILD_CFLAGS += -D__thumb2__ -mthumb
 //在menuconfig中配置
 endif
 
-
-
-
 1 LOCAL_SRC_FILES := bar.c.arm 告诉系统总是将bar.c 以arm的模式编译
 2 LOCAL_ARM_MODE = arm 也可以设置模式
 
@@ -685,7 +671,7 @@ eabi 和 oabi 的区别
 
 2  Android并没有采用glibc作为C库，而是采用了Google自己开发的Bionic Libc
 它的官方Toolchain也是基于Bionic Libc而并非glibc的 这使得使用或移植其他Toolchain来用于Android要比较麻烦
-在Google公布用于Android的官方Toolchain之前，多数的Android爱好者使用的Toolchain是在http://www.codesourcery.com/gnu_toolchains/arm/download.html  
+在Google公布用于Android的官方Toolchain之前，多数的Android爱好者使用的Toolchain是在http://www.codesourcery.com/gnu_toolchains/arm/download.html
 下载的一个通用的Toolchain  它用来编译和移植Android 的Linux内核是可行的，因为内核并不需要C库， 但是开发Android的应用程序时，直接采用或者移植其他的Toolchain都比较麻烦，其他Toolchain编译的应用程序只能采用静态编译的方式才能运行于Android模拟器中，这显然是实际开发中所不能接受的方式。目前尚没有看到说明成功移植其他交叉编译器来编译 Android应用程序的资料。 
 
 3  android 的启动过程
@@ -853,13 +839,13 @@ ifeq ($(TARGET_PRODUCT),)
 ifeq ($(TARGET_SIMULATOR),true)
 TARGET_PRODUCT := sim  可以改成 ifneq  走这里
 else
-$(info hahahah)   这里会打印出来 说明走这里了  
+$(info hahahah)   这里会打印出来 说明走这里了
 TARGET_PRODUCT := generic
 endif
 endif
 
 
-模拟器上运行的时候 编译的是arm的指令还是x86的指令呢？【】
+模拟器上运行的时候 编译的是arm的指令还是x86的指令呢？
 ============================================
 PLATFORM_VERSION_CODENAME=REL
 PLATFORM_VERSION=2.1-update1
@@ -868,7 +854,7 @@ TARGET_BUILD_VARIANT=eng
 TARGET_SIMULATOR=true
 TARGET_BUILD_TYPE=release
 TARGET_ARCH=x86   ******
-HOST_ARCH=x86     ******注意这里 sim的时候编译的是x86代码！！！！
+HOST_ARCH=x86     ******注意这里 sim的时候编译的是x86代码
 HOST_OS=linux
 HOST_BUILD_TYPE=release
 BUILD_ID=ECLAIR
@@ -1098,13 +1084,6 @@ Android模擬器所對應的源代碼主要在external/qemu目錄下。如果你
 對於應用程序的開發者，模擬器提供了很多開發和測試時的便利。無論在Windows下還是Linux下，Android模擬器都可以順利運行，並且Google提供了Eclipse插件，可將模擬器集成到Eclipse的IDE環境。當然，你也可以從命令行啟動Android模擬器。
 
 
-Android 1.0移置到华硕P535 [历史存档]
-Android, 华硕, 历史
-LCD、键盘及触摸屏都已正常工作。
-
-演示视频见此：
-http://www.youtube.com/watch?v=0GZwguPJCmI
-
 运行文件下载地址：
 http://www.rayfile.com/files/603 ... -b77a-0014221b798a/
 下载后打开readme文件查看如何运行。
@@ -1240,7 +1219,7 @@ gaojie@gaojie:~/Nxp_prj/android-sdk-linux_86/tools$
 
 
 7 Android根目录的结构
-init.rc init.goldfish.rc  
+init.rc init.goldfish.rc
 
 Android的程序文件为APK格式，APK文件是Android最终的运行程序，是Android Package的全称，类似于Symbian操作系统中sis文件，APK文件其实ZIP文件格式，但后缀名被修改为APK，通过UnZip解压后
 
@@ -1260,7 +1239,7 @@ zImage bzImage 都是用gzip压缩的
 它们不仅是一个压缩文件，而且在这两个文件的开头部分内嵌有gzip解压缩代码
 所以你不能用gunzip解压
 
-vmlinux是未压缩的内核  
+vmlinux是未压缩的内核
 
 ./target/src/project/project_include.mk:_SDE_PROC_DEFINES = -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp
 ./target/src/project/project_include.mk:_SDE_EXTRA_CFLAGS += -DCPU=CORTEX_A9 -D__LINUX_ARM_ARCH__=7 -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp
@@ -1348,14 +1327,6 @@ eclipse 可以使用自己喜欢的版本 建议3.4 以上
 ./adb install ApiDemos.apk 可以安装一个apk
 虚拟机目录 ~/.android/avd 
 
-搞清楚 sdk 和 ndk 的区别
-
-下载android sdk 后，里面有SDK Readme.txt 说 “The Android SDK archive now only contains the tools”
-说明只有 tools目录 没有 platforms 
-use the SDK Manager to install or update SDK components such as platforms,
-tools, add-ons, and documentation.
-
-SDK Manager 是什么？ Eclipes 里面的？
 
 To start the SDK Manager, please execute the program "tools/android".  （无法直接执行）
 
@@ -1415,29 +1386,6 @@ ADT android development tools 在eclipse->help中安装的
 
 6 Fawn源码中的参考代码在 /development/samples 这个目录就是eclipse中可以单独下载的sample.tgz包
 WXGA：全称Wide Extended Graphics Array，按的16：10比例加宽了笔记本屏幕
-
-
-8 关于ndk  用r6 实验
- Native Development Kit
- 不用ndk开发的话，就不能开发 java +c 的代码吗？用 android源码总可以吧
-对了：android 源码里面自带的那几个应用程序 都是用到jni方式的吗？  
-
-但是，自从ndk r5发布以后（7月13日，ndk r6发布），已经允许你完全用 C/C++ 来开发应用或者游戏，而不再需要编写任何 Java 的代码。
-？？  什么意思？  还可以用纯C开发 android 程序？！
-
-ndk r6 支持x86开发 也就是在toolchains目录下有 arm-linux-4.4.3 和 x86-4.4.3
-
-本次ndk升级中，个人认为比较有用的是ndk-stack工具。在ndk开发中，最令人头疼的是native代码崩溃，但是logcat只显示一些地址信息，无从查找代码崩溃的位置，有了ndk-stack工具，相信会给ndk开发带来很大的帮助。
-
-
-ndk-stack 工具
-
-
-ndk智能编译C C++ 代码 不能编译java   java还是要用 eclipse编译  
-
-奥！在sdk 的sample里面 也就是eclipse里面下载的sample包 里面 没有任何 c  c++ 代码！
-
-但是android源码里面自带的应用程序 是可以用 jni 开发的
 
 ------------------------------------------------------
 Checking API: checkapi-current
@@ -1728,8 +1676,70 @@ android的build系统很复杂强大，甚至有继承功能，体现了OO思想
 
 
 ndk
+
+ndk可以完全用C/C++开发应用或游戏，不需要编写任何Java代码
+ndk-stack 代码跟踪工具
+
 1 ndk9 安装成standalone模式:
-/build/tools/make-standalone-toolchain.sh --platform=android-14 --install-dir=/tmp/jpegturbo
+./build/tools/make-standalone-toolchain.sh --platform=android-14 --install-dir=/tmp/jpegturbo
+./build/tools/make-standalone-toolchain.sh --platform=android-14 --install-dir=/usr/lib/ndk9
+--arch=<name> 指定处理器，默认arm
+./build/tools/make-standalone-toolchain.sh --platform=android-14 --arch=mips --install-dir=/tmp/jpegturbo
+安装mips编译器
+
+安装前后的区别：
+安装前1.4G  安装后228M仅保留了arm
+
+安装完的编译器结构：
+./bin/arm-linux-androideabi- 工具组   gcc 4.6  g++ 4.6   ld objdump 都属于Binutils  v2.21
+./arm-linux-androideabi/bin/gcc  长目录短文件名，短目录长文件名，一直没搞明白
+
+arm-linux-androideabi-gcc 与gcc 完全相同
+
+./arm-linux-androideabi/bin/ar
+./arm-linux-androideabi/bin/as
+./arm-linux-androideabi/bin/c++ (干什么用的？)
+./arm-linux-androideabi/bin/g++
+./arm-linux-androideabi/bin/gcc
+./arm-linux-androideabi/bin/ld
+./arm-linux-androideabi/bin/ld.bfd
+./arm-linux-androideabi/bin/ld.gold
+./arm-linux-androideabi/bin/ld.mcld
+./arm-linux-androideabi/bin/nm
+./arm-linux-androideabi/bin/objcopy
+./arm-linux-androideabi/bin/objdump
+./arm-linux-androideabi/bin/ranlib
+./arm-linux-androideabi/bin/strip
+
+./bin/arm-linux-androideabi-ar
+./bin/arm-linux-androideabi-as
+./bin/arm-linux-androideabi-c++
+./bin/arm-linux-androideabi-g++
+./bin/arm-linux-androideabi-gcc
+./bin/arm-linux-androideabi-ld
+./bin/arm-linux-androideabi-ld.bfd
+./bin/arm-linux-androideabi-ld.gold
+./bin/arm-linux-androideabi-ld.mcld
+./bin/arm-linux-androideabi-nm
+./bin/arm-linux-androideabi-objcopy
+./bin/arm-linux-androideabi-objdump
+./bin/arm-linux-androideabi-ranlib
+./bin/arm-linux-androideabi-strip
+
+多的
+./bin/arm-linux-androideabi-addr2line
+./bin/arm-linux-androideabi-c++filt
+./bin/arm-linux-androideabi-cpp
+./bin/arm-linux-androideabi-elfedit
+./bin/arm-linux-androideabi-gcc-4.6
+./bin/arm-linux-androideabi-gcov
+./bin/arm-linux-androideabi-gdb
+./bin/arm-linux-androideabi-gprof
+./bin/arm-linux-androideabi-readelf
+./bin/arm-linux-androideabi-run
+./bin/arm-linux-androideabi-size
+./bin/arm-linux-androideabi-strings
+
 
 4 华硕应用偶尔闪烁红色边框：
 I can confirm that changing the build type from "eng" 
