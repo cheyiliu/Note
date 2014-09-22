@@ -1,0 +1,44 @@
+编译器
+
+事情的逻辑是：硬件厂商自己或外包构建集成测试gun工具链。用户自己弄耗时耗力比较复杂，我没有尝试过。然后出现了Codesourcery这样的公司专门作这个事情。
+
+
+gcc 是一组工具 编译器+binutiles
+可以从源码开始自己制作，但是太复杂完全没有必要。
+"开发商们越来越意识到花几个星期的时间构建、集成和测试他们自己的GNU工具链已显得没有意义"
+
+ 虽然据说用Codesourcery的编译器对代码的性能有提升，但是使用的时候应该是也有技巧的，由于 Codesourcery 的arm编译器没有对armv4做出优化或者不太适合做为v4的ARM核（也可能是需要特殊的编译配置选项），有时用它编译出的S3C24x0的u-boot无法使用。
+
+对编译原理和编译器的了解对于产品的性能和安全性是有很大关系的。对于一个代码工作者来说也是非常重要的，必备的知识。 对于编译器知识的重要性，可以用一个unix创始人Ken的小故事来说明：
+
+    说到Unix与C语言，还有一段小故事，当时安装了Unix的PDP-11被放在贝尔实验室供大家使用，有一天大家伙发现Ken总是可以得到最高的 权限轻松进入他们的帐户，在贝尔实验室这种高人云集的地方，这简单是太不能容忍了，于是有若干高人跳了出来，仔细分析Unix代码，找到后门，修改后再重 新编译整个Unix，当所有人都以为这个世界应该从此清静了的时候，却发现Ken还是很容易就取得了他们的帐户权限，为此大家郁闷不已。直到很多年 后，Ken才道出其中的原委，原来代码里确实存在后门，不过并不在Unix代码中，而是藏在编译Unix的编译器里，每次编译器编译时就会自动加入后门代 码，而当时整个贝尔实验室都用的是Ken所写的C编译器。
+
+CodeSourcery成立于1997年，为开放原始码工具的领导公司。原CodeSourcery执行长Mark Mitchell(图2)在公司被购并后，随即出任明导国际嵌入式软体部嵌入式工具总监，Mitchell指出，CodeSourcery在开放原始码社群贡献良多，同时也是GCC与GDB相当活跃的贡献者，CodeSourcery不但扮演公共评论家、承诺者与维护员的角色，更是诸多开放原始码工具委员会会员的掌舵者。  
+
+
+几种现成的编译器来源：
+linaro 网站
+codesourcery: http://www.codesourcery.com(现已不存在 被mentor收购) 现在是收费软件了，30天试用期。据说可大幅优化android。
+
+各家平台也会提供编译器供u-boot 和 kernel 使用
+android源码里面的
+ndk里面的
+
+
+结构：
+codesourcery
+arm-none-linux-gnueabi
+bin
+lib
+share
+
+android Toolchain(指gcc)基于Bionic而非glibc，这使得使用或移植其他Toolchain来用于Android要比较麻烦
+
+http://www.codesourcery.com/gnu_toolchains/arm/download.html
+它可以编译kernel，因kernel不需要C库， 但是开发Android的应用程序时，直接采用或者移植其他的Toolchain都比较麻烦，其他Toolchain只能采用静态编译。
+
+
+成功：
+ndk 编译 ffmpeg
+ndk 编译 jpeg-turbo
+

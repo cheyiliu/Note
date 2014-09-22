@@ -530,6 +530,10 @@ gsettings set com.cononical.Unity.Panel systray-whitelist "[....]" 与UI方式�
 build-essential除了gcc multilib 等还包含其他相关库
 
 
+## update-alternatives
+
+update-alternatives: --install <link> <name> <path> <priority>
+update-alternatives --remove
 
 
 

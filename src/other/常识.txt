@@ -17,3 +17,7 @@ TS卡座第9脚检查插入拔出
 Maxim 美信
 
 ds2411 序列号芯片
+
+Mentor Graphics (明导国际) 是电子设计自动化技术的领导产商 PADS 是其产品
+后来收购了CodeSourcery公司
+

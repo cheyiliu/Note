@@ -536,11 +536,10 @@ Linus Torvalds 已于今日（2009-01-11）发布了 Linux Kernel 2.6.29 的首�
 
 2.6.29 是从2.6.28经过
 
-2.6.28那个tags之前的东西可以跟webgit上的内容对上。 之后还有很多，搞不懂了！！！
+2.6.28那个tags之前的东西可以跟webgit上的内容对上。
 所以这个changelog 就是把commit的信息保存到这个文件中
 
 
-===================================
 init问题参数跟踪
 
 1 
@@ -553,25 +552,11 @@ kernel .c 文件
 arm-linux-uclibcgnueabi-gcc -Wp,-MD  -nostdinc -isystem -D__KERNEL__ -mlittle-endian -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -Werror-implicit-function-declaration -O2 -marm -mabi=aapcs-linux -mno-thumb-interwork -funwind-tables -D__LINUX_ARM_ARCH__=7 -march=armv7-a -msoft-float -Uarm -Wframe-larger-than=1024 -fno-stack-protector -fomit-frame-pointer -Wdeclaration-after-statement -Wno-pointer-sign -fwrapv -fno-dwarf2-cfi-asm  -D"KBUILD_STR(s)=#s" -D"KBUILD_BASENAME=KBUILD_STR(version)"  -D"KBUILD_MODNAME=KBUILD_STR(version)"
 
 
-
-
-nxp平台
-
-./target/src/sd/video/drivers/comps/tmvipSupport/makefile:LOCAL_CFLAGS += -mfpu=vfpv3-d16 -mfloat-abi=softfp
-./target/src/project/project_include.mk:_SDE_PROC_DEFINES = -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp
-./target/src/project/project_include.mk:_SDE_EXTRA_CFLAGS += -DCPU=CORTEX_A9 -D__LINUX_ARM_ARCH__=7 -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp
-
-在 ./target/output/objs/summit-singlehd_license_free-gnu-4.4.0-linux-retail/comps/uLoader/下能找到
-target/output/objs/summit-singlehd_license_free-gnu-4.4.0-linux-retail/comps/uLoader/tmp/armgnu_nullos_el_cortex-a9_flo_linux_mp_/src/
-
 vi .miic.o.cmd  后看到
 
 简化以后：
 arm-linux-uclibcgnueabi-gcc -DCPU=CORTEX_A9 -D__LINUX_ARM_ARCH__=7 -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp -DBSP_LITTLE_ENDIAN=1 -DCONFIG=APOLLO_VPE -DCUSTOMER=CNXT -DRVERSION=Development -DARM_TOOLKIT=GNUGCC -DARM_VERSION=411 -DRTOS=LINUX -DCHIP_NAME=APOLLO -DIMAGE_TYPE=GENERIC -DSWCONFIG_INCL=1 -DMODULE -Wall -Wcomment -mno-sched-prolog -fno-common -fno-builtin -fdollars-in-identifiers -D_Bool=int -DTMFL_REL=0x00000000 -DNDEBUG -DNDEBUG -Wall -Wshadow -Wpointer-arith -Wconversion -Winline -Wundef -Wstrict-prototypes -DUNDER_TM_pSOS -DTM_CPU -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp -MD
 
-这个是依赖文件，主要包含 -I 注意其他的参数  这里的参数跟编译busybox的不同啊
-
-多了-mcpu=cortex-a9  
 
 ./core/combo/arch/arm/armv7-a.mk:ARCH_ARM_HAVE_THUMB_SUPPORT     := true
 这里应该是false！！！
@@ -582,7 +567,6 @@ ifeq ($(CONFIG_AEABI),y)
 CFLAGS_ABI      :=-mabi=aapcs-linux -mno-thumb-interwork
 else
 难道AEABI 跟thumb 是冲突的？
-
 
 busybox的编译选项里没有 armv7-a 但是objdump 最终的busybox 还是armv7  奇怪了
 

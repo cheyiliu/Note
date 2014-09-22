@@ -18,18 +18,14 @@
 openjdk-6-jdk(1.6.0_31或_32 与安装时间有关)，4.0.4不可用，提示：Your version is: java version "1.6.0_31". The correct version is: Java SE 1.6.
 
 1. sun版需oracal官网注册下载bin文件，如jdk-6u35-linux-x64.bin(jdk1.6第35个版本)
-	执行./jdk-6u35-linux-x64.bin
-	生成jdk1.6.0_35 目录，拷贝到合适位置如/usr/lib/jvm(与openjdk并列)并在~/.bashrc中添加 export PATH=$PATH:/usr/lib/jdk1.6.0_35/bin(u14.04直接生效)
-
-	或使用：update-alternatives: --install <link> <name> <path> <priority>
-
-	执行：
+	执行./jdk-6u35-linux-x64.bin生成jdk1.6.0_35 目录，拷贝到合适位置如/usr/lib/jvm(与openjdk并列)并在~/.bashrc中添加 export PATH=$PATH:/usr/lib/jdk1.6.0_35/bin(u14.04直接生效) 或：
 	update-alternatives --install "/usr/bin/java" "java" "/usr/lib/jvm/jdk1.6.0_35/jre/bin/java" 1
 	update-alternatives --install "/usr/bin/javac" "java" "/usr/lib/jvm/jdk1.6.0_35/bin/javac" 1
 	javadoc，jar 等视情况添加，java/javac 2个程序切换到sun，其他仍然使用open就可以编译ics。
 
 
-3 gcc (and his friends)
+## gcc
+### 编译主机工具的host gcc
 	12.04默认4.6，需要降版本（4.5,4.6编译都会失败。小版本没关系 ubuntu10.04是4.4.3）:
 	apt-get install gcc-4.4 g++-4.4 g++-4.4-multilib gcc-4.4-multilib(最终装的是4.4.7，并且随安装时间不同而变化，那怎么控制小版本呢？)
 
@@ -43,23 +39,37 @@ openjdk-6-jdk(1.6.0_31或_32 与安装时间有关)，4.0.4不可用，提示：
 	//12.04 实测4.0.4  不注册cpp也可
 	update-alternatives --install /usr/bin/cpp cpp-bin /usr/bin/cpp-4.4 100
 
-	删除	
-	update-alternatives --remove gcc /usr/bin/gcc-4.5
-
 	install gcc-4.4安装3个新包： cpp-4.4 gcc-4.4 gcc-4.4-base
 	install gcc-4.4-multilib 安装8个新包：gcc-4.4-multilib gcc-4.6-multilib(闹那样) gcc-multilib lib32gcc1 lib32gomp1 lib32quadmath0 libc6-dev-i386 libc6-i386
 
-	android4.0 中要clang llvm 干什么用啊！ 难道不用gcc编译而是用clang了？
-	主机工具都用-m32参数编译32位版本，需要相应的32位库
+android4.0 中要clang llvm 干什么用啊！ 难道不用gcc编译而是用clang了？主机工具都用-m32参数编译32位版本，需要相应的32位库实测发现编译m3平台4.0.4基本成功，仅在做ota zip包时出现boot_img变量的一个错误。在a20平台4.2.2中成功。u14.04 gcc4.8.x 编译4.2.2成功。
 
+### android gcc
+android4.2.2 prebuilts/gcc 目录原始1.4G 包含darwin(Apple) 和linux 2个系统。
+删除darwin,以及linux里面的 mips和 x86（用于intel灵动处理器）
+prebuilts/gcc/linux-x86/arm/arm-eabi-4.6 有什么用?
+prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.6  android用这个
+这2个编译器有什么区别呢？
 
-实测发现编译m3平台4.0.4基本成功，仅在做ota zip包时出现boot_img变量的一个错误。在a20平台4.2.2中成功。
+执行lunch时才触发设置变量如：
+ANDROID_EABI_TOOLCHAIN="/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.6/bin"
+ANDROID_TOOLCHAIN="/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.6/bin"
+ARM_EABI_TOOLCHAIN="/prebuilts/gcc/linux-x86/arm/arm-eabi-4.6/bin" (4.0.4没发现谁用)
+并最终设置到PATH变量中： export PATH=$ANDROID_BUILD_PATHS$PATH （这个变量是上面那些变量的总和）
 
-u14.04 gcc4.8.x 编译4.2.2成功
+路径设置逻辑：
+./build/core/combo/TARGET_linux-arm.mk :
+一般不会有人在别处定义TARGET_TOOLS_PREFIX，所以就用这个设置
+ifeq ($(strip $(TARGET_TOOLS_PREFIX)),)
+TARGET_TOOLS_PREFIX := prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.6/bin/arm-linux-androideabi-
+endif
 
-4 提示找不到某某库的原因
-	1 确实没有安装
-	2 有-m32选项需要32位版但系统只有64位版(readelf -h可查看)
+TARGET_CC := $(TARGET_TOOLS_PREFIX)gcc
+TARGET_CXX := $(TARGET_TOOLS_PREFIX)g++
+
+这样看 envsetup.sh里面设置的编译器路径的变量都没有用
+
+## 环境变量配置逻辑
 
 
 ## Build系统
@@ -95,10 +105,6 @@ u14.04 gcc4.8.x 编译4.2.2成功
 	那么 product.mk这个文件怎么使用呢？ ？
 	直接修改 TARGET_linux-arm.mk 文件是最方便的
 
-
-
-. /build/envsetup.sh 
-	
 2 make命令
 	1) make update-api
 
@@ -127,9 +133,6 @@ host C++: obbtool <= frameworks/base/tools/obbtool/Main.cpp
 <built-in>:0:0: note: this is the location of the previous definition
 cc1plus: all warnings being treated as errors
 
-注意gcc4.4.3  安装的时候是gcc-4.4
-不能指定小版本号
-
 4）host C: acp <= build/tools/acp/acp.c
 <command-line>:0:0: warning: "_FORTIFY_SOURCE" redefined [enabled by default]
 <built-in>:0:0: note: this is the location of the previous definition
@@ -152,34 +155,13 @@ make: *** No rule to make target `device/amlogic/f16ref/initlogo-robot-1920x1080
 host C++: llvm-rs-cc <= frameworks/compile/slang/llvm-rs-cc.cpp
 <command-line>:0:0: error: "_FORTIFY_SOURCE" redefined [-Werror]
 
-
-需要安装的全部包：
-sudo apt-get install       zip  zlib1g-dev libc6-dev   x11proto-core-dev libx11-dev lib32readline-gplv2-dev lib32z1-dev   libgl1-mesa-dev gcc-multilib g++-multilib mingw32 tofrodos    libxml2-utils  xsltproc
-
-
-sudo apt-get install
-  zip  libc6-dev  x11proto-core-dev \
-  libx11-dev:i386 libreadline6-dev:i386 libgl1-mesa-glx:i386 \
-  libgl1-mesa-dev  mingw32 tofrodos \
-  libxml2-utils xsltproc zlib1g-dev:i386 lib32z1-dev
-
-$ sudo apt-get install 
-zip  zlib1g-dev libc6-dev 
-x11proto-core-dev libx11-dev lib32readline5-dev lib32z-dev \
-libgl1-mesa-dev  mingw32 tofrodos
-
-
 接着安装
 uestc@uestc-ThinkPad-T43:~/tools$ sudo apt-get install u-boot-tools texinfo texlive ccache gawk gettext uuid-dev
-
-u-boot_tools ???
+u-boot_tools
 
 lib32readline5-dev
-
  The GNU readline library aids in the consistency of user interface across discrete programs that need to provide a command line interface.
-
 The GNU history library provides a consistent user interface for recalling lines of previously typed input. 
-
 
 开机logo:RLE(run-length encoding游程编码)
 convert命令将11.jpg转化为11.raw： convert -depth 8 11.jpg rgb:11.raw
@@ -250,14 +232,7 @@ repo init -u git://android.git.kernel.org/platform/manifest.git -b cupcake
 git clone git://android.git.kernel.org/kernel/common.git
 
 
-
-----------------------------------------------------------
-已经不是froyo编译了 注意整理 要整理
-
-1 . build/envsetup.sh 
-  including device/htc/dream/vendorsetup.sh
-  including device/htc/passion/vendorsetup.sh
-  including device/htc/sapphire/vendorsetup.sh
+4 某库确实安装了却提示找不到：有-m32选项需要32位版但系统只有64位版(readelf -h可查看)
 
 # Execute the contents of any vendorsetup.sh files we can find.
 for f in `/bin/ls vendor/*/vendorsetup.sh vendor/*/build/vendorsetup.sh device/*/*/vendorsetup.sh 2> /dev/null`
@@ -574,12 +549,6 @@ terminal 为什么常规方法不能kill掉？ 需要在任务信息里面 “�
 
 Novo 7 开机后，跟360一样，显示了一个开机使用时间，怎么做的呢？
 
-
-u11.10编译ics
-<command-line>:0:0: warning: "_FORTIFY_SOURCE" redefined [enabled by default]
-原因:gcc-4.6 g++-4.6不行
-
-
 实践证明还需要修改 cpp（预处理器）
 
 android提供了预制程序升级机制。可以在system/app 和 data/app 2个地方同时存在2分apk，运行后者，删除程序，提示apk会 恢复到初始版本。
@@ -609,16 +578,9 @@ cat cpu  时候 显示htc手机 Hardware: bravo
 我的平台 hardware : NXP BL-STB platform
 ./arch/arm/mach-apollo/apollo.c:MACHINE_START(APOLLO, "NXP BL-STB platform")
 
-3 关于如何更改 android的编译器
-./tools/adbs:  prefix = "./prebuilt/" + uname + "/toolchain/arm-eabi-4.4.0/bin/"
-./tools/adbs:               "/toolchain/arm-eabi-4.4.0/bin/"
-./envsetup.sh:    export ANDROID_EABI_TOOLCHAIN=$prebuiltdir/toolchain/arm-eabi-4.4.0/bin
-./core/envsetup.mk:	ABP:=$(ABP):$(PWD)/prebuilt/$(HOST_PREBUILT_TAG)/toolchain/arm-eabi-4.4.0/bin
-./core/combo/linux-arm.mk:	prebuilt/$(HOST_PREBUILT_TAG)/toolchain/arm-eabi-4.4.0/bin/arm-eabi-
-[注]20140630 4.0.4以后，只有./envsetup.sh出现一次arm-eabi-，其他地方都优化掉了。
-
 关于shell的进一步理解
 Apollo的bin文件 开始 #!/bin/bash
+
 而 codesourcery 网站的编译器下载下来后看到#!/bin/sh
 而我看到 在bin下面已经有一个 sh-》dash的链接
 注意一个是bash  一个是 dash
@@ -632,21 +594,6 @@ Apollo的bin文件 开始 #!/bin/bash
 
 “No.  TLS is only in ARMv6K (MPCORE) and ARMv7 (Cortex).”
 
-注意这个网址！！
-http://android.git.kernel.org/?p=platform/hardware/ti/omap3.git;a=summary
-
--mcpu=cortex-a9
-
-kernel :Makefile:# conficting options:	-mcpu=cortex-a9
-
-
-# Add the Thumb2 build capabilities for ARM targets
-ifdef CONFIG_THUMB2_COMPILATION
-KBUILD_CFLAGS += -D__thumb2__ -mthumb
-# conficting options:   -mcpu=cortex-a9  这里被注释了  并且这个宏也没有放开  
-//在menuconfig中配置
-endif
-
 1 LOCAL_SRC_FILES := bar.c.arm 告诉系统总是将bar.c 以arm的模式编译
 2 LOCAL_ARM_MODE = arm 也可以设置模式
 
@@ -657,7 +604,7 @@ endif
 Point Performance，它使用Vector Float Point(矢量浮点)，
 因此可以提高涉及到浮点运算的程序
 
-+++++++++++++++++++++++++++
+
 oabi eabi 都是针对arm的cpu来说的
 eabi 有时候也叫做gnu eabi
 eabi的好处： 1 支持软件浮点合硬件浮点 实现浮点功能的混用
@@ -668,13 +615,6 @@ eabi 和 oabi 的区别
          2 应用程序如何去做系统调用
          3 结构体中的填充和对其 （ padding packing ）
 
-
-2  Android并没有采用glibc作为C库，而是采用了Google自己开发的Bionic Libc
-它的官方Toolchain也是基于Bionic Libc而并非glibc的 这使得使用或移植其他Toolchain来用于Android要比较麻烦
-在Google公布用于Android的官方Toolchain之前，多数的Android爱好者使用的Toolchain是在http://www.codesourcery.com/gnu_toolchains/arm/download.html
-下载的一个通用的Toolchain  它用来编译和移植Android 的Linux内核是可行的，因为内核并不需要C库， 但是开发Android的应用程序时，直接采用或者移植其他的Toolchain都比较麻烦，其他Toolchain编译的应用程序只能采用静态编译的方式才能运行于Android模拟器中，这显然是实际开发中所不能接受的方式。目前尚没有看到说明成功移植其他交叉编译器来编译 Android应用程序的资料。 
-
-3  android 的启动过程
 Android 启动过程详解
 
 Android从Linux系统启动有4个步骤；
@@ -932,221 +872,15 @@ Android作为Google公司推出的一款手机开发平台，其本身是基于l
 设置：
 
 1. 为网卡配置静态IP地址
-
        虚拟机和XP连接用的虚拟网卡设置IP，gateway和DNS都为192.168.0.1。
-
        在Vmware虚拟机中执行：
-
 sudo vi /etc/network/interfaces 加入：
-
 auto eth0
-
 iface eth0 inet static
-
 address 192.168.0.2
-
 gateway 192.168.0.1
-
 netmask 255.255.255.0
-
  
-
-2. 配置DNS
-
-sudo vi /etc/resolv.conf
-
-nameserver 192.168.0.1
-
- 
-
-
- 
-
-4. 清理系统
-
-sudo apt-get clean
-
- 
-2.2 建立Android内核开发环境
-
-1、工作环境及所需软件包
-
-1）系统环境：Ubuntu 8.10 server
-
-2）交叉编译器：GNU Toolchain for ARM Processors
-
-(http://www.codesourcery.com/gnu_toolchains/arm/download.html)
-
-本文用：arm-2008q3-66-arm-none-eabi-i686-pc-linux-gnu.tar.bz2
-
-3）Android内核源代码：linux-2.6.23-android-m5-rc14.tar.gz
-
-（http://code.google.com/p/android/downloads/list）本文用：linux-2.6.25-android-1.0_r1.tar.gz
-
-4）Android SDK
-
-（http://code.google.com/android/download_list.html）
-
-SDK中带有Android Emulator仿真器等工具，本文用：android-sdk-linux_x86-1.0_r2.zip
-
-2、搭建交叉编译环境
-
-       安装好系统后，把下载的Android kernel，交叉编译器和Android SDK都放在/home/xxx目录，xxx是安装系统时的普通用户的用户名。
-
-1) 安装交叉编译器
-
-$cd ~
-
-$mkdir tools
-
-$cp arm-2008q3-66-arm-none-eabi-i686-pc-linux-gnu.tar.bz2  tools
-
-$cd tools
-
-$tar jxvf arm-2008q3-66-arm-none-eabi-i686-pc-linux-gnu.tar.bz2
-
- 
-
-2) 解压Android SDK
-
-$cp ~/android-sdk-linux_x86-1.0_r2.zip ~/tools
-
-$cd ~/tools/
-
-$unzip android-sdk-linux_x86-1.0_r2.zip
-
- 
-
-3) 解压缩内核源代码
-
-       $mkdir sources
-
-       $cp linux-2.6.25-android-1.0_r1.tar.gz sources
-
-       $cd sources
-
-       $tar zxvf linux-2.6.25-android-1.0_r1.tar.gz
-
-       $mv kernel.git  linux-2.6.25-android-1.0_r1
-
- 
-
- 
-三、编译和运行Android Kernel
-
-1）  获取Android官方的默认内核配置文件.config
-
-这个.config文件可以从SDK中得到。启动android模拟器，然后用adb从模拟器中提出内核配置文件：
-
-$~/tools/android-sdk-linux_x86-1.0_r2/tools/emulator &
-
-$adb pull /proc/config.gz  ~/
-
-$mv ~/  ~/sources/linux-2.6.25-android-1.0_r1
-
-$cd ~/sources/linux-2.6.25-android-1.0_r1
-
-$ gunzip config.gz
-$ mv config .config
-
-2）编译
-
-$~/mk-kernel.sh sources/linux-2.6.25-android-1.0_r1/
-
-其中mk-kernel.sh脚本如下：
-
-#!/bin/sh
-
-#Simple script for Android Kernel compiling.
-
-#By Neil Chiao, Mar.14,2009
-
-export PATH=$PATH:/home/neil/tools/arm-2008q3/bin
-
-export CROSS_COMPILE=arm-none-eabi-
-
-cd $1||exit 1
-
-make menuconfig
-
-make
-
-3）运行该镜像
-
-$cd ~/tools/android-sdk-linux_x86-1.0_r2/tools/
-
-$./emulator -kernel ~/sources/linux-2.6.25-android-1.0_r1/arch/arm/boot/zImage
-
-Android中提供了一個模擬器來模擬ARM核的移動設備。Android的模擬器是基於QEMU開發的，QEMU是一個有名的開源虛擬機項目（詳見http://bellard.org/qemu/），它可以提供一個虛擬的ARM移動設備。Android模擬器被命名為goldfish，用來模擬包括下面一些功能的ARM SoC:
-
-Android模擬器所對應的源代碼主要在external/qemu目錄下。如果你想將Android移植到其他設備上，熟悉它目前所針對的模擬器環境可以提供一些參考。
-
-對於應用程序的開發者，模擬器提供了很多開發和測試時的便利。無論在Windows下還是Linux下，Android模擬器都可以順利運行，並且Google提供了Eclipse插件，可將模擬器集成到Eclipse的IDE環境。當然，你也可以從命令行啟動Android模擬器。
-
-
-运行文件下载地址：
-http://www.rayfile.com/files/603 ... -b77a-0014221b798a/
-下载后打开readme文件查看如何运行。
-1. 首先我们大家都知道Android是基于Linux之上的一个软件平台，Android移植的大部分工作其实是 Linux到P535的移植。所以，我们首先需要完成Linux的移植。
-
-2. P535原本是Windows Mobile系统（以下简称WM），因此需要解决如何从WM引导进入Linux的问题。烧boot是不可能了，我只有一台P535，可不想把3000多大洋换成砖头。幸好有HaRET这个好工具，它运行在WM下，可以直接读取linux的zImage文件实现内核加载。所以，欲练神功，必先...
-学习HaRET，主页地址： http://www.handhelds.org/moin/moin.cgi/HaRET
-
-3. 接下来要编译一个能在P535上跑起来的linux内核文件zImage。从www.kernel.org下载下来的linux源代码编译生成的 zImage是无法直接跑起来的，因为缺了对P535硬件设备的驱动支持。最好有一套能直接支持P535设备的Linux源代码，有吗？没有。如果有的话这移植工作就太没劲了。不过，我们可以找到一个好的起点。请访问链接：
-http://www.handhelds.org/moin/moin.cgi/GettingHandheldKernels
-handhelds 是一个组织，他们的工作就是移植linux到各种PDA上面，包括HP、HTC、DELL等等，还有Asus，不过都是一些老的型号，不包括P535。这个组织似乎有一两年没什么动静了，他们的Familiar项目最后版本v0.84发布日期是06年8月20日。所以指望他们去更新支持P535是不可能了，我还尝试过发邮件想加入他们的队伍，结果没人理我：（ 。
-
-看来只能自力更生了。他们虽然不更新了，但是他们的网站依然屹立。从上面的链接，我们可以下载到他们维护的最近的linux源代码版本2.6.21。这个版本就是我们的出发点。
-
-4. 载下来的这套源代码我们称为handheld linux2.6.21，它与官方linux2.6.21的区别在于增加了对很多 PDA设备的驱动支持。虽然不包括P535，但我们可以参考其他类似设备完成对我们设备的驱动支持。我当时参考的其它设备主要有：Asus A730, Asus 696, HTC magician等。因为P535的很多硬件部件的芯片型号与这几款设备相同。
-
-那如何知道P535使用的都是什么芯片呢？这得下点狠功夫了，拆机！而且是很彻底的那种。不狠一点怎么能体会到干底层工作的乐趣？！心肠不够狠的弟兄可以参考我拆机后拍的照片。
-http://sites.google.com/site/siteofhx/Home/android/p535-hardware
-我这台已经被我肢解过好几十次了，之前换触摸屏、升级内存都是大手术，能幸存下来真是顽强。
-
-5. 知道了硬件芯片型号，可又不知道管脚连接，又不可能向Asus要电路图，怎么办？认真学习并操练过前面几个步骤的弟兄可能已经有答案了。HaRET这个工具再次出马，所以要不我怎么说欲练神功，必先....
-
-通过HaRET这个工具，我们可以知道P535中各个部件对应的GPIO，最重要的是搞清楚键盘、LCD、触摸屏，这三个硬件驱动的成功移植是我们的首要目标，这样才能体验到Android Touch操作的快感！
-
-6. OK，这几项准备工作完成后，您就可以开始埋头苦干了，写代码、编译、调试、拷贝、粘贴，快的话几天，慢的话几周，最后炮制出一个能在自己的机器上跑起来的zImage文件。
-
-对了，得用这个交叉编译器：
-http://www.codesourcery.com/gnu_ ... c-linux-gnu.tar.bz2
-
-7. 光有zImage最多只能进入黑漆漆的命令行界面，无法验证键盘、液晶和触摸屏是否工作正常，解决这个问题，您可以到这里：
-http://familiar.handhelds.org/re ... /files/ipaq-pxa270/
-下载一个rootfs系统，准备一张空闲的SD卡，将下载的文件解到卡中，然后通过HaRET引导您炮制好的linux kernel，启来后执行rootfs中的初始化脚本，进入GPE或者OPIE的图形界面，这时您就可以验证您的键盘、LCD和触摸屏驱动是否正常工作了。
-
-如果还不正常，那再埋头苦干吧，这关必须过了才能继续往下走。
-
-8. 过了上一关，Linux的移植已经被你踩在了脚下，您一定有一点兴奋感和成就感了。别急，让我们继续往上爬。
-
-Android SDK 1.0使用的linux版本是2.6.25，而我们刚刚完成移植的版本是2.6.21，要知道他们之间有什么不同吗？在此推荐一个非常棒的工具，Meld Diff Viewer，有了它，后面的工作将变得易如反掌。
-从Kernel.org下载一份官方的2.6.25，同您刚完成的handheld 2.6.21比较一下，不比不知道，一比吓一跳！改动的地方是不是很多？不要怕，让我们一步一步搞定。
-
-我们之前的移植是基于handheld的版本完成的，多少有点让我们感觉是踩在了别人的肩膀上爬上来的。没关系，至少我们学会了爬。现在让我们回到地上，自己爬上来。
-从 Kernel.org再下载一份官方的2.6.21，用Meld同前面的handheld 2.6.21比较一下，将官方版本缺少的驱动合并过来，不要一股脑全部合并过来，看看您的P535缺少什么才合并什么，这样子您就非常清楚从官方下载的 linux需要增加哪些驱动才能在您的机器上跑起来。
-
-合并完成后，编译和调试您的官方2.6.21版本，让它也能顺利的跑起来，进入GPE和OPIE图形界面。
-
-9. 把移植成功的官方2.6.21，同前面下载的官方2.6.25进行比较，官方比官方，差别是不是没那么恐怖了？同样，将2.6.25缺少的驱动文件从 2.6.21合并过来，编译调试，让2.6.25也跑起来。
-
-10. OK，下面我们要真正开始同Android打交道了。
-先下载 Android 使用的linux版本，地址在此：http://code.google.com/p/android/downloads/list
-再下载Android SDK 1.0：http://code.google.com/android/download.html
-照此教程从SDK中提取Android的rootfs：http://discuz-android.blogspot.c ... id-file-system.html
-
-现在就差Android的linux zImage了。
-
-11. 将Android linux2.6.25同前面移植完成的官方linux2.6.25比较，找出其中的异同，将官方2.6.25缺少的东东从Android linux2.6.25合并过来，注意不要搞错方向了。其中，凡是涉及QEMU、Goldfish及yaffs2的内容没有用处，不要合并过来。您会发现其实Android对linux的改动很小。
-这一步的详细操作请参考这个链接：http://elinux.org/Android_on_OMAP
-
-然后编译，又得到一个zImage. 调试它，让它能顺利引导进入Android rootfs中的初始化脚本。
-
-12. 引导进入Android的图形界面不像进入GPE和OPIE那么顺利，因为Android对LCD驱动有特殊的要求，需要Frame Buffer驱动支持double buffering 和 pan function。您需要参考这个帖子：http://androidzaurus.seesaa.net/article/105551643.html 或者 http://www.androidrd.com/thread-9-1-1.html 完成对2.6.25自带的Frame Buffer驱动的修改。
-
-
-此外，触摸驱动发出的X坐标是对的，Y坐标是倒过来的，您需要修改驱动纠正一下姿势。参考：http://androidzaurus.seesaa.net
 
 5 android里面的编译起 arm-eabi-gcc  和 arm-eabi-gcc-4.4.0 内容一模一样
 编译好的文件在：
@@ -1238,12 +972,6 @@ emulator @Test -show-kernel
 zImage bzImage 都是用gzip压缩的 
 它们不仅是一个压缩文件，而且在这两个文件的开头部分内嵌有gzip解压缩代码
 所以你不能用gunzip解压
-
-vmlinux是未压缩的内核
-
-./target/src/project/project_include.mk:_SDE_PROC_DEFINES = -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp
-./target/src/project/project_include.mk:_SDE_EXTRA_CFLAGS += -DCPU=CORTEX_A9 -D__LINUX_ARM_ARCH__=7 -mcpu=cortex-a9 -mfpu=vfpv3-d16 -mfloat-abi=softfp
-
 
 修改了init.c后 make
 
@@ -1518,10 +1246,6 @@ external 有一个 perf工具
 ffmpeg的目录
 packages/amlogic/LibPlayer/amffmpeg/libavcodec/pgssubdec.c
 
-
-make otapackage 这是原生android就提供的
-
-
 x509.pem 是什么？？？
 X.509是一种非常通用的证书格式
 
@@ -1674,73 +1398,6 @@ standalone模式，打印：
 android的build系统很复杂强大，甚至有继承功能，体现了OO思想，比如inherit-product函数
 有一些字段的值，如果子文件赋值了，就用子文件的，如果没有赋值，就用父文件的。
 
-
-ndk
-
-ndk可以完全用C/C++开发应用或游戏，不需要编写任何Java代码
-ndk-stack 代码跟踪工具
-
-1 ndk9 安装成standalone模式:
-./build/tools/make-standalone-toolchain.sh --platform=android-14 --install-dir=/tmp/jpegturbo
-./build/tools/make-standalone-toolchain.sh --platform=android-14 --install-dir=/usr/lib/ndk9
---arch=<name> 指定处理器，默认arm
-./build/tools/make-standalone-toolchain.sh --platform=android-14 --arch=mips --install-dir=/tmp/jpegturbo
-安装mips编译器
-
-安装前后的区别：
-安装前1.4G  安装后228M仅保留了arm
-
-安装完的编译器结构：
-./bin/arm-linux-androideabi- 工具组   gcc 4.6  g++ 4.6   ld objdump 都属于Binutils  v2.21
-./arm-linux-androideabi/bin/gcc  长目录短文件名，短目录长文件名，一直没搞明白
-
-arm-linux-androideabi-gcc 与gcc 完全相同
-
-./arm-linux-androideabi/bin/ar
-./arm-linux-androideabi/bin/as
-./arm-linux-androideabi/bin/c++ (干什么用的？)
-./arm-linux-androideabi/bin/g++
-./arm-linux-androideabi/bin/gcc
-./arm-linux-androideabi/bin/ld
-./arm-linux-androideabi/bin/ld.bfd
-./arm-linux-androideabi/bin/ld.gold
-./arm-linux-androideabi/bin/ld.mcld
-./arm-linux-androideabi/bin/nm
-./arm-linux-androideabi/bin/objcopy
-./arm-linux-androideabi/bin/objdump
-./arm-linux-androideabi/bin/ranlib
-./arm-linux-androideabi/bin/strip
-
-./bin/arm-linux-androideabi-ar
-./bin/arm-linux-androideabi-as
-./bin/arm-linux-androideabi-c++
-./bin/arm-linux-androideabi-g++
-./bin/arm-linux-androideabi-gcc
-./bin/arm-linux-androideabi-ld
-./bin/arm-linux-androideabi-ld.bfd
-./bin/arm-linux-androideabi-ld.gold
-./bin/arm-linux-androideabi-ld.mcld
-./bin/arm-linux-androideabi-nm
-./bin/arm-linux-androideabi-objcopy
-./bin/arm-linux-androideabi-objdump
-./bin/arm-linux-androideabi-ranlib
-./bin/arm-linux-androideabi-strip
-
-多的
-./bin/arm-linux-androideabi-addr2line
-./bin/arm-linux-androideabi-c++filt
-./bin/arm-linux-androideabi-cpp
-./bin/arm-linux-androideabi-elfedit
-./bin/arm-linux-androideabi-gcc-4.6
-./bin/arm-linux-androideabi-gcov
-./bin/arm-linux-androideabi-gdb
-./bin/arm-linux-androideabi-gprof
-./bin/arm-linux-androideabi-readelf
-./bin/arm-linux-androideabi-run
-./bin/arm-linux-androideabi-size
-./bin/arm-linux-androideabi-strings
-
-
 4 华硕应用偶尔闪烁红色边框：
 I can confirm that changing the build type from "eng" 
 (=engineering) to "user" (=end user) does remove the red border issue.
@@ -1749,12 +1406,7 @@ I can confirm that changing the build type from "eng"
 应用程序在主线程上执行长时间操作时闪烁屏幕。
 
 5 华硕 terminal的logcat setting应用操作时看到
-intent.action.HDMI_PLUGGED  
-
-
-ndk里面没有pthread库？
-通过查看源码，pthread函数在libc.so里，所以不用包含-lpthread  -lrc
-
+intent.action.HDMI_PLUGGED
 
 3.rootfs的使用
 （1）在原来的bcm7241-rootfs上切换到HaiWaiFta分支上
@@ -1768,12 +1420,9 @@ setenv -p STARTUP "boot -z -elf nandflash0.kernel: 'root=/dev/nfs nfsroot=192.16
 
 
 
-uu说haisi文档说u10.04是开发android最好用的系统
+haisi文档说u10.04是开发android最好用的系统
 
 
-
-
----------
 编译系统原理及相关
 ## make
 make otapackage

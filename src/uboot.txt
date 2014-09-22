@@ -27,15 +27,6 @@ PLATFORM_CPPFLAGS += -mcpu=cortex-a7   编译器不认
 
  Error: selected processor does not support ARM mode `isb'
 
-
--mcpu
--march
-各是什么意思？
-ndk arm-linux-androideabi-gcc  -v --help 得到
--mcpu=   Specify the name of the target CPU
--march=	 Specify the name of the target architecture
-
-
 改成 -mcpu=cortex-a9：
 as: unrecognized option '-mcpu=cortex-a9'  这个ndk这么熊呢，原来验证 kernel都是可以编译的阿
 
@@ -50,7 +41,7 @@ as: unrecognized option '-mcpu=cortex-a9'  这个ndk这么熊呢，原来验证 
 编译器赋值逻辑：
 在arch/arm/config.mk中：
 CROSS_COMPILE ?= arm-linux-
-这是默认值，如果外面有人赋值，会覆盖他
+这是原始版默认值，如果外面有人赋值，会覆盖他
 
 Makefile文件里
 # set default to nothing for native builds

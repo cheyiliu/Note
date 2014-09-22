@@ -1,4 +1,19 @@
-1 来自codesourcery网站的邮件列表
+make ARCH="mips" CROSS_COMPILE="mips-wrs-linux-gnu-" LOCALVERSION="-WR3.0.2zz_standard" O=/home/ccdt/linux-nec_emma3slp-standard-build KBUILD_MODPOST_WARN=1
+
+qemu模拟器中运行内核：
+$./emulator -kernel ~/sources/linux-2.6.25-android-1.0_r1/arch/arm/boot/zImage
+
+内核编译脚本：
+#!/bin/sh
+export PATH=$PATH:/home/neil/tools/arm-2008q3/bin
+export CROSS_COMPILE=arm-none-eabi-
+cd $1||exit 1
+make menuconfig
+make
+
+/proc/config.gz  内核配置文件
+
+1 codesourcery 网站邮件列表
 >> It generates Thumb-2 code if you specify -march=armv7-a and -mthumb.
 >> It never generates ARM mode code if you specify -mthumb.
 > Does that mean it generates only ARM if I do not specify -mthumb?
@@ -21,38 +36,6 @@ Options starting with -g, -f, -m, -O, -W, or --param are automatically
  -Wa,<options>  Pass comma-separated <options> on to the assembler
  -Wp,<options>  Pass comma-separated <options> on to the preprocessor
  -Wl,<options>  Pass comma-separated <options> on to the linker
-
--mthumb -march -meabi -mcpu -mthumb-interwork
-这些参数都是传递给as的
-man as 得到：
-       Target ARM options:
-          [-mcpu=processor[+extension...]]
-          [-march=architecture[+extension...]]
-          [-mfpu=floating-point-format]
-          [-mfloat-abi=abi]
-          [-meabi=ver]
-          [-mthumb]
-          [-EB|-EL]
-          [-mapcs-32|-mapcs-26|-mapcs-float|
-           -mapcs-reentrant]
-          [-mthumb-interwork] [-k]
-
-
-
-1 编译器的种类
-现在已经有3个编译器了 nxp的  android的 和 codesourcery的
-2 结构
-codesourcery的
-arm-none-linux-gnueabi
-bin
-lib
-share
-
-
-而nxp的目录结构就有些奇怪了 左一层右一层的
-
-另外，每个arm-none-linux-gnueabi-xx 都对应一个xx 是一样的程序 只是文件名不同
-
 
 http://omappedia.org/wiki/OMAP_Android_Main 注意这个目录
 

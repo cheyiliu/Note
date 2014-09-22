@@ -1,3 +1,108 @@
-arm编译器
+编译器
 1 目录结构
+
+
+-mcpu=cortex-a9  //Specify the name of the target CPU
+-march=armv7-a   //Specify the name of the target architecture
+armv7-a 可以是cortex-a8 cortex-a9 等
+
+-mfpu=vfpv3-d16 
+-mfloat-abi=softfp
+
+
+-mthumb -march -meabi -mcpu -mthumb-interwork
+这些参数是传递给as的
+man as 得到：
+       Target ARM options:
+          [-mcpu=processor[+extension...]]
+          [-march=architecture[+extension...]]
+          [-mfpu=floating-point-format]
+          [-mfloat-abi=abi]
+          [-meabi=ver]
+          [-mthumb]
+          [-EB|-EL]
+          [-mapcs-32|-mapcs-26|-mapcs-float|
+           -mapcs-reentrant]
+          [-mthumb-interwork] [-k]
+
+
+ndk
+
+ndk可以完全用C/C++开发应用或游戏，不需要编写任何Java代码
+ndk-stack 代码跟踪工具
+
+1 ndk9 安装成standalone模式:
+./build/tools/make-standalone-toolchain.sh --platform=android-14 --install-dir=/tmp/jpegturbo
+./build/tools/make-standalone-toolchain.sh --platform=android-14 --install-dir=/usr/lib/ndk9
+--arch=<name> 指定处理器，默认arm
+./build/tools/make-standalone-toolchain.sh --platform=android-14 --arch=mips --install-dir=/tmp/jpegturbo
+安装mips编译器
+
+安装前后的区别：
+安装前1.4G  安装后228M仅保留了arm
+
+安装完的编译器结构：
+./bin/arm-linux-androideabi- 工具组   gcc 4.6  g++ 4.6   ld objdump 都属于Binutils  v2.21
+./arm-linux-androideabi/bin/gcc  长目录短文件名，短目录长文件名，一直没搞明白
+
+arm-linux-androideabi-gcc 与gcc 完全相同
+
+./arm-linux-androideabi/bin/ar
+./arm-linux-androideabi/bin/as
+./arm-linux-androideabi/bin/c++
+./arm-linux-androideabi/bin/g++
+./arm-linux-androideabi/bin/gcc
+./arm-linux-androideabi/bin/ld
+./arm-linux-androideabi/bin/ld.bfd
+./arm-linux-androideabi/bin/ld.gold
+./arm-linux-androideabi/bin/ld.mcld
+./arm-linux-androideabi/bin/nm
+./arm-linux-androideabi/bin/objcopy
+./arm-linux-androideabi/bin/objdump
+./arm-linux-androideabi/bin/ranlib
+./arm-linux-androideabi/bin/strip
+
+./bin/arm-linux-androideabi-ar
+./bin/arm-linux-androideabi-as
+./bin/arm-linux-androideabi-c++
+./bin/arm-linux-androideabi-g++
+./bin/arm-linux-androideabi-gcc
+./bin/arm-linux-androideabi-ld
+./bin/arm-linux-androideabi-ld.bfd
+./bin/arm-linux-androideabi-ld.gold
+./bin/arm-linux-androideabi-ld.mcld
+./bin/arm-linux-androideabi-nm
+./bin/arm-linux-androideabi-objcopy
+./bin/arm-linux-androideabi-objdump
+./bin/arm-linux-androideabi-ranlib
+./bin/arm-linux-androideabi-strip
+
+多的
+./bin/arm-linux-androideabi-addr2line
+./bin/arm-linux-androideabi-c++filt
+./bin/arm-linux-androideabi-cpp
+./bin/arm-linux-androideabi-elfedit
+./bin/arm-linux-androideabi-gcc-4.6
+./bin/arm-linux-androideabi-gcov
+./bin/arm-linux-androideabi-gdb
+./bin/arm-linux-androideabi-gprof
+./bin/arm-linux-androideabi-readelf
+./bin/arm-linux-androideabi-run
+./bin/arm-linux-androideabi-size
+./bin/arm-linux-androideabi-strings
+
+ndk里没有pthread库，pthread函数在libc.so里，所以不用包含-lpthread  -lrc
+
+
+属于gcc的：
+cpp 预编译器 The C Preprocessor
+c++ (与g++在二进制级别完全相同)
+g++
+gcc
+其他都是binutiles
+
+
+
+编译器前缀：
+arm-none-linux-gnueabi-  经常见到，不知道none是什么含义
 
